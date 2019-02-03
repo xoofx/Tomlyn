@@ -197,6 +197,9 @@ namespace SharpToml.Parsing
                 case TokenKind.OpenBrace:
                     return ParseInlineTable();
 
+                case TokenKind.DateTime:
+                    return ParseDateTime();
+
                 case TokenKind.True:
                 case TokenKind.False:
                     return ParseBoolean();
@@ -222,6 +225,14 @@ namespace SharpToml.Parsing
             boolean.Value = (bool)_token.Value;
             boolean.Token = EatToken();            
             return Close(boolean);
+        }
+
+        private DateTimeValueSyntax ParseDateTime()
+        {
+            var datetime = Open<DateTimeValueSyntax>();
+            datetime.Value = (DateTime)_token.Value;
+            datetime.Token = EatToken();
+            return Close(datetime);
         }
 
         private IntegerValueSyntax ParseInteger()
@@ -445,7 +456,14 @@ namespace SharpToml.Parsing
                 var invalid = Open<InvalidSyntaxToken>();
                 invalid.InvalidKind = _token.Kind;
                 syntax = invalid;
-                LogError($"Unexpected token found `{ToPrintable(_token)}` (`{_token.Kind}`) while expecting `{tokenKind.ToText()}` (`{tokenKind}`)");
+                if (_token.Kind == TokenKind.Invalid)
+                {
+                    LogError($"Unexpected token found `{ToPrintable(_token)}` while expecting `{tokenKind.ToText() ?? ToPrintable(_token)}` (token: `{tokenKind.ToString().ToLowerInvariant()}`)");
+                }
+                else
+                {
+                    LogError($"Unexpected token found `{ToPrintable(_token)}` (token: `{_token.Kind.ToString().ToLowerInvariant()}`) while expecting `{tokenKind.ToText() ?? ToPrintable(_token)}` (token: `{tokenKind.ToString().ToLowerInvariant()}`)");
+                }
             }
             syntax.Kind = tokenKind;
             syntax.Text = _token.Kind.ToText() ?? _token.GetText(_lexer.Source);

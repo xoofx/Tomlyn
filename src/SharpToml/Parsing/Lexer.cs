@@ -3,6 +3,7 @@
 // See license.txt file in the project root for full license information.
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -20,17 +21,14 @@ namespace SharpToml.Parsing
     internal class Lexer<TSourceView, TCharReader> : ITokenProvider<TSourceView> where TSourceView : struct, ISourceView<TCharReader> where TCharReader : struct, CharacterIterator
     {
         private SyntaxTokenValue _token;
-        private TextPosition _position;
-        private TextPosition _nextPosition;
-        private char32 _pc1; // previous previous character - 1
-        private char32 _pc; // previous character
-        private char32 _c;
         private List<DiagnosticMessage> _errors;
         private TCharReader _reader;
         private const int Eof = -1;
         private TSourceView _sourceView;
         private readonly StringBuilder _textBuilder;
         private readonly List<char32> _currentIdentifierChars;
+        private LexerInternalState? _preview1 = null;
+        private LexerInternalState _current;
 
         /// <summary>
         /// Initialize a new instance of this <see cref="Lexer{TSourceView,TCharReader}" />.
@@ -82,6 +80,10 @@ namespace SharpToml.Parsing
         public SyntaxTokenValue Token => _token;
 
         public LexerSate State { get; set; }
+
+        private TextPosition _position => _current._position;
+
+        private char32 _c => _current._c;
 
         private void NextTokenForKey()
         {
@@ -245,7 +247,7 @@ namespace SharpToml.Parsing
 
                     if (CharHelper.IsDigit(_c))
                     {
-                        ReadNumber();
+                        ReadNumberOrDate();
                         break;
                     }
 
@@ -304,7 +306,7 @@ namespace SharpToml.Parsing
             if ((firstChar == '+' || firstChar == '-') && CharHelper.IsDigit(_c))
             {
                 _currentIdentifierChars.Clear();
-                ReadNumber(firstChar, start);
+                ReadNumberOrDate(firstChar, start);
                 return;
             }
 
@@ -367,13 +369,14 @@ namespace SharpToml.Parsing
             return true;
         }
 
-        private void ReadNumber(char32? numberPrefix = null, TextPosition? startPrefix = null)
+        private void ReadNumberOrDate(char32? numberPrefix = null, TextPosition? startPrefix = null)
         {
             var start = startPrefix ?? _position;
             var end = _position;
             var isFloat = false;
 
             var firstChar = numberPrefix ?? _c;
+            var startsWithPositiveOrNegative = numberPrefix != null;
             var startsWithZero = firstChar == '0';
 
             // If we start with 0, it might be an hexa, octal or binary literal
@@ -489,7 +492,7 @@ namespace SharpToml.Parsing
             bool hasSignedPrefix = firstChar == '+' || firstChar == '-';
             _textBuilder.AppendUtf32(firstChar);
 
-            if (startPrefix == null)
+            if (!startsWithZero && startPrefix == null)
             {
                 NextChar();
             }
@@ -504,6 +507,75 @@ namespace SharpToml.Parsing
                 }
                 end = _position;
                 NextChar();
+            }
+
+            // We are in the case of a date
+            if (_c == '-' || _c == ':')
+            {
+                // Offset Date-Time
+                // odt1 = 1979-05-27T07:32:00Z
+                // odt2 = 1979-05-27T00:32:00-07:00
+                // odt3 = 1979-05-27T00:32:00.999999-07:00
+                //
+                // For the sake of readability, you may replace the T delimiter between date and time with a space (as permitted by RFC 3339 section 5.6).
+                //  NOTE: ISO 8601 defines date and time separated by "T".
+                //      Applications using this syntax may choose, for the sake of
+                //      readability, to specify a full-date and full-time separated by
+                //      (say) a space character.
+                // odt4 = 1979-05-27 07:32:00Z
+                //
+                // Local Date-Time
+                //
+                // ldt1 = 1979-05-27T07:32:00
+                //
+                // Local Date
+                //
+                // ld1 = 1979-05-27
+                //
+                // Local Time
+                //
+                // lt1 = 07:32:00
+                // lt2 = 00:32:00.999999
+
+                // Parse the date/time
+                while (CharHelper.IsDateTime(_c))
+                {
+                    _textBuilder.AppendUtf32(_c);
+                    end = _position;
+                    NextChar();
+                }
+
+                // If we have a space, followed by a digit, try to parse the following
+                if (CharHelper.IsWhiteSpace(_c) && CharHelper.IsDateTime(PeekChar()))
+                {
+                    while (CharHelper.IsDateTime(_c))
+                    {
+                        _textBuilder.AppendUtf32(_c);
+                        end = _position;
+                        NextChar();
+                    }
+                }
+                
+                var dateTimeAsString = _textBuilder.ToString();
+
+                if (firstChar == '+' || firstChar == '-')
+                {
+                    AddError($"Invalid prefix `{firstChar}` for the following offset/local date/time `{dateTimeAsString}`", start, end);
+                    // Still try to recover
+                    dateTimeAsString = dateTimeAsString.Substring(1);
+                }
+
+                DateTime dateTime;
+                if (!DateTime.TryParse(dateTimeAsString, CultureInfo.InvariantCulture, DateTimeStyles.AllowInnerWhite, out dateTime))
+                {
+                    AddError($"Unable to parse the date time/offset `{dateTimeAsString}`", start, end);
+                }
+
+                _token = new SyntaxTokenValue(TokenKind.DateTime, start, end, dateTime);
+                return;
+                
+                // TODO: if the digit started with a `-` we should emit an error
+
             }
 
             // Read any number following
@@ -716,25 +788,23 @@ namespace SharpToml.Parsing
                         NextChar();
                         return true;
                     case '\\':
+                        _textBuilder.Append('\\');
                         end = _position;
                         NextChar();
+                        return true;
 
-                        // toml-specs:  When the last non-whitespace character on a line is a \,
-                        // it will be trimmed along with all whitespace (including newlines)
-                        // up to the next non-whitespace character or closing delimiter. 
-                        if (_c == '\r' || _c == '\n')
+                    // toml-specs:  When the last non-whitespace character on a line is a \,
+                    // it will be trimmed along with all whitespace (including newlines)
+                    // up to the next non-whitespace character or closing delimiter. 
+                    case '\r':
+                    case '\n':
+                        while (CharHelper.IsWhiteSpace(_c))
                         {
-                            while (CharHelper.IsWhiteSpace(_c))
-                            {
-                                end = _position;
-                                NextChar();
-                            }
-                        }
-                        else
-                        {
-                            _textBuilder.Append('\\');
+                            end = _position;
+                            NextChar();
                         }
                         return true;
+
                     case 'u':
                     case 'U':
                     {
@@ -761,7 +831,7 @@ namespace SharpToml.Parsing
                         break;
                 }
 
-                AddError($"Unexpected escape character [{_c}] in string. Only 0 'b t n f r \\ \" u0000-uFFFF U00000000-UFFFFFFFF are allowed", _position, _position);
+                AddError($"Unexpected escape character [{_c}] in string. Only b t n f r \\ \" u0000-uFFFF U00000000-UFFFFFFFF are allowed", _position, _position);
                 return false;
             }
             return false;
@@ -866,11 +936,32 @@ namespace SharpToml.Parsing
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void NextChar()
         {
+            // If we have a character in preview
+            if (_preview1 != null)
+            {
+                _current = _preview1.Value;
+                _preview1 = null;
+                return;
+            }
+
             // Else move to the next position
-            _position = _nextPosition;
-            _pc1 = _pc; // save the previous character -1
-            _pc = _c; // save the previous character
-            _c = NextCharFromReader();
+            _current._position = _current._nextPosition;
+            _current._pc = _c; // save the previous character
+            _current._c = NextCharFromReader();
+        }
+
+        // Peek one char ahead
+        private char32 PeekChar()
+        {
+            if (_preview1 == null)
+            {
+                var saved = _current;
+                NextChar();
+                _preview1 = _current;
+                _current = saved;
+            }
+
+            return _preview1.Value._c;
         }
 
         private char32 NextCharFromReader()
@@ -879,19 +970,19 @@ namespace SharpToml.Parsing
             {
                 int position = _position.Offset;
                 var nextChar = _reader.TryGetNext(ref position);
-                _nextPosition.Offset = position;
+                _current._nextPosition.Offset = position;
 
                 if (nextChar.HasValue)
                 {
                     var nextc = nextChar.Value;
                     if (nextc == '\n')
                     {
-                        _nextPosition.Column = 0;
-                        _nextPosition.Line += 1;
+                        _current._nextPosition.Column = 0;
+                        _current._nextPosition.Line += 1;
                     }
                     else
                     {
-                        _nextPosition.Column++;
+                        _current._nextPosition.Column++;
                     }
                     return nextc;
                 }
@@ -917,28 +1008,46 @@ namespace SharpToml.Parsing
         private void Reset()
         {
             // Initialize the position at -1 when starting
-            _nextPosition = new TextPosition();
-            _position = new TextPosition();
-            _pc = 0;
-            _c = NextCharFromReader();
-
+            _preview1 = null;
+            _current = new LexerInternalState();
+            _current._c = NextCharFromReader();
             _token = new SyntaxTokenValue();
             _errors = null;
         }
-
-
-        private class BoxedValues
-        {
-            public static object True = true;
-            public static object False = false;
-            public static object IntegerZero = (long) 0;
-            public static object IntegerOne = (long)1;
-            public static object FloatZero = 0.0;
-            public static object FloatOne = 1.0;
-            public static object FloatPositiveInfinity = double.PositiveInfinity;
-            public static object FloatNegativeInfinity = double.NegativeInfinity;
-            public static object FloatNan = double.NaN;
-        }
     }
+    
+    [DebuggerDisplay("{Position} {Character}")]
+    internal struct LexerInternalState
+    {
+        public LexerInternalState(TextPosition nextPosition, TextPosition position, char32 pc, char32 c)
+        {
+            _nextPosition = nextPosition;
+            _position = position;
+            _pc = pc;
+            _c = c;
+        }
+
+        public TextPosition _nextPosition;
+
+        public TextPosition _position;
+
+        public char32 _pc;
+
+        public char32 _c;
+    }
+
+    internal static class BoxedValues
+    {
+        public static object True = true;
+        public static object False = false;
+        public static object IntegerZero = (long)0;
+        public static object IntegerOne = (long)1;
+        public static object FloatZero = 0.0;
+        public static object FloatOne = 1.0;
+        public static object FloatPositiveInfinity = double.PositiveInfinity;
+        public static object FloatNegativeInfinity = double.NegativeInfinity;
+        public static object FloatNan = double.NaN;
+    }
+
 }
 

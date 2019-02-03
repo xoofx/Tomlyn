@@ -47,6 +47,11 @@ namespace SharpToml.Text
             return (c >= '0' && c <= '9');
         }
 
+        public static bool IsDateTime(char32 c)
+        {
+            return IsDigit(c) || c == ':' || c == '-' || c == 'Z' || c == 'T' || c == 'z' || c == 't' || c == '+' || c == '.';
+        }
+   
         /// <summary>
         /// Converts a string that may have control characters to a printable string
         /// </summary>

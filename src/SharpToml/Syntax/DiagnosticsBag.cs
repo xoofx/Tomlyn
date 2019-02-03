@@ -4,9 +4,11 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace SharpToml.Syntax
 {
+    [DebuggerDisplay("{Count} Errors: {HasErrors}")]
     public class DiagnosticsBag : IEnumerable<DiagnosticMessage>
     {
         private readonly List<DiagnosticMessage> _messages;

@@ -20,6 +20,8 @@ namespace SharpToml.Syntax
 
         Comment,
 
+        DateTime,
+
         Integer,
 
         IntegerHexa,

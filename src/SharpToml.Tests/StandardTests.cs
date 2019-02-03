@@ -15,10 +15,25 @@ namespace SharpToml.Tests
 {
     public class StandardTests
     {
+        private const string InvalidSpec = "invalid";
+        private const string ValidSpec = "valid";
+
         private const string RelativeTomlTestsDirectory = @"../../../../../ext/toml-test/tests";
 
-        [TestCaseSource("ListTomlFiles", new object[] { "valid" }, Category = "toml-test")]
-        public static void CheckValid(string inputName, string toml, string json)
+        [TestCaseSource("ListTomlFiles", new object[] { ValidSpec }, Category = "toml-test")]
+        public static void SpecValid(string inputName, string toml, string json)
+        {
+            ValidateSpec(ValidSpec, inputName, toml, json);
+        }
+
+        [TestCaseSource("ListTomlFiles", new object[] { InvalidSpec }, Category = "toml-test")]
+        public static void SpecInvalid(string inputName, string toml, string json)
+        {
+
+            ValidateSpec(InvalidSpec, inputName, toml, json);
+        }
+
+        private static void ValidateSpec(string type, string inputName, string toml, string json)
         {
             var doc = Toml.Parse(toml);
 
@@ -41,11 +56,22 @@ namespace SharpToml.Tests
                     Console.WriteLine(syntaxMessage);
                 }
 
-                Assert.False(doc.HasErrors, "Unexpected parsing errors");
+                if (type == ValidSpec)
+                {
+                    Assert.False(doc.HasErrors, "Unexpected parsing errors");
+                }
             }
 
-            Assert.AreEqual(toml, docAsStr, "The roundtrip doesn't match");
-            // TODO: Add tests for 
+            if (type == InvalidSpec)
+            {
+                Assert.True(doc.HasErrors, "The TOML requires parsing/validation errors");
+            }
+
+            // Only in the case of a valid spec we check for rountrip
+            if (type == ValidSpec)
+            {
+                Assert.AreEqual(toml, docAsStr, "The roundtrip doesn't match");
+            }
         }
 
         private static void DisplayHeader(string name)
