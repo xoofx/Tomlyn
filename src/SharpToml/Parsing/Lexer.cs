@@ -369,18 +369,24 @@ namespace SharpToml.Parsing
             return true;
         }
 
-        private void ReadNumberOrDate(char32? numberPrefix = null, TextPosition? startPrefix = null)
+        private void ReadNumberOrDate(char32? signPrefix = null, TextPosition? signPrefixPos = null)
         {
-            var start = startPrefix ?? _position;
+            var start = signPrefixPos ?? _position;
             var end = _position;
             var isFloat = false;
 
-            var firstChar = numberPrefix ?? _c;
-            var startsWithPositiveOrNegative = numberPrefix != null;
-            var startsWithZero = firstChar == '0';
+            var positionFirstDigit = _position;
+
+            //var firstChar = numberPrefix ?? _c;
+            var hasLeadingSign = signPrefix != null;
+            var hasLeadingZero = _c == '0';
+
+            // Reset parsing of integer
+            _textBuilder.Length = 0;
+            if (hasLeadingSign) _textBuilder.AppendUtf32(signPrefix.Value);
 
             // If we start with 0, it might be an hexa, octal or binary literal
-            if (startsWithZero)
+            if (!hasLeadingSign && hasLeadingZero)
             {
                 NextChar(); // Skip first digit character
                 if (_c == 'x' || _c == 'X' || _c == 'o' || _c == 'O' || _c == 'b' || _c == 'B')
@@ -485,29 +491,15 @@ namespace SharpToml.Parsing
                     }
                     return;
                 }
-            }
-
-            // Reset parsing of integer
-            _textBuilder.Length = 0;
-            bool hasSignedPrefix = firstChar == '+' || firstChar == '-';
-            _textBuilder.AppendUtf32(firstChar);
-
-            if (!startsWithZero && startPrefix == null)
-            {
-                NextChar();
-            }
-
-            // Parse all digits
-            bool isDigit;
-            while ((isDigit = CharHelper.IsDigit(_c)) || _c == '_') 
-            {
-                if (isDigit)
+                else
                 {
-                    _textBuilder.AppendUtf32(_c);
+                    // Append the leading 0
+                    _textBuilder.Append('0');
                 }
-                end = _position;
-                NextChar();
             }
+
+            // Parse leading digits
+            ReadDigits(ref end);
 
             // We are in the case of a date
             if (_c == '-' || _c == ':')
@@ -558,9 +550,9 @@ namespace SharpToml.Parsing
                 
                 var dateTimeAsString = _textBuilder.ToString();
 
-                if (firstChar == '+' || firstChar == '-')
+                if (hasLeadingSign)
                 {
-                    AddError($"Invalid prefix `{firstChar}` for the following offset/local date/time `{dateTimeAsString}`", start, end);
+                    AddError($"Invalid prefix `{signPrefix.Value}` for the following offset/local date/time `{dateTimeAsString}`", start, end);
                     // Still try to recover
                     dateTimeAsString = dateTimeAsString.Substring(1);
                 }
@@ -573,9 +565,6 @@ namespace SharpToml.Parsing
 
                 _token = new SyntaxTokenValue(TokenKind.DateTime, start, end, dateTime);
                 return;
-                
-                // TODO: if the digit started with a `-` we should emit an error
-
             }
 
             // Read any number following
@@ -594,15 +583,7 @@ namespace SharpToml.Parsing
                 }
 
                 isFloat = true;
-                while ((isDigit = CharHelper.IsDigit(_c)) || _c == '_')
-                {
-                    if (isDigit)
-                    {
-                        _textBuilder.AppendUtf32(_c);
-                    }
-                    end = _position;
-                    NextChar();
-                }
+                ReadDigits(ref end);
             }
 
             // Parse only the exponent if we don't have a range
@@ -626,16 +607,7 @@ namespace SharpToml.Parsing
                     _token = new SyntaxTokenValue(TokenKind.Invalid, start, end);
                     return;
                 }
-
-                while ((isDigit = CharHelper.IsDigit(_c)) || _c == '_')
-                {
-                    if (isDigit)
-                    {
-                        _textBuilder.AppendUtf32(_c);
-                    }
-                    end = _position;
-                    NextChar();
-                }
+                ReadDigits(ref end);
             }
 
             var numberAsText = _textBuilder.ToString();
@@ -646,6 +618,12 @@ namespace SharpToml.Parsing
                 {
                     AddError($"Unable to parse floating point `{numberAsText}`", start, end);
                 }
+                int firstDigit = (int) doubleValue;
+                if (firstDigit != 0 && hasLeadingZero)
+                {
+                    AddError($"Unexpected leading zero (`0`) for float `{numberAsText}`", positionFirstDigit, positionFirstDigit);
+                }
+
                 // If value is 0.0 or 1.0, use box cached otherwise box
                 resolvedValue = doubleValue == 0.0 ? BoxedValues.FloatZero : doubleValue == 1.0 ? BoxedValues.FloatOne : doubleValue;
             }
@@ -655,11 +633,46 @@ namespace SharpToml.Parsing
                 {
                     AddError($"Unable to parse integer `{numberAsText}`", start, end);
                 }
+
+                if (hasLeadingZero && longValue != 0)
+                {
+                    AddError($"Unexpected leading zero (`0`) for integer `{numberAsText}`", positionFirstDigit, positionFirstDigit);
+                }
+
                 // If value is 0 or 1, use box cached otherwise box
                 resolvedValue = longValue == 0 ? BoxedValues.IntegerZero : longValue == 1 ? BoxedValues.IntegerOne : longValue;
             }
 
             _token = new SyntaxTokenValue(isFloat ? TokenKind.Float : TokenKind.Integer, start, end, resolvedValue);
+        }
+
+        private void ReadDigits(ref TextPosition end)
+        {
+            bool isDigit;
+            bool isPreviousDigit = CharHelper.IsDigit(_c);
+            while ((isDigit = CharHelper.IsDigit(_c)) || _c == '_')
+            {
+                if (isDigit)
+                {
+                    _textBuilder.AppendUtf32(_c);
+                    isPreviousDigit = true;
+                }
+                else if (!isPreviousDigit)
+                {
+                    AddError("An underscore `_` must follow a digit and not another `_`", _position, _position);
+                }
+                else
+                {
+                    isPreviousDigit = false;
+                }
+                end = _position;
+                NextChar();
+            }
+
+            if (!isPreviousDigit)
+            {
+                AddError("An underscore `_` must not follow a digit", _position, _position);
+            }
         }
 
         private void ReadString(TextPosition start, bool allowMultiline)
