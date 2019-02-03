@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2019 - Alexandre Mutel. All rights reserved.
+// Copyright (c) 2019 - Alexandre Mutel. All rights reserved.
 // Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
 using System;
@@ -198,24 +198,10 @@ namespace SharpToml.Parsing
                     break;
                 case '[':
                     NextChar();
-                    // case of: ]]
-                    if (_c == '[')
-                    {
-                        _token = new SyntaxTokenValue(TokenKind.OpenBracketDouble, start, _position);
-                        NextChar();
-                        break;
-                    }
                     _token = new SyntaxTokenValue(TokenKind.OpenBracket, start, start);
                     break;
                 case ']':
                     NextChar();
-                    // case of: ]]
-                    if (_c == ']')
-                    {
-                        _token = new SyntaxTokenValue(TokenKind.CloseBracketDouble, start, _position);
-                        NextChar();
-                        break;
-                    }
                     _token = new SyntaxTokenValue(TokenKind.CloseBracket, start, start);
                     break;
                 case '{':

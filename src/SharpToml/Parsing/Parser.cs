@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2019 - Alexandre Mutel. All rights reserved.
+// Copyright (c) 2019 - Alexandre Mutel. All rights reserved.
 // Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
 using System;
@@ -296,39 +296,53 @@ namespace SharpToml.Parsing
         {
             var inlineTable = Open<InlineTableSyntax>();
 
-            // toml-specs: Inline tables are intended to appear on a single line. 
-            // -> So we don't hide newlines
+            inlineTable.OpenBrace = EatToken(TokenKind.OpenBrace);
 
-            bool expectingEndOfInitializer = false;
-            while (true)
+            var previousState = _lexer.State;
+            _lexer.State = LexerSate.Key;
+            try
             {
-                if (_token.Kind == TokenKind.CloseBrace)
-                {
-                    inlineTable.CloseBrace = EatToken();
-                    break;
-                }
 
-                if (!expectingEndOfInitializer && (_token.Kind == TokenKind.BasicKey || _token.Kind == TokenKind.String))
+                // toml-specs: Inline tables are intended to appear on a single line. 
+                // -> So we don't hide newlines
+
+                bool expectingEndOfInitializer = false;
+                while (true)
                 {
-                    var item = Open<InlineTableItemSyntax>();
-                    item.KeyValue = ParseKeyValue(false);
-                    if (_token.Kind == TokenKind.Comma)
+                    if (_token.Kind == TokenKind.CloseBrace)
                     {
-                        item.Comma = EatToken();
+                        inlineTable.CloseBrace = EatToken();
+                        break;
+                    }
+
+                    if (!expectingEndOfInitializer && (_token.Kind == TokenKind.BasicKey || _token.Kind == TokenKind.String))
+                    {
+                        var item = Open<InlineTableItemSyntax>();
+                        item.KeyValue = ParseKeyValue(false);
+
+                        if (_token.Kind == TokenKind.Comma)
+                        {
+                            item.Comma = EatToken();
+                        }
+                        else
+                        {
+                            expectingEndOfInitializer = true;
+                        }
+
+                        Close(item);
+
+                        AddToListAndUpdateSpan(inlineTable.Items, item);
                     }
                     else
                     {
-                        expectingEndOfInitializer = true;
+                        LogError($"Unexpected token `{_token.Kind}` while parsing inline table. Expecting a bare key or string instead of `{ToPrintable(_token)}`");
+                        break;
                     }
-                    Close(item);
-
-                    AddToListAndUpdateSpan(inlineTable.Items, item);
                 }
-                else
-                {
-                    LogError($"Unexpected token `{_token.Kind}` while parsing inline table. Expecting a bare key or string instead of `{ToPrintable(_token)}`");
-                    break;
-                }
+            }
+            finally
+            {
+                _lexer.State = previousState;
             }
 
             return Close(inlineTable);
@@ -426,7 +440,7 @@ namespace SharpToml.Parsing
                 syntax = invalid;
                 LogError($"Unexpected token found `{ToPrintable(_token)}` (`{_token.Kind}`) while expecting `{tokenKind.ToText()}` (`{tokenKind}`)");
             }
-            syntax.Kind = _token.Kind;
+            syntax.Kind = tokenKind;
             syntax.Text = _token.Kind.ToText() ?? _token.GetText(_lexer.Source);
             if (tokenKind == TokenKind.NewLine)
             {

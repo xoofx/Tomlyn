@@ -1,0 +1,3 @@
+[submodule "ext/toml-test"]
+	path = ext/toml-test
+	url = https://github.com/BurntSushi/toml-test.git
