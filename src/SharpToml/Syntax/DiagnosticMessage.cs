@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2019 - Alexandre Mutel. All rights reserved.
+// Copyright (c) 2019 - Alexandre Mutel. All rights reserved.
 // Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
 using System;
@@ -6,16 +6,16 @@ using System.Text;
 
 namespace SharpToml.Syntax
 {
-    public class SyntaxMessage
+    public class DiagnosticMessage
     {
-        public SyntaxMessage(SyntaxMessageKind kind, SourceSpan span, string message)
+        public DiagnosticMessage(DiagnosticMessageKind kind, SourceSpan span, string message)
         {
             Kind = kind;
             Span = span;
             Message = message;
         }
 
-        public SyntaxMessageKind Kind { get; set; }
+        public DiagnosticMessageKind Kind { get; set; }
 
         public SourceSpan Span { get; set; }
 
@@ -28,10 +28,10 @@ namespace SharpToml.Syntax
             builder.Append(" : ");
             switch (Kind)
             {
-                case SyntaxMessageKind.Error:
+                case DiagnosticMessageKind.Error:
                     builder.Append("error");
                     break;
-                case SyntaxMessageKind.Warning:
+                case DiagnosticMessageKind.Warning:
                     builder.Append("warning");
                     break;
                 default:

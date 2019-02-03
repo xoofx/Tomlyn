@@ -218,10 +218,13 @@ namespace SharpToml.Text
             return (c == '0' || c == '1');
         }
 
-        public static void AppendFromUtf32(int utf32, StringBuilder builder)
+        public static void AppendUtf32(this StringBuilder builder, char32 utf32)
         {
             if (utf32 < 65536)
+            {
                 builder.Append((char) utf32);
+                return;
+            }
             utf32 -= 65536;
             builder.Append((char) (utf32 / 1024 + 55296));
             builder.Append((char) (utf32 % 1024 + 56320));

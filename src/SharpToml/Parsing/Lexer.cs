@@ -25,7 +25,7 @@ namespace SharpToml.Parsing
         private char32 _pc1; // previous previous character - 1
         private char32 _pc; // previous character
         private char32 _c;
-        private List<SyntaxMessage> _errors;
+        private List<DiagnosticMessage> _errors;
         private TCharReader _reader;
         private const int Eof = -1;
         private TSourceView _sourceView;
@@ -58,7 +58,7 @@ namespace SharpToml.Parsing
         /// <summary>
         /// Gets error messages.
         /// </summary>
-        public IEnumerable<SyntaxMessage> Errors => _errors ?? Enumerable.Empty<SyntaxMessage>();
+        public IEnumerable<DiagnosticMessage> Errors => _errors ?? Enumerable.Empty<DiagnosticMessage>();
 
         public bool MoveNext()
         {
@@ -115,6 +115,14 @@ namespace SharpToml.Parsing
                 case '=': // in the context of a key, we need to parse up to the =
                     NextChar();
                     _token = new SyntaxTokenValue(TokenKind.Equal, start, start);
+                    break;
+                case '{':
+                    _token = new SyntaxTokenValue(TokenKind.OpenBrace, _position, _position);
+                    NextChar();
+                    break;
+                case '}':
+                    _token = new SyntaxTokenValue(TokenKind.CloseBrace, _position, _position);
+                    NextChar();
                     break;
                 case '[':
                     NextChar();
@@ -287,8 +295,18 @@ namespace SharpToml.Parsing
             _currentIdentifierChars.Clear();
 
             // We track an identifier to check if it is a keyword (inf, true, false)
+            var firstChar = _c;
             _currentIdentifierChars.Add(_c);
+
             NextChar();
+
+            // IF we have a digit, this is a -1 or +2
+            if ((firstChar == '+' || firstChar == '-') && CharHelper.IsDigit(_c))
+            {
+                _currentIdentifierChars.Clear();
+                ReadNumber(firstChar, start);
+                return;
+            }
 
             while (CharHelper.IsIdentifierContinue(_c))
             {
@@ -349,19 +367,19 @@ namespace SharpToml.Parsing
             return true;
         }
 
-        private void ReadNumber()
+        private void ReadNumber(char32? numberPrefix = null, TextPosition? startPrefix = null)
         {
-            var start = _position;
+            var start = startPrefix ?? _position;
             var end = _position;
             var isFloat = false;
 
-            var firstChar = _c;
-            var startsWithZero = _c == '0';
-            NextChar(); // Skip first digit character
+            var firstChar = numberPrefix ?? _c;
+            var startsWithZero = firstChar == '0';
 
             // If we start with 0, it might be an hexa, octal or binary literal
             if (startsWithZero)
             {
+                NextChar(); // Skip first digit character
                 if (_c == 'x' || _c == 'X' || _c == 'o' || _c == 'O' || _c == 'b' || _c == 'B')
                 {
                     string name;
@@ -468,7 +486,13 @@ namespace SharpToml.Parsing
 
             // Reset parsing of integer
             _textBuilder.Length = 0;
-            _textBuilder.Append(firstChar);
+            bool hasSignedPrefix = firstChar == '+' || firstChar == '-';
+            _textBuilder.AppendUtf32(firstChar);
+
+            if (startPrefix == null)
+            {
+                NextChar();
+            }
 
             // Parse all digits
             bool isDigit;
@@ -476,7 +500,7 @@ namespace SharpToml.Parsing
             {
                 if (isDigit)
                 {
-                    _textBuilder.Append(_c);
+                    _textBuilder.AppendUtf32(_c);
                 }
                 end = _position;
                 NextChar();
@@ -502,7 +526,7 @@ namespace SharpToml.Parsing
                 {
                     if (isDigit)
                     {
-                        _textBuilder.Append(_c);
+                        _textBuilder.AppendUtf32(_c);
                     }
                     end = _position;
                     NextChar();
@@ -514,12 +538,12 @@ namespace SharpToml.Parsing
             {
                 isFloat = true;
 
-                _textBuilder.Append(_c);
+                _textBuilder.AppendUtf32(_c);
                 end = _position;
                 NextChar();
                 if (_c == '+' || _c == '-')
                 {
-                    _textBuilder.Append(_c);
+                    _textBuilder.AppendUtf32(_c);
                     end = _position;
                     NextChar();
                 }
@@ -535,7 +559,7 @@ namespace SharpToml.Parsing
                 {
                     if (isDigit)
                     {
-                        _textBuilder.Append(_c);
+                        _textBuilder.AppendUtf32(_c);
                     }
                     end = _position;
                     NextChar();
@@ -549,8 +573,6 @@ namespace SharpToml.Parsing
                 if (!double.TryParse(numberAsText, NumberStyles.Float, CultureInfo.InvariantCulture, out var doubleValue))
                 {
                     AddError($"Unable to parse floating point `{numberAsText}`", start, end);
-                    _token = new SyntaxTokenValue(TokenKind.Invalid, start, end);
-                    return;
                 }
                 // If value is 0.0 or 1.0, use box cached otherwise box
                 resolvedValue = doubleValue == 0.0 ? BoxedValues.FloatZero : doubleValue == 1.0 ? BoxedValues.FloatOne : doubleValue;
@@ -560,8 +582,6 @@ namespace SharpToml.Parsing
                 if (!long.TryParse(numberAsText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var longValue))
                 {
                     AddError($"Unable to parse integer `{numberAsText}`", start, end);
-                    _token = new SyntaxTokenValue(TokenKind.Invalid, start, end);
-                    return;
                 }
                 // If value is 0 or 1, use box cached otherwise box
                 resolvedValue = longValue == 0 ? BoxedValues.IntegerZero : longValue == 1 ? BoxedValues.IntegerOne : longValue;
@@ -604,7 +624,7 @@ namespace SharpToml.Parsing
             {
                 if (!TryReadEscapeChar(ref end))
                 {
-                    _textBuilder.Append(_c);
+                    _textBuilder.AppendUtf32(_c);
                     end = _position;
                     NextChar();
                 }
@@ -734,7 +754,7 @@ namespace SharpToml.Parsing
 
                         if (i == maxCount)
                         {
-                            CharHelper.AppendFromUtf32(value, _textBuilder);
+                            _textBuilder.AppendUtf32((char32)value);
                             return true;
                         }
                     }
@@ -778,7 +798,7 @@ namespace SharpToml.Parsing
             continue_parsing_string:
             while (_c != '\'' && _c != Eof)
             {
-                _textBuilder.Append(_c);
+                _textBuilder.AppendUtf32(_c);
                 end = _position;
                 NextChar();
             }
@@ -832,7 +852,7 @@ namespace SharpToml.Parsing
 
         private void ReadComment(TextPosition start)
         {
-            var end = _position;
+            var end = start;
             // Read until the end of the line/file
             while (_c != Eof && _c != '\r' && _c != '\n')
             {
@@ -889,9 +909,9 @@ namespace SharpToml.Parsing
         {
             if (_errors == null)
             {
-                _errors = new List<SyntaxMessage>();
+                _errors = new List<DiagnosticMessage>();
             }
-            _errors.Add(new SyntaxMessage(SyntaxMessageKind.Error, new SourceSpan(_sourceView.SourcePath, start, end), message));
+            _errors.Add(new DiagnosticMessage(DiagnosticMessageKind.Error, new SourceSpan(_sourceView.SourcePath, start, end), message));
         }
 
         private void Reset()

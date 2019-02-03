@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2019 - Alexandre Mutel. All rights reserved.
+// Copyright (c) 2019 - Alexandre Mutel. All rights reserved.
 // Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
 namespace SharpToml.Syntax
@@ -36,7 +36,7 @@ namespace SharpToml.Syntax
         public SyntaxToken EndOfLineToken
         {
             get => _endOfLineToken;
-            set => ParentToThis(ref _endOfLineToken, value, TokenKind.NewLine);
+            set => ParentToThis(ref _endOfLineToken, value, TokenKind.NewLine, TokenKind.Eof);
         }
 
         public SyntaxList<KeyValueSyntax> KeyValues { get; }

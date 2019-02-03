@@ -5,7 +5,16 @@ namespace SharpToml.Tests
     public class BasicTests
     {
         [Test]
-        public void Test1()
+        public void TestEmptyComment()
+        {
+            var input = "#\n";
+            var doc = Toml.Parse(input);
+            var docAsStr = doc.ToString();
+            Assert.AreEqual(input, docAsStr);
+        }
+
+        [Test]
+        public void SimpleTest()
         {
             var test = @"[table-1]
 key1 = ""some string""    # This is a comment

@@ -22,24 +22,27 @@ namespace SharpToml.Tests
         {
             var doc = Toml.Parse(toml);
 
-            foreach (var syntaxMessage in doc.Messages)
-            {
-                Console.WriteLine(syntaxMessage);
-            }
-
-            Assert.False(doc.HasErrors, "Unexpected parsing errors");
-
-            var docAsStr = doc.ToString();
-
-
             Console.WriteLine();
             DisplayHeader("input");
             Console.WriteLine(toml);
 
             Console.WriteLine();
             DisplayHeader("round-trip");
+            var docAsStr = doc.ToString();
             Console.WriteLine(docAsStr);
 
+            if (doc.Diagnostics.Count > 0)
+            {
+                Console.WriteLine();
+                DisplayHeader("messages");
+
+                foreach (var syntaxMessage in doc.Diagnostics)
+                {
+                    Console.WriteLine(syntaxMessage);
+                }
+
+                Assert.False(doc.HasErrors, "Unexpected parsing errors");
+            }
 
             Assert.AreEqual(toml, docAsStr, "The roundtrip doesn't match");
             // TODO: Add tests for 

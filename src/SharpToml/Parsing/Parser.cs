@@ -19,6 +19,7 @@ namespace SharpToml.Parsing
         private bool _hideNewLine;
         private readonly List<SyntaxTrivia> _currentTrivias;
         private TableSyntax _currentTable = null;
+        private DiagnosticsBag _diagnostics;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Parser"/> class.
@@ -28,13 +29,8 @@ namespace SharpToml.Parsing
         public Parser(ITokenProvider<TSourceView> lexer)
         {
             this._lexer = lexer;
-            Messages = new List<SyntaxMessage>();
             _currentTrivias = new List<SyntaxTrivia>();
         }
-
-        public List<SyntaxMessage> Messages { get; private set; }
-
-        public bool HasErrors { get; private set; }
 
         // private Stack<ScriptNode> Blocks { get; }
 
@@ -42,10 +38,8 @@ namespace SharpToml.Parsing
 
         public DocumentSyntax Run()
         {
-            HasErrors = false;
-
             var doc = new DocumentSyntax();
-            Messages = doc.Messages;
+            _diagnostics = doc.Diagnostics;
 
             _currentTable = null;
             _hideNewLine = true;
@@ -75,6 +69,7 @@ namespace SharpToml.Parsing
                 Close(_currentTable);
                 _currentTable = null;
             }
+            Close(doc);
 
             if (_lexer.HasErrors)
             {
@@ -131,6 +126,7 @@ namespace SharpToml.Parsing
         private KeyValueSyntax ParseKeyValue(bool expectEndOfLine)
         {
             // When parsing a key = value, we don't expect NewLines, so we don't hide them as trivia
+            var previousState = _hideNewLine;
             _hideNewLine = false;
             try
             {
@@ -169,7 +165,7 @@ namespace SharpToml.Parsing
             }
             finally
             {
-                _hideNewLine = true;
+                _hideNewLine = previousState;
             }
         }
 
@@ -257,6 +253,8 @@ namespace SharpToml.Parsing
                 {
                     if (_token.Kind == TokenKind.CloseBracket)
                     {
+                        // Before parsing the next token we need to restore the parsing of new line
+                        _hideNewLine = saveHideNewLine;
                         array.CloseBracket = EatToken();
                         break;
                     }
@@ -296,10 +294,11 @@ namespace SharpToml.Parsing
         {
             var inlineTable = Open<InlineTableSyntax>();
 
-            inlineTable.OpenBrace = EatToken(TokenKind.OpenBrace);
-
             var previousState = _lexer.State;
             _lexer.State = LexerSate.Key;
+            var previousLine = _hideNewLine;
+            _hideNewLine = false;
+            inlineTable.OpenBrace = EatToken(TokenKind.OpenBrace);
             try
             {
 
@@ -311,6 +310,8 @@ namespace SharpToml.Parsing
                 {
                     if (_token.Kind == TokenKind.CloseBrace)
                     {
+                        _hideNewLine = previousLine;
+                        _lexer.State = previousState;
                         inlineTable.CloseBrace = EatToken();
                         break;
                     }
@@ -343,6 +344,7 @@ namespace SharpToml.Parsing
             finally
             {
                 _lexer.State = previousState;
+                _hideNewLine = previousLine;
             }
 
             return Close(inlineTable);
@@ -357,6 +359,7 @@ namespace SharpToml.Parsing
             }
             bool isTableArray = _token.Kind == TokenKind.OpenBracketDouble;
 
+            var previousState = _hideNewLine;
             _hideNewLine = false;
             var table = Open<TableSyntax>();
             try
@@ -364,12 +367,16 @@ namespace SharpToml.Parsing
                 table.OpenBracket = EatToken();
                 table.Name = ParseKey();
                 table.CloseBracket = EatToken(isTableArray ? TokenKind.CloseBracketDouble : TokenKind.CloseBracket);
-                table.EndOfLineToken = EatToken(TokenKind.NewLine);
+
+                if (_token.Kind != TokenKind.Eof)
+                {
+                    table.EndOfLineToken = EatToken(TokenKind.NewLine);
+                }
                 // We don't close the table as it is going to be the new table
             }
             finally
             {
-                _hideNewLine = true;
+                _hideNewLine = previousState;
             }
 
             return table;
@@ -444,6 +451,7 @@ namespace SharpToml.Parsing
             syntax.Text = _token.Kind.ToText() ?? _token.GetText(_lexer.Source);
             if (tokenKind == TokenKind.NewLine)
             {
+                // Once we have found a new line, we let all the other NewLines as trivias
                 _hideNewLine = true;
             }
             NextToken();
@@ -561,7 +569,7 @@ namespace SharpToml.Parsing
 
         private void LogError(SourceSpan span, string text)
         {
-            Log(new SyntaxMessage(SyntaxMessageKind.Error, span, text));
+            Log(new DiagnosticMessage(DiagnosticMessageKind.Error, span, text));
         }
 
         private void LogError(SyntaxNode node, string message)
@@ -574,14 +582,10 @@ namespace SharpToml.Parsing
             LogError(span, $"Error while parsing {node.GetType().Name}: {message}");
         }
 
-        private void Log(SyntaxMessage syntaxMessage)
+        private void Log(DiagnosticMessage diagnosticMessage)
         {
-            if (syntaxMessage == null) throw new ArgumentNullException(nameof(syntaxMessage));
-            Messages.Add(syntaxMessage);
-            if (syntaxMessage.Kind == SyntaxMessageKind.Error)
-            {
-                HasErrors = true;
-            }
+            if (diagnosticMessage == null) throw new ArgumentNullException(nameof(diagnosticMessage));
+            _diagnostics.Add(diagnosticMessage);
         }
     }
 }
