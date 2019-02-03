@@ -821,6 +821,7 @@ namespace SharpToml.Parsing
                     case 'u':
                     case 'U':
                     {
+                        var start = _position;
                         end = _position;
                         var maxCount = _c == 'u' ? 4 : 8;
                         NextChar();
@@ -837,6 +838,10 @@ namespace SharpToml.Parsing
 
                         if (i == maxCount)
                         {
+                            if (!CharHelper.IsValidUnicodeScalarValue(value))
+                            {
+                                AddError($"Invalid Unicode scalar value [{value:X}]",start, start);
+                            }
                             _textBuilder.AppendUtf32((char32)value);
                             return true;
                         }

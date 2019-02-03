@@ -42,6 +42,11 @@ namespace SharpToml.Text
             return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
         }
 
+        public static bool IsValidUnicodeScalarValue(char32 c)
+        {
+            return c >= 0 && c <= 0xD7FF || c >= 0xE000 && c < 0x10FFFF;
+        }
+
         public static bool IsDigit(char32 c)
         {
             return (c >= '0' && c <= '9');
