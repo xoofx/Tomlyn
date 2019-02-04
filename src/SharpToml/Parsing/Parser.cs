@@ -51,11 +51,11 @@ namespace SharpToml.Parsing
                 if (itemEntry is TableSyntaxBase table)
                 {
                     _currentTable = table;
-                    AddToListAndUpdateSpan(doc.Items, itemEntry);
+                    AddToListAndUpdateSpan(doc.Tables, table);
                 }
                 else if (_currentTable == null)
                 {
-                    AddToListAndUpdateSpan(doc.Items, itemEntry);
+                    AddToListAndUpdateSpan(doc.KeyValues, (KeyValueSyntax)itemEntry);
                 }
                 else
                 {

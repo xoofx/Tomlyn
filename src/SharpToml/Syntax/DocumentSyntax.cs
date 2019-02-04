@@ -7,7 +7,8 @@ namespace SharpToml.Syntax
     {
         public DocumentSyntax() : base(SyntaxKind.Document)
         {
-            Items = new SyntaxList<TableEntrySyntax>() { Parent = this };
+            KeyValues = new SyntaxList<KeyValueSyntax>() {Parent = this};
+            Tables = new SyntaxList<TableSyntaxBase>() { Parent = this };
             Diagnostics = new DiagnosticsBag();
         }
         public DiagnosticsBag Diagnostics { get; }
@@ -19,13 +20,16 @@ namespace SharpToml.Syntax
             visitor.Visit(this);
         }
 
-        public SyntaxList<TableEntrySyntax> Items { get; }
+        public SyntaxList<KeyValueSyntax> KeyValues { get; }
 
-        public override int ChildrenCount => 1;
+
+        public SyntaxList<TableSyntaxBase> Tables { get; }
+
+        public override int ChildrenCount => 2;
 
         protected override SyntaxNode GetChildrenImpl(int index)
         {
-            return Items;
+            return index == 0 ? (SyntaxNode)KeyValues : Tables;
         }
     }
 }
