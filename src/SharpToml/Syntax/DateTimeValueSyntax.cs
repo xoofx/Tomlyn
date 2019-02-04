@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2019 - Alexandre Mutel. All rights reserved.
+// Copyright (c) 2019 - Alexandre Mutel. All rights reserved.
 // Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
 using System;
@@ -7,9 +7,13 @@ namespace SharpToml.Syntax
 {
     public sealed class DateTimeValueSyntax : ValueSyntax
     {
-        public override void Visit(ISyntaxVisitor visitor)
+        public DateTimeValueSyntax() : base(SyntaxKind.DateTime)
         {
-            visitor.Accept(this);
+        }
+
+        public override void Accept(SyntaxVisitor visitor)
+        {
+            visitor.Visit(this);
         }
 
         public SyntaxToken Token { get; set; }

@@ -499,7 +499,7 @@ namespace SharpToml.Parsing
             }
 
             // Parse leading digits
-            ReadDigits(ref end);
+            ReadDigits(ref end, hasLeadingZero);
 
             // We are in the case of a date
             if (_c == '-' || _c == ':')
@@ -583,7 +583,7 @@ namespace SharpToml.Parsing
                 }
 
                 isFloat = true;
-                ReadDigits(ref end);
+                ReadDigits(ref end, false);
             }
 
             // Parse only the exponent if we don't have a range
@@ -607,7 +607,7 @@ namespace SharpToml.Parsing
                     _token = new SyntaxTokenValue(TokenKind.Invalid, start, end);
                     return;
                 }
-                ReadDigits(ref end);
+                ReadDigits(ref end, false);
             }
 
             var numberAsText = _textBuilder.ToString();
@@ -646,10 +646,9 @@ namespace SharpToml.Parsing
             _token = new SyntaxTokenValue(isFloat ? TokenKind.Float : TokenKind.Integer, start, end, resolvedValue);
         }
 
-        private void ReadDigits(ref TextPosition end)
+        private void ReadDigits(ref TextPosition end, bool isPreviousDigit)
         {
             bool isDigit;
-            bool isPreviousDigit = CharHelper.IsDigit(_c);
             while ((isDigit = CharHelper.IsDigit(_c)) || _c == '_')
             {
                 if (isDigit)
@@ -671,7 +670,7 @@ namespace SharpToml.Parsing
 
             if (!isPreviousDigit)
             {
-                AddError("An underscore `_` must not follow a digit", _position, _position);
+                AddError("An underscore `_` must not followed a digit", _position, _position);
             }
         }
 

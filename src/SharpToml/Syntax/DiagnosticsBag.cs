@@ -41,6 +41,16 @@ namespace SharpToml.Syntax
             HasErrors = false;
         }
 
+        public void Warning(SourceSpan span, string text)
+        {
+            Add(new DiagnosticMessage(DiagnosticMessageKind.Warning, span, text));
+        }
+
+        public void Error(SourceSpan span, string text)
+        {
+            Add(new DiagnosticMessage(DiagnosticMessageKind.Error, span, text));
+        }
+
         public List<DiagnosticMessage>.Enumerator GetEnumerator()
         {
             return _messages.GetEnumerator();

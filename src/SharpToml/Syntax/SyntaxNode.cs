@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2019 - Alexandre Mutel. All rights reserved.
+// Copyright (c) 2019 - Alexandre Mutel. All rights reserved.
 // Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
 using System;
@@ -11,6 +11,13 @@ namespace SharpToml.Syntax
 {    
     public abstract class SyntaxNode : SyntaxNodeBase
     {
+        protected SyntaxNode(SyntaxKind kind)
+        {
+            Kind = kind;
+        }
+
+        public SyntaxKind Kind { get; }
+
         public List<SyntaxTrivia> LeadingTrivia { get; set; }
 
         public List<SyntaxTrivia> TrailingTrivia { get; set; }

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2019 - Alexandre Mutel. All rights reserved.
+// Copyright (c) 2019 - Alexandre Mutel. All rights reserved.
 // Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
 namespace SharpToml.Syntax
@@ -7,6 +7,10 @@ namespace SharpToml.Syntax
     {
         private SyntaxToken _dot;
         private BasicValueSyntax _value;
+
+        public DottedKeyItemSyntax() : base(SyntaxKind.DottedKeyItem)
+        {
+        }
 
         public SyntaxToken Dot
         {
@@ -20,9 +24,9 @@ namespace SharpToml.Syntax
             set => ParentToThis(ref _value, value);
         }
 
-        public override void Visit(ISyntaxVisitor visitor)
+        public override void Accept(SyntaxVisitor visitor)
         {
-            visitor.Accept(this);
+            visitor.Visit(this);
         }
 
         public override int ChildrenCount => 2;

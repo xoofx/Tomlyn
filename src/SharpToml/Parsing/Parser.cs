@@ -18,7 +18,7 @@ namespace SharpToml.Parsing
         private SyntaxTokenValue _token;
         private bool _hideNewLine;
         private readonly List<SyntaxTrivia> _currentTrivias;
-        private TableSyntax _currentTable = null;
+        private TableSyntaxBase _currentTable = null;
         private DiagnosticsBag _diagnostics;
 
         /// <summary>
@@ -48,19 +48,19 @@ namespace SharpToml.Parsing
             {
                 if (itemEntry == null) continue;
                  
-                if (itemEntry is TableSyntax table)
+                if (itemEntry is TableSyntaxBase table)
                 {
                     _currentTable = table;
-                    AddToListAndUpdateSpan(doc.Entries, itemEntry);
+                    AddToListAndUpdateSpan(doc.Items, itemEntry);
                 }
                 else if (_currentTable == null)
                 {
-                    AddToListAndUpdateSpan(doc.Entries, itemEntry);
+                    AddToListAndUpdateSpan(doc.Items, itemEntry);
                 }
                 else
                 {
                     // Otherwise, we know that we can only have a key-value
-                    AddToListAndUpdateSpan(_currentTable.KeyValues, (KeyValueSyntax)itemEntry);
+                    AddToListAndUpdateSpan(_currentTable.Items, (KeyValueSyntax)itemEntry);
                 }
             }
 
@@ -361,7 +361,7 @@ namespace SharpToml.Parsing
             return Close(inlineTable);
         }
 
-        private TableSyntax ParseTableOrTableArray()
+        private TableSyntaxBase ParseTableOrTableArray()
         {
             // If we have a pending table, close it
             if (_currentTable != null)
@@ -372,7 +372,7 @@ namespace SharpToml.Parsing
 
             var previousState = _hideNewLine;
             _hideNewLine = false;
-            var table = Open<TableSyntax>();
+            var table = isTableArray ? (TableSyntaxBase)Open<TableArraySyntax>() : Open<TableSyntax>();
             try
             {
                 table.OpenBracket = EatToken();

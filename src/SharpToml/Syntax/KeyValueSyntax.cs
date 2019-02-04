@@ -10,6 +10,10 @@ namespace SharpToml.Syntax
         private ValueSyntax _value;
         private SyntaxToken _endOfLineToken;
 
+        public KeyValueSyntax() : base(SyntaxKind.KeyValue)
+        {
+        }
+
         public KeySyntax Key
         {
             get => _key;
@@ -36,9 +40,9 @@ namespace SharpToml.Syntax
 
         public override int ChildrenCount => 4;
 
-        public override void Visit(ISyntaxVisitor visitor)
+        public override void Accept(SyntaxVisitor visitor)
         {
-            visitor.Accept(this);
+            visitor.Visit(this);
         }
 
         protected override SyntaxNode GetChildrenImpl(int index)

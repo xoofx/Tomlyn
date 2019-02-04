@@ -5,27 +5,27 @@ namespace SharpToml.Syntax
 {
     public sealed class DocumentSyntax : SyntaxNode
     {
-        public DocumentSyntax()
+        public DocumentSyntax() : base(SyntaxKind.Document)
         {
-            Entries = new SyntaxList<TableEntrySyntax>() { Parent = this };
+            Items = new SyntaxList<TableEntrySyntax>() { Parent = this };
             Diagnostics = new DiagnosticsBag();
         }
         public DiagnosticsBag Diagnostics { get; }
 
         public bool HasErrors => Diagnostics.HasErrors;
 
-        public override void Visit(ISyntaxVisitor visitor)
+        public override void Accept(SyntaxVisitor visitor)
         {
-            visitor.Accept(this);
+            visitor.Visit(this);
         }
 
-        public SyntaxList<TableEntrySyntax> Entries { get; }
+        public SyntaxList<TableEntrySyntax> Items { get; }
 
         public override int ChildrenCount => 1;
 
         protected override SyntaxNode GetChildrenImpl(int index)
         {
-            return Entries;
+            return Items;
         }
     }
 }

@@ -35,7 +35,7 @@ namespace SharpToml.Tests
 
         private static void ValidateSpec(string type, string inputName, string toml, string json)
         {
-            var doc = Toml.Parse(toml);
+            var doc = Toml.ParseAndValidate(toml);
 
             Console.WriteLine();
             DisplayHeader("input");

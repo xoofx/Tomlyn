@@ -9,9 +9,9 @@ namespace SharpToml.Syntax
 
         public string Text { get; set; }
 
-        public override void Visit(ISyntaxVisitor visitor)
+        public override void Accept(SyntaxVisitor visitor)
         {
-            visitor.Accept(this);
+            visitor.Visit(this);
         }
     }
 }

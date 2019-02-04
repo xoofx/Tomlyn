@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2019 - Alexandre Mutel. All rights reserved.
+// Copyright (c) 2019 - Alexandre Mutel. All rights reserved.
 // Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
 namespace SharpToml.Syntax
@@ -6,6 +6,10 @@ namespace SharpToml.Syntax
     public sealed class IntegerValueSyntax : ValueSyntax
     {
         private SyntaxToken _token;
+
+        public IntegerValueSyntax() : base(SyntaxKind.Integer)
+        {
+        }
 
         public SyntaxToken Token
         {
@@ -15,9 +19,9 @@ namespace SharpToml.Syntax
 
         public long Value { get; set; }
 
-        public override void Visit(ISyntaxVisitor visitor)
+        public override void Accept(SyntaxVisitor visitor)
         {
-            visitor.Accept(this);
+            visitor.Visit(this);
         }
         public override int ChildrenCount => 1;
 

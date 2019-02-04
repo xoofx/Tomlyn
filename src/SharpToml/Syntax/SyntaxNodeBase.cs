@@ -7,7 +7,7 @@ namespace SharpToml.Syntax
     {
         public SourceSpan Span;
 
-        public abstract void Visit(ISyntaxVisitor visitor);
+        public abstract void Accept(SyntaxVisitor visitor);
 
         public SyntaxNode Parent { get; internal set; }
     }
