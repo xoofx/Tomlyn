@@ -14,7 +14,7 @@ namespace SharpToml.Syntax
         public SyntaxToken Token
         {
             get => _token;
-            set => ParentToThis(ref _token, value, value != null && value.Kind.IsFloat(), TokenKind.Float);
+            set => ParentToThis(ref _token, value, value != null && value.TokenKind.IsFloat(), TokenKind.Float);
         }
 
         public double Value { get; set; }

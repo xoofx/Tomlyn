@@ -12,10 +12,6 @@ namespace SharpToml.Syntax
         {
             DefaultVisit(list);
         }
-        public virtual void Visit(TableSyntax table)
-        {
-            DefaultVisit(table);
-        }
         public virtual void Visit(DocumentSyntax document)
         {
             DefaultVisit(document);
@@ -40,10 +36,16 @@ namespace SharpToml.Syntax
         {
             DefaultVisit(floatValue);
         }
-        public virtual void Visit(TableEntrySyntax tableEntry)
+        public virtual void Visit(TableSyntax table)
         {
-            DefaultVisit(tableEntry);
+            DefaultVisit(table);
         }
+
+        public virtual void Visit(TableArraySyntax table)
+        {
+            DefaultVisit(table);
+        }
+
         public virtual void Visit(SyntaxToken token)
         {
             DefaultVisit(token);

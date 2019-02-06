@@ -33,7 +33,7 @@ namespace SharpToml.Parsing
         /// <summary>
         /// Initialize a new instance of this <see cref="Lexer{TSourceView,TCharReader}" />.
         /// </summary>
-        /// <param name="textReader">The text to analyze</param>
+        /// <param name="sourceView">The text to analyze</param>
         /// <param name="sourcePath">The file path used for error reporting only.</param>
         /// <exception cref="ArgumentNullException"></exception>
         /// <exception cref="System.ArgumentNullException">If text is null</exception>

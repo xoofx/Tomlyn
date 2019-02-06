@@ -14,7 +14,7 @@ namespace SharpToml.Syntax
         public SyntaxToken Token
         {
             get => _token;
-            set => ParentToThis(ref _token, value, value != null && value.Kind.IsInteger(), "decimal/hex/binary/octal integer");
+            set => ParentToThis(ref _token, value, value != null && value.TokenKind.IsInteger(), "decimal/hex/binary/octal integer");
         }
 
         public long Value { get; set; }

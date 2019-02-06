@@ -20,6 +20,7 @@
     <PackageProjectUrl>https://github.com/xoofx/SharpToml</PackageProjectUrl>
     <PackageLicenseUrl>https://github.com/xoofx/SharpToml/blob/master/license.txt</PackageLicenseUrl>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
     <!--Add support for sourcelink-->
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>

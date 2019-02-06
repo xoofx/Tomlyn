@@ -8,10 +8,5 @@ namespace SharpToml.Syntax
         protected TableEntrySyntax(SyntaxKind kind) : base(kind)
         {
         }
-
-        public override void Accept(SyntaxVisitor visitor)
-        {
-            visitor.Visit(this);
-        }
     }
 }

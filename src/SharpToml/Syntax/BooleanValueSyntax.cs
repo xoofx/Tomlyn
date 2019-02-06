@@ -21,7 +21,7 @@ namespace SharpToml.Syntax
                 // Update the value accordingly
                 if (_token != null)
                 {
-                    _value = _token.Kind == TokenKind.True;
+                    _value = _token.TokenKind == TokenKind.True;
                 }
                 else
                 {
@@ -38,7 +38,7 @@ namespace SharpToml.Syntax
                 // Update the token kind accordingly
                 if (_token != null)
                 {
-                    _token.Kind = value ? TokenKind.True : TokenKind.False;
+                    _token.TokenKind = value ? TokenKind.True : TokenKind.False;
                 }
                 else
                 {

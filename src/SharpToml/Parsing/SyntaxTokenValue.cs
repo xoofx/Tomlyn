@@ -20,6 +20,7 @@ namespace SharpToml.Parsing
         /// <param name="kind">The type.</param>
         /// <param name="start">The start.</param>
         /// <param name="end">The end.</param>
+        /// <param name="value">Optional parse value of the token</param>
         /// <exception cref="System.ArgumentOutOfRangeException"></exception>
         public SyntaxTokenValue(TokenKind kind, TextPosition start, TextPosition end, object value = null)
         {

@@ -39,11 +39,6 @@ namespace SharpToml.Syntax
         public SyntaxList<KeyValueSyntax> Items { get; }
         public override int ChildrenCount => 5;
 
-        public override void Accept(SyntaxVisitor visitor)
-        {
-            visitor.Visit(this);
-        }
-
         internal abstract TokenKind OpenTokenKind { get; }
 
         internal abstract TokenKind CloseTokenKind { get; }

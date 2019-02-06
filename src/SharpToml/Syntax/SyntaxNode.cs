@@ -57,7 +57,7 @@ namespace SharpToml.Syntax
                 WriteTriviaTo(node.LeadingTrivia, writer);
                 if (node is SyntaxToken token)
                 {
-                    writer.Write(token.Kind.ToText() ?? token.Text);
+                    writer.Write(token.TokenKind.ToText() ?? token.Text);
                 }
                 else
                 {
@@ -99,18 +99,18 @@ namespace SharpToml.Syntax
 
         protected void ParentToThis<TSyntaxNode>(ref TSyntaxNode set, TSyntaxNode node, TokenKind expectedKind) where TSyntaxNode : SyntaxToken
         {
-            ParentToThis(ref set, node, node.Kind == expectedKind, expectedKind);
+            ParentToThis(ref set, node, node.TokenKind == expectedKind, expectedKind);
         }
 
         protected void ParentToThis<TSyntaxNode, TExpected>(ref TSyntaxNode set, TSyntaxNode node, bool expectedKindSuccess, TExpected expectedMessage) where TSyntaxNode : SyntaxToken
         {
-            if (node != null && !expectedKindSuccess) throw new InvalidOperationException($"Unexpected node kind `{node.Kind}` while expecting `{expectedMessage}`");
+            if (node != null && !expectedKindSuccess) throw new InvalidOperationException($"Unexpected node kind `{node.TokenKind}` while expecting `{expectedMessage}`");
             ParentToThis(ref set, node);
         }
 
         protected void ParentToThis<TSyntaxNode>(ref TSyntaxNode set, TSyntaxNode node, TokenKind expectedKind1, TokenKind expectedKind2) where TSyntaxNode : SyntaxToken
         {
-            ParentToThis(ref set, node, node.Kind == expectedKind1 || node.Kind == expectedKind2, new ExpectedTuple2<TokenKind, TokenKind>(expectedKind1, expectedKind2));
+            ParentToThis(ref set, node, node.TokenKind == expectedKind1 || node.TokenKind == expectedKind2, new ExpectedTuple2<TokenKind, TokenKind>(expectedKind1, expectedKind2));
         }
 
         private readonly struct ExpectedTuple2<T1, T2>

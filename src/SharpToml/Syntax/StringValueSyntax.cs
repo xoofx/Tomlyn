@@ -14,7 +14,7 @@ namespace SharpToml.Syntax
         public SyntaxToken Token
         {
             get => _token;
-            set => ParentToThis(ref _token, value, value != null && value.Kind.IsString(), "string");
+            set => ParentToThis(ref _token, value, value != null && value.TokenKind.IsString(), "string");
         }
 
         public string Value { get; set; }

@@ -22,7 +22,7 @@ namespace SharpToml.Parsing
         private DiagnosticsBag _diagnostics;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="Parser"/> class.
+        /// Initializes a new instance of the <see cref="Parser{TSourceView}"/> class.
         /// </summary>
         /// <param name="lexer">The lexer.</param>
         /// <exception cref="System.ArgumentNullException"></exception>
@@ -465,7 +465,7 @@ namespace SharpToml.Parsing
                     LogError($"Unexpected token found `{ToPrintable(_token)}` (token: `{_token.Kind.ToString().ToLowerInvariant()}`) while expecting `{tokenKind.ToText() ?? ToPrintable(_token)}` (token: `{tokenKind.ToString().ToLowerInvariant()}`)");
                 }
             }
-            syntax.Kind = tokenKind;
+            syntax.TokenKind = tokenKind;
             syntax.Text = _token.Kind.ToText() ?? _token.GetText(_lexer.Source);
             if (tokenKind == TokenKind.NewLine)
             {
@@ -479,7 +479,7 @@ namespace SharpToml.Parsing
         private SyntaxToken EatToken()
         {
             var syntax = Open<SyntaxToken>();
-            syntax.Kind = _token.Kind;
+            syntax.TokenKind = _token.Kind;
             syntax.Text = _token.Kind.ToText() ?? _token.GetText(_lexer.Source);
             NextToken();            
             return Close(syntax);

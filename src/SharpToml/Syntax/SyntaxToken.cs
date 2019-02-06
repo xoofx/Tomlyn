@@ -5,7 +5,7 @@ namespace SharpToml.Syntax
 {
     public class SyntaxToken : SyntaxNode
     {
-        public TokenKind Kind { get; set; }
+        public TokenKind TokenKind { get; set; }
 
         public SyntaxToken() : base(SyntaxKind.Token)
         {
