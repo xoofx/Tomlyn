@@ -5,6 +5,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Text;
 
 namespace SharpToml.Syntax
 {
@@ -65,5 +66,17 @@ namespace SharpToml.Syntax
         {
             return ((IEnumerable) _messages).GetEnumerator();
         }
+
+        public override string ToString()
+        {
+            var builder = new StringBuilder();
+            foreach (var message in _messages)
+            {
+                builder.AppendLine(message.ToString());
+            }
+
+            return builder.ToString();
+        }
+
     }
 }
