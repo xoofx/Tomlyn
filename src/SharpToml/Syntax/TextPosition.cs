@@ -34,12 +34,7 @@ namespace SharpToml.Syntax
 
         public override string ToString()
         {
-            return $"({Offset}:{Line},{Column})";
-        }
-
-        public string ToStringSimple()
-        {
-            return $"{Line+1},{Column+1}";
+            return $"({Line+1},{Column+1})";
         }
 
         public bool Equals(TextPosition other)

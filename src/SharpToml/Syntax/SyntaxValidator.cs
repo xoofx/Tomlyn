@@ -108,7 +108,7 @@ namespace SharpToml.Syntax
             {
                 if (!((existingValue.IsImplicit || isImplicit) && (existingValue.Kind == kind || existingValue.Kind == ObjectKind.TableArray && kind == ObjectKind.Table)))
                 {
-                    _diagnostics.Error(node.Span, $"The element `{node.ToString().ToPrintableString()}` with the key `{currentPath}` is already defined at {existingValue.Node.Span.Start} with `{existingValue.Node.ToString().ToPrintableString()}` and cannot be redefined");
+                    _diagnostics.Error(node.Span, $"The element `{node.ToString().TrimEnd('\r','\n').ToPrintableString()}` with the key `{currentPath}` is already defined at {existingValue.Node.Span.Start} with `{existingValue.Node.ToString().TrimEnd('\r', '\n').ToPrintableString()}` and cannot be redefined");
                 }
                 else if (existingValue.Kind == ObjectKind.TableArray)
                 {
