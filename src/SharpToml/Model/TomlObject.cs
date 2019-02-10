@@ -232,6 +232,12 @@ namespace SharpToml.Model
 
         public TomlArray() : base(ObjectKind.Array)
         {
+            _items = new List<TomlObject>();
+        }
+
+        public TomlArray(int capacity) : base(ObjectKind.Array)
+        {
+            _items = new List<TomlObject>(capacity);
         }
 
         public IEnumerator<object> GetEnumerator()
