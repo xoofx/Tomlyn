@@ -196,16 +196,19 @@ namespace SharpToml.Model
 
     public class TomlTable : TomlObject, IDictionary<string, object>
     {
+        // TODO: optimize the internal by avoiding two structures
+        private readonly List<KeyValuePair<string, TomlObject>> _order;
         private readonly Dictionary<string, TomlObject> _map;
 
         public TomlTable() : base(ObjectKind.Table)
         {
+            _order = new List<KeyValuePair<string, TomlObject>>();
             _map = new Dictionary<string, TomlObject>();
         }
 
         public IEnumerator<KeyValuePair<string, object>> GetEnumerator()
         {
-            foreach (var keyPair in _map)
+            foreach (var keyPair in _order)
             {
                 yield return new KeyValuePair<string, object>(keyPair.Key, ToObject(keyPair.Value));
             }
@@ -224,6 +227,7 @@ namespace SharpToml.Model
         public void Clear()
         {
             _map.Clear();
+            _order.Clear();
         }
 
         public bool Contains(KeyValuePair<string, object> item)
@@ -247,7 +251,10 @@ namespace SharpToml.Model
 
         public void Add(string key, object value)
         {
-            _map.Add(key, ToTomlObject(value));
+            if (value == null) throw new ArgumentNullException(nameof(value));
+            var toml = ToTomlObject(value);
+            _map.Add(key, toml);
+            _order.Add(new KeyValuePair<string, TomlObject>(key, toml));
         }
 
         public bool ContainsKey(string key)
@@ -257,7 +264,20 @@ namespace SharpToml.Model
 
         public bool Remove(string key)
         {
-            return _map.Remove(key);
+            if (_map.Remove(key))
+            {
+                for (int i = _order.Count - 1; i >= 0; i--)
+                {
+                    if (_order[i].Key == key)
+                    {
+                        _order.RemoveAt(i);
+                        break;
+                    }
+                }
+                return true;
+            }
+
+            return false;
         }
 
         public bool TryGetValue(string key, out object value)
@@ -286,21 +306,32 @@ namespace SharpToml.Model
                 }
                 else
                 {
-                    _map.Add(key, ToTomlObject(value));
+                    Add(key, value);
                 }
             }
         }
 
-        public ICollection<string> Keys => _map.Keys;
+        public ICollection<string> Keys
+        {
+            get
+            {
+                var list = new List<string>();
+                foreach (var valuePair in _order)
+                {
+                    list.Add(valuePair.Key);
+                }
+                return list;
+            }
+        }
 
         public ICollection<object> Values
         {
             get
             {
                 var list = new List<object>();
-                foreach (var value in _map.Values)
+                foreach (var valuePair in _order)
                 {
-                    list.Add(ToObject(value));
+                    list.Add(ToObject(valuePair.Value));
                 }
                 return list;
             }
