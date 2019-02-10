@@ -61,6 +61,48 @@ d = true
         }
 
 
+        [Test]
+        public static void TestTableArray()
+        {
+            var input = @"a = 1
+[[b]]
+a = 1
+b = true
+[[b]]
+c = 1
+d = true
+";
+            var syntax = Toml.Parse(input);
+            Assert.False(syntax.HasErrors, "The document should not have any errors");
+
+            var model = syntax.ToModel();
+
+            Assert.True(model.ContainsKey("a"));
+            Assert.True(model.ContainsKey("b"));
+            Assert.AreEqual(2, model.Count);
+            Assert.AreEqual((long)1, model["a"]);
+            Assert.IsInstanceOf<TomlTableArray>(model["b"]);
+            var tableArray = ((TomlTableArray)model["b"]);
+            Assert.AreEqual(2, tableArray.Count);
+
+            // first [[b]]
+            Assert.IsInstanceOf<TomlTable>(tableArray[0]);
+            var bTable0 = tableArray[0];
+            Assert.True(bTable0.ContainsKey("a"));
+            Assert.True(bTable0.ContainsKey("b"));
+            Assert.AreEqual((long)1, bTable0["a"]);
+            Assert.AreEqual((bool)true, bTable0["b"]);
+
+            // second [[b]]
+            Assert.IsInstanceOf<TomlTable>(tableArray[1]);
+            var bTable1 = tableArray[1];
+            Assert.True(bTable1.ContainsKey("c"));
+            Assert.True(bTable1.ContainsKey("d"));
+            Assert.AreEqual((long)1, bTable1["c"]);
+            Assert.AreEqual((bool)true, bTable1["d"]);
+        }
+
+
 
     }
 }

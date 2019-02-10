@@ -38,8 +38,6 @@ namespace SharpToml.Model
         {
             _currentTable = _rootTable;
             _currentTable = SetKeyValue(table.Name, null, true);
-            var newTable = new TomlTable();
-            _currentTable = newTable;
             base.Visit(table);
         }
 
