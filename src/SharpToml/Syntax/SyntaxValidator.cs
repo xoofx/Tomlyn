@@ -106,7 +106,7 @@ namespace SharpToml.Syntax
             ObjectPathValue existingValue;
             if (_maps.TryGetValue(currentPath, out existingValue))
             {
-                if (!((existingValue.IsImplicit || isImplicit) && (existingValue.Kind == kind || existingValue.Kind == ObjectKind.TableArray && kind == ObjectKind.Table)))
+                if (!((existingValue.IsImplicit || isImplicit) && (existingValue.Kind == kind || isImplicit && existingValue.Kind == ObjectKind.TableArray && kind == ObjectKind.Table)))
                 {
                     _diagnostics.Error(node.Span, $"The element `{node.ToString().TrimEnd('\r','\n').ToPrintableString()}` with the key `{currentPath}` is already defined at {existingValue.Node.Span.Start} with `{existingValue.Node.ToString().TrimEnd('\r', '\n').ToPrintableString()}` and cannot be redefined");
                 }

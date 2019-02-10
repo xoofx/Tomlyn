@@ -72,5 +72,23 @@ b = true
             StandardTests.Dump(input, doc, roundTrip);
             Assert.False(doc.HasErrors, "The document should not have any errors");
         }
+
+
+        [Test]
+        public void TestTableArrayAndInvalidTable()
+        {
+            var input = @"[[a]]
+b = 1
+[[a.b]]
+c = true
+[a.b]
+d = true
+";
+            var doc = Toml.Parse(input);
+            var roundTrip = doc.ToString();
+            StandardTests.Dump(input, doc, roundTrip);
+            Assert.True(doc.HasErrors, "The document should have errors");
+        }
+
     }
 }
