@@ -5,20 +5,26 @@ using SharpToml.Text;
 
 namespace SharpToml
 {
+    public enum TomlParserOptions
+    {
+        ParseAndValidate = 0,
+
+        ParseOnly = 1,
+    }
+
     public static class Toml
     {
-        public static DocumentSyntax Parse(string text, string sourcePath = null)
+        public static DocumentSyntax Parse(string text, string sourcePath = null, TomlParserOptions options = TomlParserOptions.ParseAndValidate)
         {
             var textView = new StringSourceView(text, sourcePath ?? string.Empty);
             var lexer = new Lexer<StringSourceView, StringCharacterIterator>(textView, textView.SourcePath);
             var parser = new Parser<StringSourceView>(lexer);
-            return parser.Run();
-        }
-
-        public static DocumentSyntax ParseAndValidate(string text, string sourcePath = null)
-        {
-            var doc = Parse(text, sourcePath);
-            return Validate(doc);
+            var doc = parser.Run();
+            if (options == TomlParserOptions.ParseAndValidate)
+            {
+                Validate(doc);
+            }
+            return doc;
         }
 
         public static DocumentSyntax Validate(DocumentSyntax doc)

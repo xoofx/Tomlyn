@@ -10,6 +10,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
+using SharpToml.Syntax;
 
 namespace SharpToml.Tests
 {
@@ -35,16 +36,32 @@ namespace SharpToml.Tests
 
         private static void ValidateSpec(string type, string inputName, string toml, string json)
         {
-            var doc = Toml.ParseAndValidate(toml);
+            var doc = Toml.Parse(toml);
+            var roundtrip = doc.ToString();
+            Dump(toml, doc, roundtrip);
 
+            switch (type)
+            {
+                case ValidSpec:
+                    Assert.False(doc.HasErrors, "Unexpected parsing errors");
+                    // Only in the case of a valid spec we check for rountrip
+                    Assert.AreEqual(toml, roundtrip, "The roundtrip doesn't match");
+                    break;
+                case InvalidSpec:
+                    Assert.True(doc.HasErrors, "The TOML requires parsing/validation errors");
+                    break;
+            }
+        }
+
+        public static void Dump(string input, DocumentSyntax doc, string roundtrip)
+        {
             Console.WriteLine();
             DisplayHeader("input");
-            Console.WriteLine(toml);
+            Console.WriteLine(input);
 
             Console.WriteLine();
             DisplayHeader("round-trip");
-            var docAsStr = doc.ToString();
-            Console.WriteLine(docAsStr);
+            Console.WriteLine(roundtrip);
 
             if (doc.Diagnostics.Count > 0)
             {
@@ -55,22 +72,6 @@ namespace SharpToml.Tests
                 {
                     Console.WriteLine(syntaxMessage);
                 }
-
-                if (type == ValidSpec)
-                {
-                    Assert.False(doc.HasErrors, "Unexpected parsing errors");
-                }
-            }
-
-            if (type == InvalidSpec)
-            {
-                Assert.True(doc.HasErrors, "The TOML requires parsing/validation errors");
-            }
-
-            // Only in the case of a valid spec we check for rountrip
-            if (type == ValidSpec)
-            {
-                Assert.AreEqual(toml, docAsStr, "The roundtrip doesn't match");
             }
         }
 

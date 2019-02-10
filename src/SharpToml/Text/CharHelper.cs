@@ -60,7 +60,7 @@ namespace SharpToml.Text
         /// <summary>
         /// Converts a string that may have control characters to a printable string
         /// </summary>
-        public static string PrintableString(string text)
+        public static string ToPrintableString(this string text)
         {
             StringBuilder builder = null;
             for (int i = 0; i < text.Length; i++)
@@ -95,9 +95,9 @@ namespace SharpToml.Text
                     case '\b':
                         return @"\b";
                     case '\r':
-                        return @"\r";
+                        return @"␍";
                     case '\n':
-                        return @"\n";
+                        return @"␤";
                     case '\t':
                         return @"\t";
                     case '\a':

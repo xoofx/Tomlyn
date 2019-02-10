@@ -533,7 +533,7 @@ namespace SharpToml.Parsing
 
         private string ToPrintable(SyntaxTokenValue localToken)
         {
-            return CharHelper.PrintableString(ToText(localToken));
+            return CharHelper.ToPrintableString(ToText(localToken));
         }
 
         private string ToText(SyntaxTokenValue localToken)
@@ -543,7 +543,7 @@ namespace SharpToml.Parsing
 
         private string ToPrintable(SourceSpan span)
         {
-            return CharHelper.PrintableString(_lexer.Source.GetString(span.Offset, span.Length));
+            return CharHelper.ToPrintableString(_lexer.Source.GetString(span.Offset, span.Length));
         }
 
         private void NextToken()
