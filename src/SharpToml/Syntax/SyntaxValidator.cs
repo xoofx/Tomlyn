@@ -30,25 +30,25 @@ namespace SharpToml.Syntax
             ObjectKind kind;
             switch (keyValue.Value)
             {
-                case ArraySyntax arraySyntax:
+                case ArraySyntax _:
                     kind = ObjectKind.Array;
                     break;
-                case BooleanValueSyntax booleanValueSyntax:
+                case BooleanValueSyntax _:
                     kind = ObjectKind.Boolean;
                     break;
-                case DateTimeValueSyntax dateTimeValueSyntax:
+                case DateTimeValueSyntax _:
                     kind = ObjectKind.DateTime;
                     break;
-                case FloatValueSyntax floatValueSyntax:
+                case FloatValueSyntax _:
                     kind = ObjectKind.Float;
                     break;
-                case InlineTableSyntax inlineTableSyntax:
+                case InlineTableSyntax _:
                     kind = ObjectKind.Table;
                     break;
-                case IntegerValueSyntax integerValueSyntax:
+                case IntegerValueSyntax _:
                     kind = ObjectKind.Integer;
                     break;
-                case StringValueSyntax stringValueSyntax:
+                case StringValueSyntax _:
                     kind = ObjectKind.String;
                     break;
                 default:
