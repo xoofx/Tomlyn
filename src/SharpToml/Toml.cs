@@ -5,13 +5,6 @@ using SharpToml.Text;
 
 namespace SharpToml
 {
-    public enum TomlParserOptions
-    {
-        ParseAndValidate = 0,
-
-        ParseOnly = 1,
-    }
-
     public static class Toml
     {
         public static DocumentSyntax Parse(string text, string sourcePath = null, TomlParserOptions options = TomlParserOptions.ParseAndValidate)
