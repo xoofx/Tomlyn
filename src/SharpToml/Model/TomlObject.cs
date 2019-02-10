@@ -305,8 +305,17 @@ namespace SharpToml.Model
                 return list;
             }
         }
+        
+        public static TomlTable From(DocumentSyntax documentSyntax)
+        {
+            if (documentSyntax == null) throw new ArgumentNullException(nameof(documentSyntax));
+            if (documentSyntax.HasErrors) throw new InvalidOperationException($"The document has errors: {documentSyntax.Diagnostics}");
+            var root = new TomlTable();
+            var syntaxTransform = new SyntaxTransform(root);
+            syntaxTransform.Visit(documentSyntax);
+            return root;
+        }
     }
-    
 
     public class TomlArray : TomlObject, IList<object>
     {
