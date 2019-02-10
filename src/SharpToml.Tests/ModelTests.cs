@@ -2,6 +2,9 @@
 // Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
 
+using System;
+using System.IO;
+using Newtonsoft.Json;
 using NUnit.Framework;
 using SharpToml.Model;
 
@@ -9,6 +12,34 @@ namespace SharpToml.Tests
 {
     public class ModelTests
     {
+        [Test]
+        public static void TestPrimitives()
+        {
+            var input = @"a = 1
+b = true
+c = 1.0
+d = 'yo'
+e = 1980-01-20
+";
+            var syntax = Toml.Parse(input);
+            Assert.False(syntax.HasErrors, "The document should not have any errors");
+
+            var model = syntax.ToModel();
+
+            Assert.True(model.ContainsKey("a"));
+            Assert.True(model.ContainsKey("b"));
+            Assert.True(model.ContainsKey("c"));
+            Assert.True(model.ContainsKey("d"));
+            Assert.True(model.ContainsKey("e"));
+
+            Assert.AreEqual(5, model.Count);
+            Assert.AreEqual((long)1, model["a"]);
+            Assert.AreEqual(true, model["b"]);
+            Assert.AreEqual(1.0, model["c"]);
+            Assert.AreEqual("yo", model["d"]);
+            Assert.AreEqual(new DateTime(1980, 01, 20), model["e"]);
+        }
+
         [Test]
         public static void TestBasic()
         {
@@ -102,7 +133,107 @@ d = true
             Assert.AreEqual((bool)true, bTable1["d"]);
         }
 
+        [Test]
+        public static void TestNestedTableArray()
+        {
+            var input = @"[[fruit]]
+  name = 'apple'
+
+  [fruit.physical]
+    color = 'red'
+    shape = 'round'
+
+  [[fruit.variety]]
+    name = 'red delicious'
+
+  [[fruit.variety]]
+    name = 'granny smith'
+
+[[fruit]]
+  name = 'banana'
+
+  [[fruit.variety]]
+    name = 'plantain'
+";
+
+            var json = @"{
+  ""fruit"": [
+    {
+      ""name"": ""apple"",
+      ""physical"": {
+        ""color"": ""red"",
+        ""shape"": ""round""
+      },
+      ""variety"": [
+        {
+          ""name"": ""red delicious""
+        },
+        {
+          ""name"": ""granny smith""
+        }
+      ]
+    },
+    {
+      ""name"": ""banana"",
+      ""variety"": [
+        {
+          ""name"": ""plantain""
+        }
+      ]
+    }
+  ]
+}";
+            AssertJson(input, json);
+        }
 
 
+        [Test]
+        public void TestArrayAndInline()
+        {
+            var input = @"points = [ { x = 1, y = 2, z = 3 },
+           { x = 7, y = 8, z = 9 },
+           { x = 2, y = 4, z = 8 } ]";
+
+            var json = @"{
+  ""points"": [
+    {
+      ""x"": 1,
+      ""y"": 2,
+      ""z"": 3
+    },
+    {
+      ""x"": 7,
+      ""y"": 8,
+      ""z"": 9
+    },
+    {
+      ""x"": 2,
+      ""y"": 4,
+      ""z"": 8
+    }
+  ]
+}";
+            AssertJson(input, json);
+        }
+
+        private static void AssertJson(string input, string expectedJson)
+        {
+            var syntax = Toml.Parse(input);
+            Assert.False(syntax.HasErrors, "The document should not have any errors");
+
+            StandardTests.Dump(input, syntax, syntax.ToString());
+
+            var model = syntax.ToModel();
+
+            var serializer = JsonSerializer.Create(new JsonSerializerSettings() { Formatting = Formatting.Indented });
+            var writer = new StringWriter();
+            serializer.Serialize(writer, model);
+            var jsonResult = writer.ToString();
+
+            StandardTests.DisplayHeader("json");
+            Console.WriteLine(jsonResult);
+
+            Assert.AreEqual(expectedJson, jsonResult);
+        }
     }
 }

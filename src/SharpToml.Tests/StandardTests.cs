@@ -75,7 +75,7 @@ namespace SharpToml.Tests
             }
         }
 
-        private static void DisplayHeader(string name)
+        public static void DisplayHeader(string name)
         {
             Console.WriteLine($"// ----------------------------------------------------------");
             Console.WriteLine($"// {name}");
