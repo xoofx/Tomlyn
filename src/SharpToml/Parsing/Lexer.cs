@@ -8,6 +8,7 @@ using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
+using SharpToml.Helpers;
 using SharpToml.Syntax;
 using SharpToml.Text;
 
@@ -558,7 +559,7 @@ namespace SharpToml.Parsing
                 }
 
                 DateTime dateTime;
-                if (!DateTime.TryParse(dateTimeAsString, CultureInfo.InvariantCulture, DateTimeStyles.AllowInnerWhite, out dateTime))
+                if (!DateTimeRFC3339.TryParse(dateTimeAsString, out dateTime))
                 {
                     AddError($"Unable to parse the date time/offset `{dateTimeAsString}`", start, end);
                 }
