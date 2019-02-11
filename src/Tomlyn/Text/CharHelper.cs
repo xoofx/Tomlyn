@@ -128,6 +128,12 @@ namespace Tomlyn.Text
                    c == '\n'; // \n
         }
 
+        public static bool IsNewLine(char32 c)
+        {
+            return c == '\r' || // \r
+                   c == '\n'; // \n
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static char32? ToUtf8(byte[] buffer, ref int position)
         {

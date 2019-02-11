@@ -706,17 +706,7 @@ namespace Tomlyn.Parsing
                     NextChar();
                     // we have an opening ''' -> this a multi-line string
                     isMultiLine = true;
-
-                    // Skip any white spaces until the next line
-                    while (CharHelper.IsWhiteSpaceOrNewLine(_c))
-                    {
-                        var isNewLine = _c == '\n';
-                        NextChar();
-                        if (isNewLine)
-                        {
-                            break;
-                        }
-                    }
+                    SkipImmediateNextLine();
                 }
                 else
                 {
@@ -734,6 +724,15 @@ namespace Tomlyn.Parsing
             {
                 if (!TryReadEscapeChar(ref end))
                 {
+                    if (!isMultiLine && CharHelper.IsNewLine(_c))
+                    {
+                        AddError("Invalid newline in a string", _position, _position);
+                    }
+                    else if (_c < 32 && (!isMultiLine || !CharHelper.IsNewLine(_c)))
+                    {
+                        AddError($"Invalid control character found {((char)_c).ToPrintableString()}", start, start);
+                    }
+
                     _textBuilder.AppendUtf32(_c);
                     end = _position;
                     NextChar();
@@ -757,11 +756,14 @@ namespace Tomlyn.Parsing
                         }
                         else
                         {
+                            _textBuilder.Append('"');
+                            _textBuilder.Append('"');
                             goto continue_parsing_string;
                         }
                     }
                     else
                     {
+                        _textBuilder.Append('"');
                         goto continue_parsing_string;
                     }
                 }
@@ -783,6 +785,23 @@ namespace Tomlyn.Parsing
                     AddError("Invalid End-Of-File found on string literal", end, end);
                 }
                 _token = new SyntaxTokenValue(TokenKind.String, start, end, _textBuilder.ToString());
+            }
+        }
+
+        private void SkipImmediateNextLine()
+        {
+            // Skip any white spaces until the next line
+            if (_c == '\r')
+            {
+                NextChar();
+                if (_c == '\n')
+                {
+                    NextChar();
+                }
+            }
+            else if (_c == '\n')
+            {
+                NextChar();
             }
         }
 
@@ -899,16 +918,7 @@ namespace Tomlyn.Parsing
                     // we have an opening ''' -> this a multi-line literal string
                     isMultiLine = true;
 
-                    // Skip any white spaces until the next line
-                    while (CharHelper.IsWhiteSpaceOrNewLine(_c))
-                    {
-                        var isNewLine = _c == '\n';
-                        NextChar();
-                        if (isNewLine)
-                        {
-                            break;
-                        }
-                    }
+                    SkipImmediateNextLine();
                 }
                 else
                 {
@@ -922,6 +932,14 @@ namespace Tomlyn.Parsing
             continue_parsing_string:
             while (_c != '\'' && _c != Eof)
             {
+                if (!isMultiLine && CharHelper.IsNewLine(_c))
+                {
+                    AddError("Invalid newline in a string", _position, _position);
+                }
+                else if (_c < 32 && (!isMultiLine || !CharHelper.IsNewLine(_c)))
+                {
+                    AddError($"Invalid control character found {((char)_c).ToPrintableString()}", start, start);
+                }
                 _textBuilder.AppendUtf32(_c);
                 end = _position;
                 NextChar();
@@ -1041,6 +1059,7 @@ namespace Tomlyn.Parsing
                     {
                         _current.NextPosition.Column++;
                     }
+                    CheckCharacter(nextc);
                     return nextc;
                 }
 
@@ -1051,6 +1070,14 @@ namespace Tomlyn.Parsing
             }
 
             return Eof;
+        }
+
+        private void CheckCharacter(char32 c)
+        {
+            if (!CharHelper.IsValidUnicodeScalarValue(c))
+            {
+                AddError($"The character `{c}` is an invalid UTF8 character", _current.Position, _current.Position);
+            }
         }
 
         private void AddError(string message, TextPosition start, TextPosition end)
