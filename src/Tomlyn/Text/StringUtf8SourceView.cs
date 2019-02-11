@@ -31,6 +31,5 @@ namespace Tomlyn.Text
         {
             return new StringCharacterUtf8Iterator(_text);
         }
-
     }
 }

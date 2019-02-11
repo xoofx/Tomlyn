@@ -7,6 +7,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
@@ -36,10 +37,9 @@ namespace Tomlyn.Tests
 
         private static void ValidateSpec(string type, string inputName, string toml, string json)
         {
-            var doc = Toml.Parse(toml);
+            var doc = Toml.Parse(toml, inputName);
             var roundtrip = doc.ToString();
             Dump(toml, doc, roundtrip);
-
             switch (type)
             {
                 case ValidSpec:
@@ -70,6 +70,12 @@ namespace Tomlyn.Tests
                 case InvalidSpec:
                     Assert.True(doc.HasErrors, "The TOML requires parsing/validation errors");
                     break;
+            }
+
+            {
+                var docUtf8 = Toml.Parse(Encoding.UTF8.GetBytes(toml), inputName);
+                var roundtripUtf8 = doc.ToString();
+                Assert.AreEqual(roundtrip, roundtripUtf8, "The UTF8 version doesn't match with the UTF16 version");
             }
         }
 

@@ -21,6 +21,19 @@ namespace Tomlyn
             return doc;
         }
 
+        public static DocumentSyntax Parse(byte[] utf8Bytes, string sourcePath = null, TomlParserOptions options = TomlParserOptions.ParseAndValidate)
+        {
+            var textView = new StringUtf8SourceView(utf8Bytes, sourcePath ?? string.Empty);
+            var lexer = new Lexer<StringUtf8SourceView, StringCharacterUtf8Iterator>(textView, textView.SourcePath);
+            var parser = new Parser<StringUtf8SourceView>(lexer);
+            var doc = parser.Run();
+            if (!doc.HasErrors && options == TomlParserOptions.ParseAndValidate)
+            {
+                Validate(doc);
+            }
+            return doc;
+        }
+
         public static TomlTable ToModel(this DocumentSyntax syntax)
         {
             if (syntax == null) throw new ArgumentNullException(nameof(syntax));
