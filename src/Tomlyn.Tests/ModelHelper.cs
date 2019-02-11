@@ -45,7 +45,7 @@ namespace Tomlyn.Tests
                     return new JObject
                     {
                         {"type", "float"},
-                        { "value", AppendDecimalPoint(tomlFloat.Value.ToString("g", CultureInfo.InvariantCulture), true)}
+                        { "value", AppendDecimalPoint(tomlFloat.Value.ToString("g16", CultureInfo.InvariantCulture), true)}
                     };
                 case TomlInteger tomlInteger:
                     return new JObject
