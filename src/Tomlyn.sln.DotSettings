@@ -3,4 +3,5 @@
 Licensed under the BSD-Clause 2 license. &#xD;
 See license.txt file in the project root for full license information.</s:String>
 	<s:String x:Key="/Default/CodeStyle/Naming/CSharpNaming/Abbreviations/=RFC/@EntryIndexedValue">RFC</s:String>
-	<s:Boolean x:Key="/Default/UserDictionary/Words/=Toml/@EntryIndexedValue">True</s:Boolean></wpf:ResourceDictionary>
+	<s:Boolean x:Key="/Default/UserDictionary/Words/=Toml/@EntryIndexedValue">True</s:Boolean>
+	<s:Boolean x:Key="/Default/UserDictionary/Words/=Tomlyn/@EntryIndexedValue">True</s:Boolean></wpf:ResourceDictionary>
