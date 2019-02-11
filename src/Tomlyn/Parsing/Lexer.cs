@@ -706,6 +706,17 @@ namespace Tomlyn.Parsing
                     NextChar();
                     // we have an opening ''' -> this a multi-line string
                     isMultiLine = true;
+
+                    // Skip any white spaces until the next line
+                    while (CharHelper.IsWhiteSpaceOrNewLine(_c))
+                    {
+                        var isNewLine = _c == '\n';
+                        NextChar();
+                        if (isNewLine)
+                        {
+                            break;
+                        }
+                    }
                 }
                 else
                 {
@@ -825,7 +836,7 @@ namespace Tomlyn.Parsing
                     // up to the next non-whitespace character or closing delimiter. 
                     case '\r':
                     case '\n':
-                        while (CharHelper.IsWhiteSpace(_c))
+                        while (CharHelper.IsWhiteSpaceOrNewLine(_c))
                         {
                             end = _position;
                             NextChar();
@@ -887,6 +898,17 @@ namespace Tomlyn.Parsing
                     NextChar();
                     // we have an opening ''' -> this a multi-line literal string
                     isMultiLine = true;
+
+                    // Skip any white spaces until the next line
+                    while (CharHelper.IsWhiteSpaceOrNewLine(_c))
+                    {
+                        var isNewLine = _c == '\n';
+                        NextChar();
+                        if (isNewLine)
+                        {
+                            break;
+                        }
+                    }
                 }
                 else
                 {
@@ -922,11 +944,14 @@ namespace Tomlyn.Parsing
                         }
                         else
                         {
+                            _textBuilder.Append('\'');
+                            _textBuilder.Append('\'');
                             goto continue_parsing_string;
                         }
                     }
                     else
                     {
+                        _textBuilder.Append('\'');
                         goto continue_parsing_string;
                     }
                 }

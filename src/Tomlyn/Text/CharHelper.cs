@@ -116,33 +116,16 @@ namespace Tomlyn.Text
 
         public static bool IsWhiteSpace(char32 c)
         {
-            // http://unicode.org/cldr/utility/list-unicodeset.jsp?a=%5B%3APattern_White_Space%3A%5D&g=&i=
-            // Pattern_White_Space except \r and \n and newlines
+            return c == ' ' || // space
+                   c == '\t'; // horizontal tab
+        }
 
-            // ZS characters http://unicode.org/cldr/utility/list-unicodeset.jsp?a=%5B%3AZS%3A%5D&g=&i=
+        public static bool IsWhiteSpaceOrNewLine(char32 c)
+        {
             return c == ' ' || // space
                    c == '\t' || // horizontal tab
-                   c == '\u000b' || // vertical tab
-                   c == '\u000c' || // form feed
-                   c == '\u200e' || // left-to-right mark
-                   c == '\u200f' || // right-to-left-mark
-                   c == '\u00A0' || // NO_BREAK SPACE
-                   c == '\u1680' || // OGHAM SPACE MARK
-                   (c >= '\u2000' && c <= '\u200A') ||
-                   //c == '\u2000' || // EN QUAD
-                   //c == '\u2001' || // EM QUAD
-                   //c == '\u2002' || // EN SPACE
-                   //c == '\u2003' || // EM SPACE
-                   //c == '\u2004' || // THREE_PER_EM SPACE
-                   //c == '\u2005' || // FOUR_PER_EM SPACE
-                   //c == '\u2006' || // SIX_PER_EM SPACE
-                   //c == '\u2007' || // FIGURE SPACE
-                   //c == '\u2008' || // PUNCTUATION SPACE
-                   //c == '\u2009' || // THIN SPACE
-                   //c == '\u200A' || // HAIR SPACE
-                   c == '\u202F' || // NARROW NO_BREAK SPACE
-                   c == '\u205F' || // MEDIUM MATHEMATICAL SPACE
-                   c == '\u3000'; // IDEOGRAPHIC SPACE
+                   c == '\r' || // \r
+                   c == '\n'; // \n
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
