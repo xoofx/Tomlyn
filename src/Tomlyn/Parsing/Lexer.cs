@@ -13,8 +13,6 @@ using Tomlyn.Helpers;
 using Tomlyn.Syntax;
 using Tomlyn.Text;
 
-// tests https://github.com/toml-lang/toml/issues/585#issuecomment-455408303
-
 namespace Tomlyn.Parsing
 {
     /// <summary>
@@ -83,9 +81,9 @@ namespace Tomlyn.Parsing
 
         public LexerSate State { get; set; }
 
-        private TextPosition _position => _current._position;
+        private TextPosition _position => _current.Position;
 
-        private char32 _c => _current._c;
+        private char32 _c => _current.CurrentChar;
 
         private void NextTokenForKey()
         {
@@ -979,9 +977,9 @@ namespace Tomlyn.Parsing
             }
 
             // Else move to the next position
-            _current._position = _current._nextPosition;
-            _current._pc = _c; // save the previous character
-            _current._c = NextCharFromReader();
+            _current.Position = _current.NextPosition;
+            _current.PreviousChar = _current.CurrentChar; // save the previous character
+            _current.CurrentChar = NextCharFromReader();
         }
 
         // Peek one char ahead
@@ -995,7 +993,7 @@ namespace Tomlyn.Parsing
                 _current = saved;
             }
 
-            return _preview1.Value._c;
+            return _preview1.Value.CurrentChar;
         }
 
         private char32 NextCharFromReader()
@@ -1004,19 +1002,19 @@ namespace Tomlyn.Parsing
             {
                 int position = _position.Offset;
                 var nextChar = _reader.TryGetNext(ref position);
-                _current._nextPosition.Offset = position;
+                _current.NextPosition.Offset = position;
 
                 if (nextChar.HasValue)
                 {
                     var nextc = nextChar.Value;
                     if (nextc == '\n')
                     {
-                        _current._nextPosition.Column = 0;
-                        _current._nextPosition.Line += 1;
+                        _current.NextPosition.Column = 0;
+                        _current.NextPosition.Line += 1;
                     }
                     else
                     {
-                        _current._nextPosition.Column++;
+                        _current.NextPosition.Column++;
                     }
                     return nextc;
                 }
@@ -1043,8 +1041,9 @@ namespace Tomlyn.Parsing
         {
             // Initialize the position at -1 when starting
             _preview1 = null;
-            _current = new LexerInternalState();
-            _current._c = NextCharFromReader();
+            _current = new LexerInternalState {Position = new TextPosition(_reader.Start, 0, 0)};
+            // It is important to initialize this separately from the previous line
+            _current.CurrentChar = NextCharFromReader();
             _token = new SyntaxTokenValue();
             _errors = null;
         }
@@ -1053,21 +1052,21 @@ namespace Tomlyn.Parsing
     [DebuggerDisplay("{Position} {Character}")]
     internal struct LexerInternalState
     {
-        public LexerInternalState(TextPosition nextPosition, TextPosition position, char32 pc, char32 c)
+        public LexerInternalState(TextPosition nextPosition, TextPosition position, char32 previousChar, char32 c)
         {
-            _nextPosition = nextPosition;
-            _position = position;
-            _pc = pc;
-            _c = c;
+            NextPosition = nextPosition;
+            Position = position;
+            PreviousChar = previousChar;
+            CurrentChar = c;
         }
 
-        public TextPosition _nextPosition;
+        public TextPosition NextPosition;
 
-        public TextPosition _position;
+        public TextPosition Position;
 
-        public char32 _pc;
+        public char32 PreviousChar;
 
-        public char32 _c;
+        public char32 CurrentChar;
     }
 
     internal static class BoxedValues
