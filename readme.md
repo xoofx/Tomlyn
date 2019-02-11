@@ -12,7 +12,7 @@ This software is released under the [BSD-Clause 2 license](https://opensource.or
 
 ## Credits
 
-Logo `Thor` by [Mike Rowe](https://thenounproject.com/itsmikerowe/) from the Noun Project (Creative Commons)
+Modified version of the logo `Thor` by [Mike Rowe](https://thenounproject.com/itsmikerowe/) from the Noun Project (Creative Commons)
 
 ## Author
 
