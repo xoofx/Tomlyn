@@ -22,39 +22,38 @@ namespace SharpToml.Model
         public override void Visit(KeyValueSyntax keyValue)
         {
             keyValue.Value.Accept(this);
-            SetKeyValue(keyValue.Key, _currentValue, false);
+            SetKeyValue(keyValue.Key, _currentValue, keyValue.Kind);
         }
 
         public override void Visit(TableSyntax table)
         {
             _currentTable = _rootTable;
-            var newTable = new TomlTable();
-            SetKeyValue(table.Name, newTable, false);
-            _currentTable = newTable;
+            _currentTable = SetKeyValue(table.Name, null, table.Kind);
             base.Visit(table);
         }
 
         public override void Visit(TableArraySyntax table)
         {
             _currentTable = _rootTable;
-            _currentTable = SetKeyValue(table.Name, null, true);
+            _currentTable = SetKeyValue(table.Name, null, table.Kind);
             base.Visit(table);
         }
 
-        private TomlTable SetKeyValue(KeySyntax key, object value, bool isTableArray)
+        private TomlTable SetKeyValue(KeySyntax key, object value, SyntaxKind kind)
         {
             var currentTable = _currentTable;
             var name = GetStringFromBasic(key.Base);
             var items = key.DotKeyItems;
             for (int i = 0; i < items.ChildrenCount; i++)
             {
-                currentTable = GetTable(currentTable, name, false, false);
+                currentTable = GetTable(currentTable, name, false);
                 name = GetStringFromBasic(items.GetChildren(i).Value);
             }
 
-            if (isTableArray)
+            var isTableArray = kind == SyntaxKind.TableArray;
+            if (kind == SyntaxKind.Table || isTableArray)
             {
-                currentTable = GetTable(currentTable, name, true, true);
+                currentTable = GetTable(currentTable, name, isTableArray);
             }
             else
             {
@@ -64,13 +63,13 @@ namespace SharpToml.Model
             return currentTable;
         }
 
-        private TomlTable GetTable(TomlTable table, string key, bool isTableArray, bool createTableForArray)
+        private TomlTable GetTable(TomlTable table, string key, bool createTableArrayItem)
         {
             if (table.TryGetValue(key, out var subTableObject))
             {
                 if (subTableObject is TomlTableArray tomlArray)
                 {
-                    if (createTableForArray)
+                    if (createTableArrayItem)
                     {
                         var newTableForArray = new TomlTable();
                         tomlArray.Add(newTableForArray);
@@ -90,7 +89,7 @@ namespace SharpToml.Model
             }
 
             var newTable = new TomlTable();
-            table[key] = isTableArray ? (TomlObject)new TomlTableArray(1) { newTable } : newTable;
+            table[key] = createTableArrayItem ? (TomlObject)new TomlTableArray(1) { newTable } : newTable;
             return newTable;
         }
 
@@ -115,7 +114,21 @@ namespace SharpToml.Model
 
         public override void Visit(DateTimeValueSyntax dateTimeValueSyntax)
         {
-            _currentValue = dateTimeValueSyntax.Value;
+            switch (dateTimeValueSyntax.Kind)
+            {
+                case SyntaxKind.OffsetDateTime:
+                    _currentValue = new TomlDateTime(ObjectKind.OffsetDateTime, dateTimeValueSyntax.Value);
+                    break;
+                case SyntaxKind.LocalDateTime:
+                    _currentValue = new TomlDateTime(ObjectKind.LocalDateTime, dateTimeValueSyntax.Value);
+                    break;
+                case SyntaxKind.LocalDate:
+                    _currentValue = new TomlDateTime(ObjectKind.LocalDate, dateTimeValueSyntax.Value);
+                    break;
+                case SyntaxKind.LocalTime:
+                    _currentValue = new TomlDateTime(ObjectKind.LocalTime, dateTimeValueSyntax.Value);
+                    break;
+            }
         }
 
         public override void Visit(FloatValueSyntax floatValueSyntax)

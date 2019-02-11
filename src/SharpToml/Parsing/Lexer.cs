@@ -558,13 +558,28 @@ namespace SharpToml.Parsing
                     dateTimeAsString = dateTimeAsString.Substring(1);
                 }
 
-                DateTime dateTime;
-                if (!DateTimeRFC3339.TryParse(dateTimeAsString, out dateTime))
+                DateTime datetime;
+                if (DateTimeRFC3339.TryParseOffsetDateTime(dateTimeAsString, out datetime))
+                {
+                    _token = new SyntaxTokenValue(TokenKind.OffsetDateTime, start, end, datetime);
+                }
+                else if (DateTimeRFC3339.TryParseLocalDateTime(dateTimeAsString, out datetime))
+                {
+                    _token = new SyntaxTokenValue(TokenKind.LocalDateTime, start, end, datetime);
+                }
+                else if (DateTimeRFC3339.TryParseLocalDate(dateTimeAsString, out datetime))
+                {
+                    _token = new SyntaxTokenValue(TokenKind.LocalDate, start, end, datetime);
+                }
+                else if (DateTimeRFC3339.TryParseLocalTime(dateTimeAsString, out datetime))
+                {
+                    _token = new SyntaxTokenValue(TokenKind.LocalTime, start, end, datetime);
+                }
+                else
                 {
                     AddError($"Unable to parse the date time/offset `{dateTimeAsString}`", start, end);
                 }
 
-                _token = new SyntaxTokenValue(TokenKind.DateTime, start, end, dateTime);
                 return;
             }
 

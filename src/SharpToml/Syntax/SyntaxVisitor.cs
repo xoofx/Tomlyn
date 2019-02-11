@@ -65,6 +65,7 @@ namespace SharpToml.Syntax
         {
             DefaultVisit(dateTime);
         }
+        
         public virtual void Visit(ArraySyntax array)
         {
             DefaultVisit(array);

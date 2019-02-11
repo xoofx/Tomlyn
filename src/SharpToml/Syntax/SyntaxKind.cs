@@ -17,7 +17,13 @@ namespace SharpToml.Syntax
 
         Boolean,
 
-        DateTime,
+        OffsetDateTime,
+
+        LocalDateTime,
+
+        LocalDate,
+
+        LocalTime,
 
         Document,
 

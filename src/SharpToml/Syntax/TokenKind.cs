@@ -20,7 +20,10 @@ namespace SharpToml.Syntax
 
         Comment,
 
-        DateTime,
+        OffsetDateTime,
+        LocalDateTime,
+        LocalDate,
+        LocalTime,
 
         Integer,
 

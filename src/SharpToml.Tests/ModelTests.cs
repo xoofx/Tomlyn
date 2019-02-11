@@ -216,6 +216,28 @@ d = true
             AssertJson(input, json);
         }
 
+        [Test]
+        public void TestImplicitAndExplicitTable()
+        {
+            var input = @"[a.b.c]
+answer = 42
+
+[a]
+better = 43
+";
+            var json = @"{
+  ""a"": {
+    ""b"": {
+      ""c"": {
+        ""answer"": 42
+      }
+    },
+    ""better"": 43
+  }
+}";
+            AssertJson(input, json);
+        }
+
         private static void AssertJson(string input, string expectedJson)
         {
             var syntax = Toml.Parse(input);
@@ -228,12 +250,20 @@ d = true
             var serializer = JsonSerializer.Create(new JsonSerializerSettings() { Formatting = Formatting.Indented });
             var writer = new StringWriter();
             serializer.Serialize(writer, model);
-            var jsonResult = writer.ToString();
+            var jsonResult = NormalizeEndOfLine(writer.ToString());
+            expectedJson = NormalizeEndOfLine(expectedJson);
 
             StandardTests.DisplayHeader("json");
             Console.WriteLine(jsonResult);
 
             Assert.AreEqual(expectedJson, jsonResult);
         }
+
+        private static string NormalizeEndOfLine(string text)
+        {
+            return text.Replace("\r\n", "\n");
+        }
+
+
     }
 }

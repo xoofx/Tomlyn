@@ -7,7 +7,7 @@ using SharpToml.Text;
 
 namespace SharpToml.Syntax
 {
-    public class SyntaxValidator : SyntaxVisitor
+    internal class SyntaxValidator : SyntaxVisitor
     {
         private readonly DiagnosticsBag _diagnostics;
         private ObjectPath _currentPath;
@@ -36,8 +36,24 @@ namespace SharpToml.Syntax
                 case BooleanValueSyntax _:
                     kind = ObjectKind.Boolean;
                     break;
-                case DateTimeValueSyntax _:
-                    kind = ObjectKind.DateTime;
+                case DateTimeValueSyntax time:
+                    switch (time.Kind)
+                    {
+                        case SyntaxKind.OffsetDateTime:
+                            kind = ObjectKind.OffsetDateTime;
+                            break;
+                        case SyntaxKind.LocalDateTime:
+                            kind = ObjectKind.LocalDateTime;
+                            break;
+                        case SyntaxKind.LocalDate:
+                            kind = ObjectKind.LocalDate;
+                            break;
+                        case SyntaxKind.LocalTime:
+                            kind = ObjectKind.LocalTime;
+                            break;
+                        default:
+                            throw new NotSupportedException($"Unsupported datetime kind `{time.Kind}` for the key-value `{keyValue}`");
+                    }
                     break;
                 case FloatValueSyntax _:
                     kind = ObjectKind.Float;

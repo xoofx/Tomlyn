@@ -19,6 +19,12 @@ namespace SharpToml.Model
 
         Float,
 
-        DateTime
+        OffsetDateTime,
+
+        LocalDateTime,
+
+        LocalDate,
+
+        LocalTime,
     }
 }

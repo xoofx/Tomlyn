@@ -37,7 +37,7 @@ namespace SharpToml.Model
             if (type == typeof(long)) return new TomlInteger((long) value);
             if (type == typeof(bool)) return new TomlBoolean((bool)value);
             if (type == typeof(double)) return new TomlFloat((double)value);
-            if (type == typeof(DateTime)) return new TomlDateTime((DateTime) value);
+            if (type == typeof(DateTime)) return new TomlDateTime(ObjectKind.LocalDateTime, (DateTime) value);
 
             throw new InvalidOperationException($"The type `{type}` of the object is invalid. Only long, bool, double, DateTime and TomlObject are supported");
         }
@@ -103,7 +103,7 @@ namespace SharpToml.Model
                     return tomlDateTime;
                 }
                 // TODO: propagate trivias from previous value
-                return new TomlDateTime((DateTime)value);
+                return new TomlDateTime(ObjectKind.LocalDateTime, (DateTime)value);
             }
 
             throw new InvalidOperationException($"The type `{type}` of the object is invalid. Only long, bool, double, DateTime and TomlObject are supported");

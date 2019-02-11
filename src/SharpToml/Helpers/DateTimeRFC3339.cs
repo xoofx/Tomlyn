@@ -30,7 +30,7 @@ namespace SharpToml.Helpers
 
         //date-time       = full-date "T" full-time
 
-        private static readonly string[] Formats = new[]
+        private static readonly string[] OffsetDateTimeFormats = new[]
         {            
             "yyyy-MM-ddTHH:mm:ssZ",            // With Z postfix
             "yyyy-MM-ddTHH:mm:ss.fZ",
@@ -66,11 +66,33 @@ namespace SharpToml.Helpers
             "yyyy-MM-dd HH:mm:ss.fffffzzz",
             "yyyy-MM-dd HH:mm:ss.ffffffzzz",
             "yyyy-MM-dd HH:mm:ss.fffffffzzz",
+        };
 
-            // Local Date
-            "yyyy-MM-dd",
+        private static readonly string[] LocalDateTimeFormats = new[]
+        {
+            "yyyy-MM-ddTHH:mm:ss",
+            "yyyy-MM-ddTHH:mm:ss.f",
+            "yyyy-MM-ddTHH:mm:ss.ff",
+            "yyyy-MM-ddTHH:mm:ss.fff",
+            "yyyy-MM-ddTHH:mm:ss.ffff",
+            "yyyy-MM-ddTHH:mm:ss.fffff",
+            "yyyy-MM-ddTHH:mm:ss.ffffff",
+            "yyyy-MM-ddTHH:mm:ss.fffffff",
 
-            // Local Time
+            // Specs says that T might be omitted
+            "yyyy-MM-dd HH:mm:ss",            // With Z postfix
+            "yyyy-MM-dd HH:mm:ss.f",
+            "yyyy-MM-dd HH:mm:ss.ff",
+            "yyyy-MM-dd HH:mm:ss.fff",
+            "yyyy-MM-dd HH:mm:ss.ffff",
+            "yyyy-MM-dd HH:mm:ss.fffff",
+            "yyyy-MM-dd HH:mm:ss.ffffff",
+            "yyyy-MM-dd HH:mm:ss.fffffff",
+        };
+
+        // Local Time
+        private static readonly string[] LocalTimeFormats = new[]
+        {
             "HH:mm:ss",
             "HH:mm:ss.f",
             "HH:mm:ss.ff",
@@ -81,9 +103,24 @@ namespace SharpToml.Helpers
             "HH:mm:ss.fffffff",
         };
 
-        public static bool TryParse(string str, out DateTime time)
+        public static bool TryParseOffsetDateTime(string str, out DateTime time)
         {
-            return DateTime.TryParseExact(str, Formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out time);
+            return DateTime.TryParseExact(str, OffsetDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out time);
+        }
+
+        public static bool TryParseLocalDateTime(string str, out DateTime time)
+        {
+            return DateTime.TryParseExact(str, LocalDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out time);
+        }
+
+        public static bool TryParseLocalDate(string str, out DateTime time)
+        {
+            return DateTime.TryParseExact(str, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out time);
+        }
+
+        public static bool TryParseLocalTime(string str, out DateTime time)
+        {
+            return DateTime.TryParseExact(str, LocalTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out time);
         }
     }
 }

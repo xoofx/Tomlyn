@@ -29,6 +29,15 @@ namespace SharpToml.Model
             }
         }
 
+
+        public IEnumerable<KeyValuePair<string, TomlObject>> GetTomlEnumerator()
+        {
+            foreach (var keyPair in _order)
+            {
+                yield return new KeyValuePair<string, TomlObject>(keyPair.Key, keyPair.Value);
+            }
+        }
+
         IEnumerator IEnumerable.GetEnumerator()
         {
             return GetEnumerator();
@@ -106,6 +115,11 @@ namespace SharpToml.Model
 
             value = null;
             return false;
+        }
+
+        public bool TryGetToml(string key, out TomlObject value)
+        {
+            return _map.TryGetValue(key, out value);
         }
 
         public object this[string key]

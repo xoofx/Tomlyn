@@ -7,8 +7,8 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
-using System.Text;
-using System.Text.RegularExpressions;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using SharpToml.Syntax;
 
@@ -46,6 +46,26 @@ namespace SharpToml.Tests
                     Assert.False(doc.HasErrors, "Unexpected parsing errors");
                     // Only in the case of a valid spec we check for rountrip
                     Assert.AreEqual(toml, roundtrip, "The roundtrip doesn't match");
+
+
+                    // Read the original json
+                    var srcJson = JObject.Parse(json);
+                    // Convert the syntax tree into a model
+                    var model = doc.ToModel();
+                    // Convert the model into the expected json
+                    var modelJson = ModelHelper.ToJson(model);
+
+                    // Write back the result to a string
+                    var srcJsonAsString = srcJson.ToString(Formatting.Indented);
+                    var dstJsonAsString = modelJson.ToString(Formatting.Indented);
+
+                    DisplayHeader("json");
+                    Console.WriteLine(srcJsonAsString);
+
+                    DisplayHeader("expected json");
+                    Console.WriteLine(dstJsonAsString);
+
+                    Assert.AreEqual(srcJsonAsString, dstJsonAsString);
                     break;
                 case InvalidSpec:
                     Assert.True(doc.HasErrors, "The TOML requires parsing/validation errors");

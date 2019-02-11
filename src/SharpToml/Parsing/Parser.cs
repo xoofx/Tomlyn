@@ -197,7 +197,10 @@ namespace SharpToml.Parsing
                 case TokenKind.OpenBrace:
                     return ParseInlineTable();
 
-                case TokenKind.DateTime:
+                case TokenKind.OffsetDateTime:
+                case TokenKind.LocalDateTime:
+                case TokenKind.LocalDate:
+                case TokenKind.LocalTime:
                     return ParseDateTime();
 
                 case TokenKind.True:
@@ -229,7 +232,26 @@ namespace SharpToml.Parsing
 
         private DateTimeValueSyntax ParseDateTime()
         {
-            var datetime = Open<DateTimeValueSyntax>();
+            DateTimeValueSyntax datetime;
+
+            switch (_token.Kind)
+            {
+                case TokenKind.OffsetDateTime:
+                    datetime = Open(new DateTimeValueSyntax(SyntaxKind.OffsetDateTime));
+                    break;
+                case TokenKind.LocalDateTime:
+                    datetime = Open(new DateTimeValueSyntax(SyntaxKind.LocalDateTime));
+                    break;
+                case TokenKind.LocalDate:
+                    datetime = Open(new DateTimeValueSyntax(SyntaxKind.LocalDate));
+                    break;
+                case TokenKind.LocalTime:
+                    datetime = Open(new DateTimeValueSyntax(SyntaxKind.LocalTime));
+                    break;
+                default:
+                    throw new InvalidOperationException("The datetime kind `{_token.Kind}` is not supported");
+            }
+
             datetime.Value = (DateTime)_token.Value;
             datetime.Token = EatToken();
             return Close(datetime);
@@ -507,9 +529,14 @@ namespace SharpToml.Parsing
             return Open<T>(_token);
         }
 
-        private T Open<T>(SyntaxTokenValue startToken) where T : SyntaxNode, new()
+        private T Open<T>(T syntax) where T : SyntaxNode
         {
-            var syntax = new T() { Span = { FileName = _lexer.Source.SourcePath, Start = startToken.Start } };
+            return Open(syntax, _token);
+        }
+
+        private T Open<T>(T syntax, SyntaxTokenValue startToken) where T : SyntaxNode
+        {
+            syntax.Span = new SourceSpan(_lexer.Source.SourcePath, startToken.Start, new TextPosition());
 
             if (_currentTrivias.Count > 0)
             {
@@ -517,6 +544,11 @@ namespace SharpToml.Parsing
                 _currentTrivias.Clear();
             }
             return syntax;
+        }
+
+        private T Open<T>(SyntaxTokenValue startToken) where T : SyntaxNode, new()
+        {
+            return Open(new T(), startToken);
         }
 
         private T Close<T>(T syntax) where T : SyntaxNode

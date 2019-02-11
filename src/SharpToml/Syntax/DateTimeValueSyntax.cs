@@ -7,13 +7,8 @@ namespace SharpToml.Syntax
 {
     public sealed class DateTimeValueSyntax : ValueSyntax
     {
-        public DateTimeValueSyntax() : base(SyntaxKind.DateTime)
+        public DateTimeValueSyntax(SyntaxKind kind) : base(CheckDateTimeKind(kind))
         {
-        }
-
-        public override void Accept(SyntaxVisitor visitor)
-        {
-            visitor.Visit(this);
         }
 
         public SyntaxToken Token { get; set; }
@@ -22,9 +17,28 @@ namespace SharpToml.Syntax
 
         public override int ChildrenCount => 1;
 
+        public override void Accept(SyntaxVisitor visitor)
+        {
+            visitor.Visit(this);
+        }
+
         protected override SyntaxNode GetChildrenImpl(int index)
         {
             return Token;
+        }
+
+        private static SyntaxKind CheckDateTimeKind(SyntaxKind kind)
+        {
+            switch (kind)
+            {
+                case SyntaxKind.OffsetDateTime:
+                case SyntaxKind.LocalDateTime:
+                case SyntaxKind.LocalDate:
+                case SyntaxKind.LocalTime:
+                    return kind;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
+            }
         }
     }
 }

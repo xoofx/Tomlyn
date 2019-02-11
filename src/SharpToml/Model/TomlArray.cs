@@ -30,6 +30,11 @@ namespace SharpToml.Model
             }
         }
 
+        public IEnumerable<TomlObject> GetTomlEnumerator()
+        {
+            return _items;
+        }
+
         IEnumerator IEnumerable.GetEnumerator()
         {
             return GetEnumerator();
