@@ -1,0 +1,39 @@
+version: 11.0.{build}
+image: Visual Studio 2017
+configuration: Release
+install:
+- ps: >-
+    cd src
+
+    nuget restore Tomlyn.sln
+
+    $env:TOMLYN_BUILD_NUMBER = ([int]$env:APPVEYOR_BUILD_NUMBER).ToString("000")
+
+    $env:appveyor_nuget_push = 'false'
+
+    if(-Not $env:APPVEYOR_PULL_REQUEST_NUMBER) {
+      if($env:appveyor_repo_tag -eq 'True') {
+        if($env:appveyor_repo_tag_name -match '^v[0-9]') {
+           $env:appveyor_nuget_push = 'true'
+        }
+      }
+    }
+build:
+  project: src/Tomlyn.sln
+  verbosity: minimal
+before_package:
+- cmd: >-
+     msbuild /t:pack /p:Configuration=Release Tomlyn/Tomlyn.csproj
+
+     msbuild /t:Clean Tomlyn/Tomlyn.csproj
+
+     msbuild /t:pack /p:Configuration=Release;SignAssembly=true Tomlyn/Tomlyn.csproj
+artifacts:
+- path: src\Tomlyn\Bin\Release\*.nupkg
+  name: Tomlyn Nugets
+deploy:
+- provider: NuGet
+  api_key:
+    secure: 7cthHh+wYWZjhqxaxR6QObRaRnstvFkQOY7MkxIsC5kpQEBlKZXuinf0IybbYxJt
+  on:
+    appveyor_nuget_push: true

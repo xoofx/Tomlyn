@@ -2,7 +2,9 @@
 // Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
 
+using System;
 using NUnit.Framework;
+using Tomlyn.Model;
 using Tomlyn.Syntax;
 
 namespace Tomlyn.Tests
@@ -51,6 +53,30 @@ g = [""0"", ""1"", ""2""]
             // Reparse the result and compare it again
             var newDoc = Toml.Parse(docStr);
             AssertHelper.AreEqualNormalizeNewLine(expected, newDoc.ToString());
+        }
+
+        [Test]
+        public void Sample()
+        {
+            var input = @"[mytable]
+key = 15
+val = true
+";
+
+            // Gets a syntax tree of the TOML text
+            var doc = Toml.Parse(input); // returns a DocumentSyntax
+            // Check for parsing errors with doc.HasErrors and doc.Diagnostics
+            // doc.HasErrors => throws an exception
+
+            // Prints the exact representation of the input
+            var docStr = doc.ToString();
+            Console.WriteLine(docStr);
+
+            // Gets a runtime representation of the syntax tree
+            var table = doc.ToModel();
+            var key = (long) ((TomlTable) table["mytable"])["key"];
+            var value = (bool) ((TomlTable) table["mytable"])["val"];
+            Console.WriteLine($"key = {key}, val = {value}");
         }
     }
 }
