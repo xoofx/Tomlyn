@@ -1,8 +1,7 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard1.3</TargetFrameworks>
-    <!--<TargetFrameworks>netstandard1.3;netstandard2.0;netcoreapp2.0;net471</TargetFrameworks>-->
+    <TargetFrameworks>net45;netstandard1.3;netstandard2.0</TargetFrameworks>
     <LangVersion>7.3</LangVersion>
     <Description>Tomlyn is a TOML parser, validator and authoring library for .NET Framework and .NET Core</Description>
     <Copyright>Alexandre Mutel</Copyright>

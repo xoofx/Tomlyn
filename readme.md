@@ -1,4 +1,4 @@
-# Tomlyn  [![Build status](https://ci.appveyor.com/api/projects/status/ig5kv8r63bqjsd9a?svg=true)](https://ci.appveyor.com/project/xoofx/Tomlyn)   [![NuGet](https://img.shields.io/nuget/v/Tomlyn.svg)](https://www.nuget.org/packages/Tomlyn/)
+# Tomlyn  [![Build status](https://ci.appveyor.com/api/projects/status/9rdg3h944ybxgto9?svg=true)](https://ci.appveyor.com/project/xoofx/tomlyn)   [![NuGet](https://img.shields.io/nuget/v/Tomlyn.svg)](https://www.nuget.org/packages/Tomlyn/)
 
 <img align="right" width="160px" height="160px" src="img/logo.png">
 
@@ -12,6 +12,7 @@ Tomlyn is a TOML parser, validator and authoring library for .NET Framework and 
 - Provides a validator with the `Toml.Validate` method
 - Allow to work on the syntax tree directly (preserving styles) through the `Toml.Parse`
 - Allow to work with a runtime representation `Toml.ToModel` (but cannot be saved back to TOML)
+- Supports for .NET Framework 4.5+, .NET Standard 1.3 and .NET Standard 2.0+ (Core)
 
 ## Usage
 
