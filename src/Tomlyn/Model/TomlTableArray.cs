@@ -8,7 +8,10 @@ using System.Collections.Generic;
 
 namespace Tomlyn.Model
 {
-    public class TomlTableArray : TomlObject, IList<TomlTable>
+    /// <summary>
+    /// Runtime representation of a TOML table array
+    /// </summary>
+    public sealed class TomlTableArray : TomlObject, IList<TomlTable>
     {
         private readonly List<TomlTable> _items;
 

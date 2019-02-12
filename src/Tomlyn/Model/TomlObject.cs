@@ -1,23 +1,21 @@
 using System;
-using Tomlyn.Syntax;
 
 namespace Tomlyn.Model
 {
+    /// <summary>
+    /// Base class for the runtime representation of a TOML object
+    /// </summary>
     public abstract class TomlObject
     {
-        protected TomlObject(ObjectKind kind)
+        internal TomlObject(ObjectKind kind)
         {
             Kind = kind;
         }
 
+        /// <summary>
+        /// The kind of the object
+        /// </summary>
         public ObjectKind Kind { get; }
-
-        public SyntaxNode Node { get; internal set; }
-
-        internal static bool IsContainer(TomlObject tomlObj)
-        {
-            return tomlObj.Kind == ObjectKind.Array || tomlObj.Kind == ObjectKind.Table || tomlObj.Kind == ObjectKind.TableArray;
-        }
 
         internal static object ToObject(TomlObject tomlObj)
         {

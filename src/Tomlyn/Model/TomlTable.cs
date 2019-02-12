@@ -9,12 +9,21 @@ using Tomlyn.Syntax;
 
 namespace Tomlyn.Model
 {
-    public class TomlTable : TomlObject, IDictionary<string, object>
+    /// <summary>
+    /// Runtime representation of a TOML table
+    /// </summary>
+    /// <remarks>
+    /// This object keep the order of the inserted key=values
+    /// </remarks>
+    public sealed class TomlTable : TomlObject, IDictionary<string, object>
     {
         // TODO: optimize the internal by avoiding two structures
         private readonly List<KeyValuePair<string, TomlObject>> _order;
         private readonly Dictionary<string, TomlObject> _map;
 
+        /// <summary>
+        /// Creates an instance of a <see cref="TomlTable"/>
+        /// </summary>
         public TomlTable() : base(ObjectKind.Table)
         {
             _order = new List<KeyValuePair<string, TomlObject>>();

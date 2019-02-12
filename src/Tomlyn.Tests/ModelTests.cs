@@ -250,20 +250,12 @@ better = 43
             var serializer = JsonSerializer.Create(new JsonSerializerSettings() { Formatting = Formatting.Indented });
             var writer = new StringWriter();
             serializer.Serialize(writer, model);
-            var jsonResult = NormalizeEndOfLine(writer.ToString());
-            expectedJson = NormalizeEndOfLine(expectedJson);
+            var jsonResult = writer.ToString();
 
             StandardTests.DisplayHeader("json");
             Console.WriteLine(jsonResult);
 
-            Assert.AreEqual(expectedJson, jsonResult);
+            AssertHelper.AreEqualNormalizeNewLine(expectedJson, jsonResult);
         }
-
-        private static string NormalizeEndOfLine(string text)
-        {
-            return text.Replace("\r\n", "\n");
-        }
-
-
     }
 }

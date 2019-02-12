@@ -7,6 +7,9 @@ using System.Globalization;
 
 namespace Tomlyn.Model
 {
+    /// <summary>
+    /// Runtime representation of a TOML datetime
+    /// </summary>
     public sealed class TomlDateTime : TomlValue<DateTime>
     {
         public TomlDateTime(ObjectKind kind, DateTime value) : base(CheckDateTimeKind(kind), value)

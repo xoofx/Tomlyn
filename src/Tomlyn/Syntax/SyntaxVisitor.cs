@@ -53,9 +53,9 @@ namespace Tomlyn.Syntax
         public virtual void Visit(SyntaxTrivia trivia)
         {
         }
-        public virtual void Visit(BasicKeySyntax basicKey)
+        public virtual void Visit(BareKeySyntax bareKey)
         {
-            DefaultVisit(basicKey);
+            DefaultVisit(bareKey);
         }
         public virtual void Visit(KeySyntax key)
         {

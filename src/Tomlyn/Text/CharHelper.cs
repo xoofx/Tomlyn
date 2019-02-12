@@ -57,7 +57,61 @@ namespace Tomlyn.Text
         {
             return IsDigit(c) || c == ':' || c == '-' || c == 'Z' || c == 'T' || c == 'z' || c == 't' || c == '+' || c == '.';
         }
-   
+
+        /// <summary>
+        /// Escape a C# string to a TOML string
+        /// </summary>
+        public static string EscapeForToml(this string text)
+        {
+            StringBuilder builder = null;
+            for (int i = 0; i < text.Length; i++)
+            {
+                var c = text[i];
+                var str = EscapeChar(text[i]);
+                if (str != null)
+                {
+                    if (builder == null)
+                    {
+                        builder = new StringBuilder(text.Length * 2);
+                        builder.Append(text.Substring(0, i));
+                    }
+                    builder.Append(str);
+                }
+                else
+                {
+                    builder?.Append(c);
+                }
+            }
+            return builder?.ToString() ?? text;
+        }
+
+        private static string EscapeChar(char c)
+        {
+            if (c < ' ' || c == '"' || c == '\\')
+            {
+                switch (c)
+                {
+                    case '\b':
+                        return @"\b";
+                    case '\t':
+                        return @"\t";
+                    case '\n':
+                        return @"\n";
+                    case '\f':
+                        return @"\f";
+                    case '\r':
+                        return @"\r";
+                    case '"':
+                        return @"\""";
+                    case '\\':
+                        return @"\\";
+                    default:
+                        return $"\\u{(int)c:X};";
+                }
+            }
+            return null;
+        }
+
         /// <summary>
         /// Converts a string that may have control characters to a printable string
         /// </summary>

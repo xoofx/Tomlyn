@@ -3,21 +3,33 @@
 // See license.txt file in the project root for full license information.
 namespace Tomlyn.Syntax
 {
+    /// <summary>
+    /// An item of an <see cref="ArraySyntax"/>
+    /// </summary>
     public sealed class ArrayItemSyntax : SyntaxNode
     {
         private ValueSyntax _value;
         private SyntaxToken _comma;
 
+        /// <summary>
+        /// Creates an instance of <see cref="ArrayItemSyntax"/>
+        /// </summary>
         public ArrayItemSyntax() : base(SyntaxKind.ArrayItem)
         {
         }
 
+        /// <summary>
+        /// Gets or sets the value of this item.
+        /// </summary>
         public ValueSyntax Value
         {
             get => _value;
             set => ParentToThis(ref _value, value);
         }
 
+        /// <summary>
+        /// Gets or sets the comma of this item (mandatory to separate elements in an array)
+        /// </summary>
         public SyntaxToken Comma
         {
             get => _comma;

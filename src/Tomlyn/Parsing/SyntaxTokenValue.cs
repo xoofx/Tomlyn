@@ -13,8 +13,6 @@ namespace Tomlyn.Parsing
     /// </summary>
     internal readonly struct SyntaxTokenValue : IEquatable<SyntaxTokenValue>
     {
-        public static readonly SyntaxTokenValue Eof = new SyntaxTokenValue(TokenKind.Eof, TextPosition.Eof, TextPosition.Eof);
-
         /// <summary>
         /// Initializes a new instance of the <see cref="SyntaxTokenValue"/> struct.
         /// </summary>

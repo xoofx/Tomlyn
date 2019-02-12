@@ -7,8 +7,17 @@ using System.Text;
 
 namespace Tomlyn.Syntax
 {
+    /// <summary>
+    /// A diagnostic message with errors.
+    /// </summary>
     public class DiagnosticMessage
     {
+        /// <summary>
+        /// Creates a new instance of a <see cref="DiagnosticMessage"/>
+        /// </summary>
+        /// <param name="kind">The kind of message</param>
+        /// <param name="span">The source span</param>
+        /// <param name="message">The message</param>
         public DiagnosticMessage(DiagnosticMessageKind kind, SourceSpan span, string message)
         {
             Kind = kind;
@@ -16,11 +25,20 @@ namespace Tomlyn.Syntax
             Message = message;
         }
 
-        public DiagnosticMessageKind Kind { get; set; }
+        /// <summary>
+        /// Gets the kind of message.
+        /// </summary>
+        public DiagnosticMessageKind Kind { get; }
 
-        public SourceSpan Span { get; set; }
+        /// <summary>
+        /// Gets the source span.
+        /// </summary>
+        public SourceSpan Span { get; }
 
-        public string Message { get; set; }
+        /// <summary>
+        /// Gets the message.
+        /// </summary>
+        public string Message { get; }
 
         public override string ToString()
         {

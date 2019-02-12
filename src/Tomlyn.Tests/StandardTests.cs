@@ -119,14 +119,14 @@ namespace Tomlyn.Tests
             {
                 var functionName = Path.GetFileName(file);
 
-                var input = File.ReadAllText(file);
+                var input = File.ReadAllText(file, Encoding.UTF8);
 
                 string json = null;
                 if (type == "valid")
                 {
                     var jsonFile = Path.ChangeExtension(file, "json");
                     Assert.True(File.Exists(jsonFile), $"The json file `{jsonFile}` does not exist");
-                    json = File.ReadAllText(jsonFile);
+                    json = File.ReadAllText(jsonFile, Encoding.UTF8);
                 }
                 tests.Add(new TestCaseData(functionName, input, json));
             }

@@ -6,6 +6,9 @@ using System;
 
 namespace Tomlyn.Model
 {
+    /// <summary>
+    /// Base class of a TOML value (bool, string, integer, float, datetime)
+    /// </summary>
     public abstract class TomlValue : TomlObject
     {
         internal TomlValue(ObjectKind kind) : base(kind)
@@ -15,6 +18,9 @@ namespace Tomlyn.Model
         public abstract object ValueAsObject { get; }
     }
 
+    /// <summary>
+    /// Base class of a TOML value (bool, string, integer, float, datetime)
+    /// </summary>
     public abstract class TomlValue<T> : TomlValue, IEquatable<TomlValue<T>> where T : IEquatable<T>
     {
         private T _value;

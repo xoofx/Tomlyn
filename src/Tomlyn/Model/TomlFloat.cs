@@ -3,6 +3,9 @@
 // See license.txt file in the project root for full license information.
 namespace Tomlyn.Model
 {
+    /// <summary>
+    /// Runtime representation of a TOML float
+    /// </summary>
     public sealed class TomlFloat : TomlValue<double>
     {
         public TomlFloat(double value) : base(ObjectKind.Float, value)

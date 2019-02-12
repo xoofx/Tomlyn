@@ -7,6 +7,9 @@ using Tomlyn.Syntax;
 
 namespace Tomlyn.Model
 {
+    /// <summary>
+    /// Internal class used to transform a <see cref="DocumentSyntax"/> into a <see cref="TomlTable"/>
+    /// </summary>
     internal class SyntaxTransform : SyntaxVisitor
     {
         private readonly TomlTable _rootTable;
@@ -42,12 +45,12 @@ namespace Tomlyn.Model
         private TomlTable SetKeyValue(KeySyntax key, object value, SyntaxKind kind)
         {
             var currentTable = _currentTable;
-            var name = GetStringFromBasic(key.Base);
-            var items = key.DotKeyItems;
+            var name = GetStringFromBasic(key.Key);
+            var items = key.DotKeys;
             for (int i = 0; i < items.ChildrenCount; i++)
             {
                 currentTable = GetTable(currentTable, name, false);
-                name = GetStringFromBasic(items.GetChildren(i).Value);
+                name = GetStringFromBasic(items.GetChildren(i).Key);
             }
 
             var isTableArray = kind == SyntaxKind.TableArray;
@@ -93,9 +96,9 @@ namespace Tomlyn.Model
             return newTable;
         }
 
-        private string GetStringFromBasic(BasicValueSyntax value)
+        private string GetStringFromBasic(BareKeyOrStringValueSyntax value)
         {
-            if (value is BasicKeySyntax basicKey)
+            if (value is BareKeySyntax basicKey)
             {
                 return basicKey.Key.Text;
             }

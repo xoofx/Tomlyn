@@ -4,11 +4,11 @@
 namespace Tomlyn.Syntax
 {
     /// <summary>
-    /// Base class for all TOML values.
+    /// Base class for a <see cref="BareKeySyntax"/> or a <see cref="StringValueSyntax"/>
     /// </summary>
-    public abstract class ValueSyntax : SyntaxNode
+    public abstract class BareKeyOrStringValueSyntax : ValueSyntax
     {
-        internal ValueSyntax(SyntaxKind kind) : base(kind)
+        internal BareKeyOrStringValueSyntax(SyntaxKind kind) : base(kind)
         {
         }
     }

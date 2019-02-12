@@ -95,10 +95,10 @@ namespace Tomlyn.Parsing
                 list.Span.End = node.Span.End;
             }
 
-            list.AddChildren(node);
+            list.Add(node);
         }
 
-        private bool TryParseTableEntry(out TableEntrySyntax nextEntry)
+        private bool TryParseTableEntry(out SyntaxNode nextEntry)
         {
             nextEntry = null;
             while (true)
@@ -223,6 +223,35 @@ namespace Tomlyn.Parsing
             return null;
         }
 
+        private bool IsCurrentValue()
+        {
+            switch (_token.Kind)
+            {
+                case TokenKind.Integer:
+                case TokenKind.IntegerHexa:
+                case TokenKind.IntegerOctal:
+                case TokenKind.IntegerBinary:
+                case TokenKind.Infinite:
+                case TokenKind.PositiveInfinite:
+                case TokenKind.NegativeInfinite:
+                case TokenKind.Float:
+                case TokenKind.String:
+                case TokenKind.StringMulti:
+                case TokenKind.StringLiteral:
+                case TokenKind.StringLiteralMulti:
+                case TokenKind.OpenBracket:
+                case TokenKind.OpenBrace:
+                case TokenKind.OffsetDateTime:
+                case TokenKind.LocalDateTime:
+                case TokenKind.LocalDate:
+                case TokenKind.LocalTime:
+                case TokenKind.True:
+                case TokenKind.False:
+                    return true;
+            }
+            return false;
+        }
+
         private BooleanValueSyntax ParseBoolean()
         {
             var boolean = Open<BooleanValueSyntax>();
@@ -302,6 +331,10 @@ namespace Tomlyn.Parsing
                         {
                             item.Comma = EatToken();
                         }
+                        else if (IsCurrentValue())
+                        {
+                            LogError($"Missing a `,` (token: comma) to separate items in an array");
+                        }
                         else
                         {
                             expectingEndOfArray = true;
@@ -312,7 +345,7 @@ namespace Tomlyn.Parsing
                     }
                     else
                     {
-                        LogError($"Unexpected token `{_token.Kind}`. Expecting a closing ] for an array");
+                        LogError($"Unexpected token `{ToPrintable(_token)}` (token: `{_token.Kind}`). Expecting a closing `]` for an array");
                         break;
                     }
                 }
@@ -419,15 +452,15 @@ namespace Tomlyn.Parsing
         private KeySyntax ParseKey()
         {
             var key = Open<KeySyntax>();
-            key.Base = ParseBaseKey();
+            key.Key = ParseBaseKey();
             while (_token.Kind == TokenKind.Dot)
             {
-                AddToListAndUpdateSpan(key.DotKeyItems, ParseDotKey());
+                AddToListAndUpdateSpan(key.DotKeys, ParseDotKey());
             }
             return Close(key);
         }
 
-        private BasicValueSyntax ParseBaseKey()
+        private BareKeyOrStringValueSyntax ParseBaseKey()
         {
             if (_token.Kind == TokenKind.BasicKey)
             {
@@ -455,13 +488,13 @@ namespace Tomlyn.Parsing
         {
             var dotKey = Open<DottedKeyItemSyntax>();
             dotKey.Dot = EatToken();
-            dotKey.Value = ParseBaseKey();            
+            dotKey.Key = ParseBaseKey();            
             return Close(dotKey);
         }
 
-        private BasicKeySyntax ParseBasicKey()
+        private BareKeySyntax ParseBasicKey()
         {
-            var basicKey = Open<BasicKeySyntax>();
+            var basicKey = Open<BareKeySyntax>();
             basicKey.Key = EatToken(TokenKind.BasicKey);
             return Close(basicKey);
         }
@@ -479,13 +512,15 @@ namespace Tomlyn.Parsing
                 var invalid = Open<InvalidSyntaxToken>();
                 invalid.InvalidKind = _token.Kind;
                 syntax = invalid;
+                var tokenText = tokenKind.ToText();
+                var expectingTokenText = tokenText != null ? $"while expecting `{tokenText}` (token: `{tokenKind.ToString().ToLowerInvariant()}`)" : $"while expecting token `{tokenKind.ToString().ToLowerInvariant()}`";
                 if (_token.Kind == TokenKind.Invalid)
                 {
-                    LogError($"Unexpected token found `{ToPrintable(_token)}` while expecting `{tokenKind.ToText() ?? ToPrintable(_token)}` (token: `{tokenKind.ToString().ToLowerInvariant()}`)");
+                    LogError($"Unexpected token found `{ToPrintable(_token)}` {expectingTokenText}");
                 }
                 else
                 {
-                    LogError($"Unexpected token found `{ToPrintable(_token)}` (token: `{_token.Kind.ToString().ToLowerInvariant()}`) while expecting `{tokenKind.ToText() ?? ToPrintable(_token)}` (token: `{tokenKind.ToString().ToLowerInvariant()}`)");
+                    LogError($"Unexpected token found `{ToPrintable(_token)}` (token: `{_token.Kind.ToString().ToLowerInvariant()}`) {expectingTokenText}");
                 }
             }
             syntax.TokenKind = tokenKind;
@@ -590,7 +625,7 @@ namespace Tomlyn.Parsing
                 _currentTrivias.Add(new SyntaxTrivia { Span = new SourceSpan(_lexer.Source.SourcePath, _lexer.Token.Start, _lexer.Token.End), Kind = _lexer.Token.Kind, Text = _lexer.Token.GetText(_lexer.Source) });
             }
 
-            _token = result ? _lexer.Token : SyntaxTokenValue.Eof;
+            _token = result ? _lexer.Token : new SyntaxTokenValue(TokenKind.Eof, new TextPosition(), new TextPosition());
         }
 
         private bool IsHidden(TokenKind tokenKind)

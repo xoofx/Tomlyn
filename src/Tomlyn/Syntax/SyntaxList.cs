@@ -9,6 +9,9 @@ using Tomlyn.Helpers;
 
 namespace Tomlyn.Syntax
 {
+    /// <summary>
+    /// Abstract list of <see cref="SyntaxNode"/>
+    /// </summary>
     public abstract class SyntaxList : SyntaxNode
     {
         protected readonly List<SyntaxNode> Children;
@@ -31,13 +34,24 @@ namespace Tomlyn.Syntax
         }
     }
 
+    /// <summary>
+    /// Abstract list of <see cref="SyntaxNode"/>
+    /// </summary>
+    /// <typeparam name="TSyntaxNode">Type of the node</typeparam>
     public sealed class SyntaxList<TSyntaxNode> : SyntaxList, IEnumerable<TSyntaxNode> where TSyntaxNode : SyntaxNode
     {
+        /// <summary>
+        /// Creates an instance of <see cref="SyntaxList{TSyntaxNode}"/>
+        /// </summary>
         public SyntaxList()
         {
         }
 
-        public void AddChildren(TSyntaxNode node)
+        /// <summary>
+        /// Adds the specified node to this list.
+        /// </summary>
+        /// <param name="node">Node to add to this list</param>
+        public void Add(TSyntaxNode node)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
             if (node.Parent != null) throw ThrowHelper.GetExpectingNoParentException();
@@ -55,6 +69,10 @@ namespace Tomlyn.Syntax
             return Children[index];
         }
 
+        /// <summary>
+        /// Removes a node at the specified index.
+        /// </summary>
+        /// <param name="index">Index of the node to remove</param>
         public void RemoveChildrenAt(int index)
         {
             var node = Children[index];
@@ -62,6 +80,10 @@ namespace Tomlyn.Syntax
             node.Parent = null;
         }
 
+        /// <summary>
+        /// Removes the specified node instance.
+        /// </summary>
+        /// <param name="node">Node instance to remove</param>
         public void RemoveChildren(TSyntaxNode node)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
@@ -70,6 +92,10 @@ namespace Tomlyn.Syntax
             node.Parent = null;
         }
 
+        /// <summary>
+        /// Gets the default enumerator.
+        /// </summary>
+        /// <returns>The enumerator of this list</returns>
         public Enumerator GetEnumerator()
         {
             return new Enumerator(Children);
@@ -85,11 +111,18 @@ namespace Tomlyn.Syntax
             return GetEnumerator();
         }
 
+        /// <summary>
+        /// Enumerator of a <see cref="SyntaxList{TSyntaxNode}"/>
+        /// </summary>
         public struct Enumerator : IEnumerator<TSyntaxNode>
         {
             private readonly List<SyntaxNode> _nodes;
             private int _index;
 
+            /// <summary>
+            /// Initialize an enumerator with a list of <see cref="SyntaxNode"/>
+            /// </summary>
+            /// <param name="nodes"></param>
             public Enumerator(List<SyntaxNode> nodes)
             {
                 _nodes = nodes;

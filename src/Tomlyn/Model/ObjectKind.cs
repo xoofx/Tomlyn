@@ -3,6 +3,9 @@
 // See license.txt file in the project root for full license information.
 namespace Tomlyn.Model
 {
+    /// <summary>
+    /// Kind of an TOML object.
+    /// </summary>
     public enum ObjectKind
     {
         Table,

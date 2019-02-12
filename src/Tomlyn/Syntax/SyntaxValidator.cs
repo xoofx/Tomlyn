@@ -104,14 +104,14 @@ namespace Tomlyn.Syntax
 
         private void KeyNameToObjectPath(KeySyntax key, ObjectKind kind)
         {
-            var name = GetStringFromBasic(key.Base);
+            var name = GetStringFromBasic(key.Key);
             _currentPath.Add(name);
 
-            var items = key.DotKeyItems;
+            var items = key.DotKeys;
             for (int i = 0; i < items.ChildrenCount; i++)
             {
                 AddObjectPath(key, kind, true);
-                var dotItem = GetStringFromBasic(items.GetChildren(i).Value);
+                var dotItem = GetStringFromBasic(items.GetChildren(i).Key);
                 _currentPath.Add(dotItem);
             }
         }
@@ -139,9 +139,9 @@ namespace Tomlyn.Syntax
             return existingValue;
         }
 
-        private string GetStringFromBasic(BasicValueSyntax value)
+        private string GetStringFromBasic(BareKeyOrStringValueSyntax value)
         {
-            if (value is BasicKeySyntax basicKey)
+            if (value is BareKeySyntax basicKey)
             {
                 return basicKey.Key.Text;
             }

@@ -155,7 +155,7 @@ namespace Tomlyn.Parsing
                     ReadStringLiteral(start, false);
                     break;
                 case Eof:
-                    _token = SyntaxTokenValue.Eof;
+                    _token = new SyntaxTokenValue(TokenKind.Eof, _position, _position);
                     break;
                 default:
                     // Eat any whitespace
@@ -229,7 +229,7 @@ namespace Tomlyn.Parsing
                     ReadStringLiteral(start, true);
                     break;
                 case Eof:
-                    _token = SyntaxTokenValue.Eof;
+                    _token = new SyntaxTokenValue(TokenKind.Eof, _position, _position);
                     break;
                 default:
                     // Eat any whitespace
@@ -576,7 +576,20 @@ namespace Tomlyn.Parsing
                 }
                 else
                 {
-                    AddError($"Unable to parse the date time/offset `{dateTimeAsString}`", start, end);
+                    // Try to recover the date using the standard C# (not necessarily RFC3339)
+                    if (DateTime.TryParse(dateTimeAsString, CultureInfo.InvariantCulture, DateTimeStyles.AllowInnerWhite, out datetime))
+                    {
+                        _token = new SyntaxTokenValue(TokenKind.LocalDateTime, start, end, datetime);
+
+                        // But we produce an error anyway
+                        AddError($"Invalid format of date time/offset `{dateTimeAsString}` not following RFC3339", start, end);
+                    }
+                    else
+                    {
+                        _token = new SyntaxTokenValue(TokenKind.LocalDateTime, start, end, new DateTime());
+                        // But we produce an error anyway
+                        AddError($"Unable to parse the date time/offset `{dateTimeAsString}`", start, end);
+                    }
                 }
 
                 return;
@@ -685,7 +698,7 @@ namespace Tomlyn.Parsing
 
             if (!isPreviousDigit)
             {
-                AddError("An underscore `_` must not followed a digit", _position, _position);
+                AddError("Missing a digit after a trailing underscore `_`", _position, _position);
             }
         }
 
@@ -1074,7 +1087,8 @@ namespace Tomlyn.Parsing
 
         private void CheckCharacter(char32 c)
         {
-            if (!CharHelper.IsValidUnicodeScalarValue(c))
+            // The character 0xFFFD is the replacement character and we assume that something went wrong when reading the input
+            if (!CharHelper.IsValidUnicodeScalarValue(c) || c == 0xFFFD)
             {
                 AddError($"The character `{c}` is an invalid UTF8 character", _current.Position, _current.Position);
             }

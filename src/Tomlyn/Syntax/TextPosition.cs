@@ -6,10 +6,19 @@ using System;
 
 namespace Tomlyn.Syntax
 {
+    /// <summary>
+    /// A position within a text (offset, line column)
+    /// </summary>
     public struct TextPosition : IEquatable<TextPosition>
     {
         public static readonly TextPosition Eof = new TextPosition(-1, -1, -1);   
 
+        /// <summary>
+        /// Creates a new instance of a <see cref="TextPosition"/>
+        /// </summary>
+        /// <param name="offset">Offset in the source text</param>
+        /// <param name="line">Line number - zero based</param>
+        /// <param name="column">Column number - zero based</param>
         public TextPosition(int offset, int line, int column)
         {
             Offset = offset;
@@ -17,21 +26,20 @@ namespace Tomlyn.Syntax
             Line = line;
         }
 
+        /// <summary>
+        /// Gets or sets the offset.
+        /// </summary>
         public int Offset { get; set; }
 
+        /// <summary>
+        /// Gets or sets the column number (zero based)
+        /// </summary>
         public int Column { get; set; }
 
+        /// <summary>
+        /// Gets or sets the line number (zero based)
+        /// </summary>
         public int Line { get; set; }
-
-        public TextPosition NextColumn(int offset = 1)
-        {
-            return new TextPosition(Offset + offset, Line, Column + offset);
-        }
-
-        public TextPosition NextLine(int offset = 1)
-        {
-            return new TextPosition(Offset + offset, Line + offset, 0);
-        }
 
         public override string ToString()
         {
