@@ -65,7 +65,7 @@ namespace Tomlyn.Parsing
                 return false;
             }
 
-            if (State == LexerSate.Key)
+            if (State == LexerState.Key)
             {
                 NextTokenForKey();
             }
@@ -78,7 +78,7 @@ namespace Tomlyn.Parsing
 
         public SyntaxTokenValue Token => _token;
 
-        public LexerSate State { get; set; }
+        public LexerState State { get; set; }
 
         private TextPosition _position => _current.Position;
 

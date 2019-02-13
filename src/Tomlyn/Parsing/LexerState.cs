@@ -3,7 +3,7 @@
 // See license.txt file in the project root for full license information.
 namespace Tomlyn.Parsing
 {
-    internal enum LexerSate
+    internal enum LexerState
     {
         Key,
 

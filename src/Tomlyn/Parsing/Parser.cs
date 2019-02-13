@@ -143,7 +143,7 @@ namespace Tomlyn.Parsing
                 else
                 {
                     // Switch the lexer to value parser
-                    _lexer.State = LexerSate.Value;
+                    _lexer.State = LexerState.Value;
                     try
                     {
                         keyValueSyntax.EqualToken = EatToken();
@@ -151,7 +151,7 @@ namespace Tomlyn.Parsing
                     }
                     finally
                     {
-                        _lexer.State = LexerSate.Key;
+                        _lexer.State = LexerState.Key;
                     }
 
                     if (expectEndOfLine && _token.Kind != TokenKind.Eof)
@@ -361,7 +361,7 @@ namespace Tomlyn.Parsing
             var inlineTable = Open<InlineTableSyntax>();
 
             var previousState = _lexer.State;
-            _lexer.State = LexerSate.Key;
+            _lexer.State = LexerState.Key;
             var previousLine = _hideNewLine;
             _hideNewLine = false;
             inlineTable.OpenBrace = EatToken(TokenKind.OpenBrace);
