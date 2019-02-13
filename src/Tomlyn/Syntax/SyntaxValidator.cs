@@ -28,7 +28,17 @@ namespace Tomlyn.Syntax
         public override void Visit(KeyValueSyntax keyValue)
         {
             var savedPath = _currentPath.Clone();
-            KeyNameToObjectPath(keyValue.Key, ObjectKind.Table);
+            if (keyValue.Key == null)
+            {
+                _diagnostics.Error(keyValue.Span, "A KeyValueSyntax must have a non null Key");
+                // returns immediately
+                return;
+            }
+
+            if (!KeyNameToObjectPath(keyValue.Key, ObjectKind.Table))
+            {
+                return;
+            }
 
             ObjectKind kind;
             switch (keyValue.Value)
@@ -71,7 +81,8 @@ namespace Tomlyn.Syntax
                     kind = ObjectKind.String;
                     break;
                 default:
-                    throw new NotSupportedException($"Unsupported value type `{keyValue.Value}` for the key-value `{keyValue}`");
+                    _diagnostics.Error(keyValue.Span, keyValue.Value == null ? $"A KeyValueSyntax must have a non null Value" : $"Not supported type `{keyValue.Value.Kind}` for the value of a KeyValueSyntax");
+                    return;
             }
             AddObjectPath(keyValue, kind, false);
 
@@ -79,20 +90,66 @@ namespace Tomlyn.Syntax
             _currentPath = savedPath;
         }
 
+        public override void Visit(StringValueSyntax stringValue)
+        {
+            if (stringValue.Token == null)
+            {
+                _diagnostics.Error(stringValue.Span, $"A StringValueSyntax must have a non null Token");
+            }
+            base.Visit(stringValue);
+        }
+
+        public override void Visit(IntegerValueSyntax integerValue)
+        {
+            if (integerValue.Token == null)
+            {
+                _diagnostics.Error(integerValue.Span, $"A IntegerValueSyntax must have a non null Token");
+            }
+            base.Visit(integerValue);
+        }
+
+        public override void Visit(BooleanValueSyntax boolValue)
+        {
+            if (boolValue.Token == null)
+            {
+                _diagnostics.Error(boolValue.Span, $"A BooleanValueSyntax must have a non null Token");
+            }
+            base.Visit(boolValue);
+        }
+
+        public override void Visit(FloatValueSyntax floatValue)
+        {
+            if (floatValue.Token == null)
+            {
+                _diagnostics.Error(floatValue.Span, $"A FloatValueSyntax must have a non null Token");
+            }
+            base.Visit(floatValue);
+        }
+
         public override void Visit(TableSyntax table)
         {
+            VerifyTable(table);
             var savedPath = _currentPath.Clone();
-            KeyNameToObjectPath(table.Name, ObjectKind.Table);
+            if (table.Name == null || !KeyNameToObjectPath(table.Name, ObjectKind.Table))
+            {
+                return;
+            }
+
             AddObjectPath(table, ObjectKind.Table, false);
 
             base.Visit(table);
+
             _currentPath = savedPath;
         }
 
         public override void Visit(TableArraySyntax table)
         {
+            VerifyTable(table);
             var savedPath = _currentPath.Clone();
-            KeyNameToObjectPath(table.Name, ObjectKind.Table);
+            if (table.Name == null || !KeyNameToObjectPath(table.Name, ObjectKind.Table))
+            {
+                return;
+            }
             var currentArrayTable = AddObjectPath(table, ObjectKind.TableArray, true);
 
             var savedIndex = _currentArrayIndex;
@@ -105,9 +162,64 @@ namespace Tomlyn.Syntax
             _currentPath = savedPath;
         }
 
-        private void KeyNameToObjectPath(KeySyntax key, ObjectKind kind)
+        public override void Visit(BareKeySyntax bareKey)
         {
+            if (bareKey.Key == null)
+            {
+                _diagnostics.Error(bareKey.Span, $"A BareKeySyntax must have a non null property Key");
+            }            
+            base.Visit(bareKey);
+        }
+
+        public override void Visit(KeySyntax key)
+        {
+            if (key.Key == null)
+            {
+                _diagnostics.Error(key.Span, $"A KeySyntax must have a non null property Key");
+            }
+            base.Visit(key);
+        }
+
+        public override void Visit(DateTimeValueSyntax dateTime)
+        {
+            if (dateTime.Token == null)
+            {
+                _diagnostics.Error(dateTime.Span, $"A DateTimeValueSyntax must have a non null Token");
+            }
+            base.Visit(dateTime);
+        }
+
+        private void VerifyTable(TableSyntaxBase table)
+        {
+            var isTableArray = table is TableArraySyntax;
+            if (table.OpenBracket == null)
+            {
+                _diagnostics.Error(table.Span, $"The table{(isTableArray? " array" : string.Empty)} must have an {table.OpenTokenKind} `{table.OpenTokenKind.ToText()}`");
+            }
+            if (table.CloseBracket == null)
+            {
+                _diagnostics.Error(table.Span, $"The table{(isTableArray ? " array" : string.Empty)} must have an {table.CloseTokenKind} `{table.CloseTokenKind.ToText()}`");
+            }
+            if (table.EndOfLineToken == null && table.Items.ChildrenCount > 0)
+            {
+                _diagnostics.Error(table.Span, $"The table{(isTableArray ? " array" : string.Empty)} must have a EndOfLine set after the open/closing brackets and before any elements");
+            }
+            if (table.Name == null)
+            {
+                _diagnostics.Error(table.Span, $"The table{(isTableArray ? " array" : string.Empty)} must have a name");
+            }
+        }
+
+        private bool KeyNameToObjectPath(KeySyntax key, ObjectKind kind)
+        {
+            if (key.Key == null)
+            {
+                _diagnostics.Error(key.Span, $"The property KeySyntax.Key cannot be null");
+            }
+
             var name = GetStringFromBasic(key.Key);
+            if (string.IsNullOrWhiteSpace(name)) return false;
+
             _currentPath.Add(name);
 
             var items = key.DotKeys;
@@ -115,8 +227,11 @@ namespace Tomlyn.Syntax
             {
                 AddObjectPath(key, kind, true);
                 var dotItem = GetStringFromBasic(items.GetChildren(i).Key);
+                if (string.IsNullOrWhiteSpace(dotItem)) return false;
                 _currentPath.Add(dotItem);
             }
+
+            return true;
         }
 
         private ObjectPathValue AddObjectPath(SyntaxNode node, ObjectKind kind, bool isImplicit)
@@ -144,16 +259,36 @@ namespace Tomlyn.Syntax
 
         private string GetStringFromBasic(BareKeyOrStringValueSyntax value)
         {
+            string result;
             if (value is BareKeySyntax basicKey)
             {
-                return basicKey.Key.Text;
+                result = basicKey.Key?.Text;
             }
-            return ((StringValueSyntax) value).Value;
+            else
+            {
+                result = ((StringValueSyntax) value).Value;
+            }
+
+            if (string.IsNullOrEmpty(result))
+            {
+                _diagnostics.Error(value.Span, $"A `{value.Kind}` must have non null/non empty text value");
+                return string.Empty;
+            }
+            return result;
         }
 
         public override void Visit(ArraySyntax array)
         {
             var savedIndex = _currentArrayIndex;
+
+            if (array.OpenBracket == null)
+            {
+                _diagnostics.Error(array.Span, $"The array must have an OpenBracket `[`");
+            }
+            else if (array.CloseBracket == null)
+            {
+                _diagnostics.Error(array.Span, $"The array must have an CloseBracket `[`");
+            }
 
             var items = array.Items;
             SyntaxKind firstKind = default;
@@ -169,17 +304,42 @@ namespace Tomlyn.Syntax
                 {
                     _diagnostics.Error(value.Span, $"The array item of type `{value.Kind.ToString().ToLowerInvariant()}` doesn't match the type of the first item: `{firstKind.ToString().ToLowerInvariant()}`");
                 }
+
+                if (i + 1 < items.ChildrenCount && item.Comma == null)
+                {
+                    _diagnostics.Error(item.Span, $"The array item [{i}] must have a comma `,`");
+                }
             }
             base.Visit(array);
 
             _currentArrayIndex = savedIndex;
         }
 
+        public override void Visit(InlineTableItemSyntax inlineTableItem)
+        {
+            base.Visit(inlineTableItem);
+        }
+
         public override void Visit(ArrayItemSyntax arrayItem)
         {
             _currentPath.Add(_currentArrayIndex);
+
+            if (arrayItem.Value == null)
+            {
+                _diagnostics.Error(arrayItem.Span, $"The array item [{_currentArrayIndex}] must have a non null value");
+            }
             base.Visit(arrayItem);
             _currentArrayIndex++;
+        }
+
+        public override void Visit(DottedKeyItemSyntax dottedKeyItem)
+        {
+            base.Visit(dottedKeyItem);
+        }
+
+        public override void Visit(InlineTableSyntax inlineTable)
+        {
+            base.Visit(inlineTable);
         }
 
         private class ObjectPath : List<ObjectPathItem>
