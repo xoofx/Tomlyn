@@ -35,16 +35,32 @@ namespace Tomlyn.Tests
                         { "value", tomlBoolean.Value.ToString(CultureInfo.InvariantCulture).ToLowerInvariant()}
                     };
                 case TomlDateTime tomlDateTime:
+                    string kindStr = "";
+                    switch (tomlDateTime.Kind)
+                    {
+                        case ObjectKind.OffsetDateTime:
+                            kindStr = "datetime";
+                            break;
+                        case ObjectKind.LocalDateTime:
+                            kindStr = "datetime-local";
+                            break;
+                        case ObjectKind.LocalDate:
+                            kindStr = "date";
+                            break;
+                        case ObjectKind.LocalTime:
+                            kindStr = "time";
+                            break;
+                    }
                     return new JObject
                     {
-                        {"type", "datetime"},
+                        {"type", kindStr},
                         { "value", tomlDateTime.ToString()}
                     };
                 case TomlFloat tomlFloat:
                     return new JObject
                     {
                         {"type", "float"},
-                        { "value", AppendDecimalPoint(tomlFloat.Value.ToString("g16", CultureInfo.InvariantCulture), true)}
+                        { "value", tomlFloat.ToString()}
                     };
                 case TomlInteger tomlInteger:
                     return new JObject
@@ -79,33 +95,6 @@ namespace Tomlyn.Tests
                 }
             }
             throw new NotSupportedException($"The type element `{obj.GetType()}` is not supported");
-        }
-
-        private static string DateTimeToString(DateTime time)
-        {
-            time = time.ToUniversalTime();
-            if (time.Millisecond == 0) return time.ToString("yyyy-MM-dd'T'HH:mm:ssK", CultureInfo.InvariantCulture);
-            return time.ToString("yyyy-MM-dd'T'HH:mm:ss.fffK", CultureInfo.InvariantCulture);
-        }
-
-        private static string AppendDecimalPoint(string text, bool hasNaN)
-        {
-            for (var i = 0; i < text.Length; i++)
-            {
-                var c = text[i];
-                // Do not append a decimal point if floating point type value
-                // - is in exponential form, or
-                // - already has a decimal point
-                if (c == 'e' || c == 'E' || c == '.')
-                {
-                    return text;
-                }
-            }
-            // Special cases for floating point type supporting NaN and Infinity
-            if (hasNaN && (string.Equals(text, "NaN") || text.Contains("Infinity")))
-                return text;
-
-            return text + ".0";
         }
     }
 }
