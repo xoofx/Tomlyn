@@ -16,7 +16,7 @@ namespace Tomlyn.Parsing
 
         TSourceView Source { get; }
 
-        LexerSate State { get; set; }
+        LexerState State { get; set; }
 
         bool MoveNext();
 
