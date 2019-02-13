@@ -344,11 +344,11 @@ namespace Tomlyn.Parsing
             }
             else if (MatchCurrentIdentifier("+nan"))
             {
-                _token = new SyntaxTokenValue(TokenKind.PositiveNan, start, end, BoxedValues.FloatNan);
+                _token = new SyntaxTokenValue(TokenKind.PositiveNan, start, end, BoxedValues.FloatPositiveNaN);
             }
             else if (MatchCurrentIdentifier("-nan"))
             {
-                _token = new SyntaxTokenValue(TokenKind.NegativeNan, start, end, BoxedValues.FloatNan); // TODO: Add negative Nan
+                _token = new SyntaxTokenValue(TokenKind.NegativeNan, start, end, BoxedValues.FloatNegativeNaN);
             }
             else
             {
@@ -1136,15 +1136,17 @@ namespace Tomlyn.Parsing
 
     internal static class BoxedValues
     {
-        public static object True = true;
-        public static object False = false;
-        public static object IntegerZero = (long)0;
-        public static object IntegerOne = (long)1;
-        public static object FloatZero = 0.0;
-        public static object FloatOne = 1.0;
-        public static object FloatPositiveInfinity = double.PositiveInfinity;
-        public static object FloatNegativeInfinity = double.NegativeInfinity;
-        public static object FloatNan = double.NaN;
+        public static readonly object True = true;
+        public static readonly object False = false;
+        public static readonly object IntegerZero = (long)0;
+        public static readonly object IntegerOne = (long)1;
+        public static readonly object FloatZero = 0.0;
+        public static readonly object FloatOne = 1.0;
+        public static readonly object FloatPositiveInfinity = double.PositiveInfinity;
+        public static readonly object FloatNegativeInfinity = double.NegativeInfinity;
+        public static readonly object FloatNan = BitConverter.Int64BitsToDouble(unchecked((long)0xfff8000000000000U));
+        public static readonly object FloatPositiveNaN = BitConverter.Int64BitsToDouble(unchecked((long)0x7ff8000000000000U));
+        public static readonly object FloatNegativeNaN = FloatNan;
     }
 
 }

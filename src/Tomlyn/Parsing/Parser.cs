@@ -179,6 +179,9 @@ namespace Tomlyn.Parsing
                 case TokenKind.IntegerBinary:
                     return ParseInteger();
 
+                case TokenKind.Nan:
+                case TokenKind.PositiveNan:
+                case TokenKind.NegativeNan:
                 case TokenKind.Infinite:
                 case TokenKind.PositiveInfinite:
                 case TokenKind.NegativeInfinite:
