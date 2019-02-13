@@ -19,6 +19,12 @@ namespace Tomlyn.Text
         public static readonly Func<char32, int> BinaryToDecFunc = BinaryToDecimal;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsControlCharacter(char32 c)
+        {
+            return c <= 0x1F || c == 0x7F;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsKeyStart(char32 c)
         {
             return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == '-' || c >= '0' && c <= '9';

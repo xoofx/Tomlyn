@@ -539,6 +539,8 @@ namespace Tomlyn.Parsing
                 // If we have a space, followed by a digit, try to parse the following
                 if (CharHelper.IsWhiteSpace(_c) && CharHelper.IsDateTime(PeekChar()))
                 {
+                    _textBuilder.AppendUtf32(_c); // Append the space
+                    NextChar(); // skip the space
                     while (CharHelper.IsDateTime(_c))
                     {
                         _textBuilder.AppendUtf32(_c);
@@ -740,7 +742,7 @@ namespace Tomlyn.Parsing
                     {
                         AddError("Invalid newline in a string", _position, _position);
                     }
-                    else if (_c < 32 && (!isMultiLine || !CharHelper.IsNewLine(_c)))
+                    else if (CharHelper.IsControlCharacter(_c) && (!isMultiLine || !CharHelper.IsNewLine(_c)))
                     {
                         AddError($"Invalid control character found {((char)_c).ToPrintableString()}", start, start);
                     }
@@ -948,7 +950,7 @@ namespace Tomlyn.Parsing
                 {
                     AddError("Invalid newline in a string", _position, _position);
                 }
-                else if (_c < 32 && (!isMultiLine || !CharHelper.IsNewLine(_c)))
+                else if (CharHelper.IsControlCharacter(_c) && (!isMultiLine || !CharHelper.IsNewLine(_c)))
                 {
                     AddError($"Invalid control character found {((char)_c).ToPrintableString()}", start, start);
                 }
