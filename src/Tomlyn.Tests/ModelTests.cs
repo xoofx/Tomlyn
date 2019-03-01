@@ -65,6 +65,31 @@ c.d = 'yo'
         }
 
         [Test]
+        public void TestShortDateKey()
+        {
+            var input = "2018-01-01=123";
+
+            var syntax = Toml.Parse(input);
+            Assert.False(syntax.HasErrors, "The document should not have any errors");
+
+            var model = syntax.ToModel();
+            Assert.True(model.ContainsKey("2018-01-01"));
+        }
+
+
+        [Test]
+        public void TestFullDateKey()
+        {
+            var input = "\"1987-07-05T17:45:00Z\"=123";
+
+            var syntax = Toml.Parse(input);
+            Assert.False(syntax.HasErrors, "The document should not have any errors");
+
+            var model = syntax.ToModel();
+            Assert.True(model.ContainsKey("1987-07-05T17:45:00Z"));
+        }
+
+        [Test]
         public static void TestTable()
         {
             var input = @"a = 1
