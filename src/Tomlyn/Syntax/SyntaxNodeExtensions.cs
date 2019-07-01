@@ -44,12 +44,20 @@ namespace Tomlyn.Syntax
             list.Add(new KeyValueSyntax(name, new ArraySyntax(values)));
         }
 
-        public static void Add(this SyntaxList<KeyValueSyntax> list, string name, string[] values)
-        {
-            if (list == null) throw new ArgumentNullException(nameof(list));
-            list.Add(new KeyValueSyntax(name, new ArraySyntax(values)));
-        }
+        public static void Add(this SyntaxList<KeyValueSyntax> list, string name, DateTimeValueSyntax value)
+		{
+			if (list == null) throw new ArgumentNullException(nameof(list));
+			list.Add(new KeyValueSyntax(name, value));
+		}
 
+        public static KeyValueSyntax AddComment(this KeyValueSyntax keyValue, string comment)
+        {
+            if (keyValue == null) throw new ArgumentNullException(nameof(keyValue));
+            if (keyValue.Value == null) throw new InvalidOperationException("The Value must not be null on the KeyValueSyntax");
+            keyValue.Value.AddTrailingWhitespace().AddComment(comment);
+            return keyValue;
+        }
+        
         public static KeyValueSyntax AddComment(this KeyValueSyntax keyValue, string comment)
         {
             if (keyValue == null) throw new ArgumentNullException(nameof(keyValue));
