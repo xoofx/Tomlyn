@@ -75,6 +75,13 @@ Console.WriteLine(doc);
 // "key with space" = 2
 ```
 
+## Unity package
+This repository can be installed as Unity package directly from git URL. You need to add new line to `Packages/manifest.json` to `dependencies` section:
+```
+"com.xfoox.tomlyn": "https://github.com/sh42913/Tomlyn.git#unity-support",
+```
+Since Unity 2019.3 git URL can be added directly in Package Manager.
+
 ## License
 
 This software is released under the [BSD-Clause 2 license](https://opensource.org/licenses/BSD-2-Clause). 
