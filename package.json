@@ -1,0 +1,13 @@
+{
+  "name": "com.xfoox.tomlyn",
+  "author": "Alexandre Mutel",
+  "displayName": "Tomlyn",
+  "description": "Tomlyn is a TOML parser, validator and authoring library for .NET Framework and .NET Core",
+  "version": "0.1.1",
+  "keywords": [
+    "TOML",
+    "Parser",
+    "Validator"
+  ],
+  "type": "tool"
+}
