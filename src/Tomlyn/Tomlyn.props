@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <TargetFrameworks>net45;netstandard1.3;netstandard2.0</TargetFrameworks>
+    <LangVersion>7.3</LangVersion>
+    <Description>Tomlyn is a TOML parser, validator and authoring library for .NET Framework and .NET Core</Description>
+    <Copyright>Alexandre Mutel</Copyright>
+    <Authors>Alexandre Mutel</Authors>
+    <NeutralLanguage>en-US</NeutralLanguage>
+    <VersionPrefix>0.1.2</VersionPrefix>
+    <!--<VersionSuffix>alpha</VersionSuffix>
+    <BuildNumber>001</BuildNumber>-->
+    <VersionSuffix Condition="'$(VersionSuffix)' != '' AND '$(BuildNumber)' != ''">$(VersionSuffix)-$(BuildNumber)</VersionSuffix>
+    <PackageTags>toml;parser</PackageTags>
+    <PackageReleaseNotes>https://github.com/xoofx/Tomlyn/blob/master/changelog.md</PackageReleaseNotes>
+    <PackageIconUrl>https://raw.githubusercontent.com/xoofx/Tomlyn/master/img/logo.png</PackageIconUrl>
+    <PackageProjectUrl>https://github.com/xoofx/Tomlyn</PackageProjectUrl>
+    <PackageLicenseUrl>https://github.com/xoofx/Tomlyn/blob/master/license.txt</PackageLicenseUrl>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <!--Add support for sourcelink-->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--Add support for sourcelink-->
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.0.*" PrivateAssets="All" />
+  </ItemGroup>
+</Project>

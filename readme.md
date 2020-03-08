@@ -1,4 +1,4 @@
-# Tomlyn  [![Build status](https://ci.appveyor.com/api/projects/status/9rdg3h944ybxgto9?svg=true)](https://ci.appveyor.com/project/xoofx/tomlyn)   [![NuGet](https://img.shields.io/nuget/v/Tomlyn.svg)](https://www.nuget.org/packages/Tomlyn/)
+# Tomlyn [![Build Status](https://github.com/xoofx/Tomlyn/workflows/ci/badge.svg?branch=master)](https://github.com/xoofx/Tomlyn/actions) [![NuGet](https://img.shields.io/nuget/v/Tomlyn.svg)](https://www.nuget.org/packages/Tomlyn/)
 
 <img align="right" width="160px" height="160px" src="img/logo.png">
 

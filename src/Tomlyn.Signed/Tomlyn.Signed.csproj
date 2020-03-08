@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\Tomlyn\Tomlyn.props" />
+  <PropertyGroup>
+    <PackageId>Tomlyn.Signed</PackageId>
+    <AssemblyOriginatorKeyFile>key.snk</AssemblyOriginatorKeyFile>
+    <SignAssembly>true</SignAssembly>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\Tomlyn\**\*.cs" Exclude="..\Tomlyn\obj\**;..\Tomlyn\bin\**">
+      <Link>%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </Compile>
+  </ItemGroup>
+</Project>

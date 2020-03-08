@@ -1,38 +1,6 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="Tomlyn.props" />
   <PropertyGroup>
-    <TargetFrameworks>net45;netstandard1.3;netstandard2.0</TargetFrameworks>
-    <LangVersion>7.3</LangVersion>
-    <Description>Tomlyn is a TOML parser, validator and authoring library for .NET Framework and .NET Core</Description>
-    <Copyright>Alexandre Mutel</Copyright>
-    <Authors>Alexandre Mutel</Authors>
-    <NeutralLanguage>en-US</NeutralLanguage>
-    <VersionPrefix>0.1.1</VersionPrefix>
-    <!--<VersionSuffix>alpha</VersionSuffix>
-    <BuildNumber>001</BuildNumber>-->
-    <VersionSuffix Condition="'$(VersionSuffix)' != '' AND '$(BuildNumber)' != ''">$(VersionSuffix)-$(BuildNumber)</VersionSuffix>
     <PackageId>Tomlyn</PackageId>
-    <PackageId Condition="'$(SignAssembly)' == 'true'">Tomlyn.Signed</PackageId>
-    <PackageTags>toml;parser</PackageTags>
-    <PackageReleaseNotes>https://github.com/xoofx/Tomlyn/blob/master/changelog.md</PackageReleaseNotes>
-    <PackageIconUrl>https://raw.githubusercontent.com/xoofx/Tomlyn/master/img/logo.png</PackageIconUrl>
-    <PackageProjectUrl>https://github.com/xoofx/Tomlyn</PackageProjectUrl>
-    <PackageLicenseUrl>https://github.com/xoofx/Tomlyn/blob/master/license.txt</PackageLicenseUrl>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);CS1591</NoWarn>
-    <!--Add support for sourcelink-->
-    <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
   </PropertyGroup>
-
-  <PropertyGroup Condition=" '$(SignAssembly)' == 'true' ">
-    <AssemblyOriginatorKeyFile>key.snk</AssemblyOriginatorKeyFile>
-    <PublicSign Condition=" '$(OS)' != 'Windows_NT' ">true</PublicSign>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="MSBuild.Sdk.Extras" Version="1.0.9" PrivateAssets="all" />
-    <!--Add support for sourcelink-->
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.0.0-*" PrivateAssets="All" />
-  </ItemGroup>
 </Project>

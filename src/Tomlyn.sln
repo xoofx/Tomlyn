@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.28307.168
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29728.190
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tomlyn", "Tomlyn\Tomlyn.csproj", "{510B6941-01BD-46D0-85D9-9F8A66D3C0FC}"
 EndProject
@@ -9,10 +9,13 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tomlyn.Tests", "Tomlyn.Test
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{0EFAEDCD-25FB-4D3A-9828-6C5F00E4227D}"
 	ProjectSection(SolutionItems) = preProject
-		..\appveyor.yml = ..\appveyor.yml
+		..\.gitignore = ..\.gitignore
 		..\changelog.md = ..\changelog.md
+		..\.github\workflows\ci.yml = ..\.github\workflows\ci.yml
 		..\readme.md = ..\readme.md
 	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tomlyn.Signed", "Tomlyn.Signed\Tomlyn.Signed.csproj", "{E8E746C7-AAEC-4257-AEC8-33C8C04EF4C0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -28,6 +31,10 @@ Global
 		{5C705EBA-9B3D-44CE-B9FC-ADBBEB88E414}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5C705EBA-9B3D-44CE-B9FC-ADBBEB88E414}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5C705EBA-9B3D-44CE-B9FC-ADBBEB88E414}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E8E746C7-AAEC-4257-AEC8-33C8C04EF4C0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E8E746C7-AAEC-4257-AEC8-33C8C04EF4C0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E8E746C7-AAEC-4257-AEC8-33C8C04EF4C0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E8E746C7-AAEC-4257-AEC8-33C8C04EF4C0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
