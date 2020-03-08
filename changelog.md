@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.2 (8 Mar 2020)
+- Add an easier way to add DateTime(through DateTimeValueSyntax) using the list initialization syntax
+
 ## 0.1.1 (13 Feb 2019)
 
 - Fix error messages for invalid control characters in multi-line strings
