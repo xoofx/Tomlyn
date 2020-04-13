@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.0 (13 Apr 2020)
+- Fix ToString for all nodes involving trivias and comments.
+
 ## 0.1.2 (8 Mar 2020)
 - Add an easier way to add DateTime(through DateTimeValueSyntax) using the list initialization syntax
 
