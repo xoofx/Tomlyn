@@ -72,34 +72,27 @@ namespace Tomlyn.Syntax
         public void WriteTo(TextWriter writer)
         {
             if (writer == null) throw new ArgumentNullException(nameof(writer));
-            var stack = new Stack<SyntaxNode>();
-            stack.Push(this);
-            WriteTo(stack, writer);
+            WriteToInternal(writer);
         }
 
-        private static void WriteTo(Stack<SyntaxNode> stack, TextWriter writer)
+        private void WriteToInternal(TextWriter writer)
         {
-            while (stack.Count > 0)
+            WriteTriviaTo(LeadingTrivia, writer);
+            if (this is SyntaxToken token)
             {
-                var node = stack.Pop();
-
-                WriteTriviaTo(node.LeadingTrivia, writer);
-                if (node is SyntaxToken token)
-                {
-                    writer.Write(token.TokenKind.ToText() ?? token.Text);
-                }
-                else
-                {
-                    int count = node.ChildrenCount;
-                    for (int i = count - 1; i >= 0; i--)
-                    {
-                        var child = node.GetChildren(i);
-                        if (child == null) continue;
-                        stack.Push(child);
-                    }
-                }
-                WriteTriviaTo(node.TrailingTrivia, writer);
+                writer.Write(token.TokenKind.ToText() ?? token.Text);
             }
+            else
+            {
+                int count = ChildrenCount;
+                for (int i = 0; i < count; i++)
+                {
+                    var child = GetChildren(i);
+                    if (child == null) continue;
+                    child.WriteToInternal(writer);
+                }
+            }
+            WriteTriviaTo(TrailingTrivia, writer);
         }
 
         private static void WriteTriviaTo(List<SyntaxTrivia> trivias, TextWriter writer)

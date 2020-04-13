@@ -2,6 +2,7 @@
 // Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
 using System;
+using System.Collections.Generic;
 using NUnit.Framework;
 using Tomlyn.Model;
 using Tomlyn.Syntax;
@@ -13,32 +14,50 @@ namespace Tomlyn.Tests
         [Test]
         public void TestDocument()
         {
+            var table = new TableSyntax("test")
+            {
+                Items =
+                {
+                    {"a", 1},
+                    {"b", true},
+                    {"c", "Check"},
+                    {"d", "ToEscape\nWithAnotherChar\t"},
+                    {"e", 12.5},
+                    {"f", new int[] {1, 2, 3, 4}},
+                    {"g", new string[] {"0", "1", "2"}},
+                    {"key with space", 2}
+                }
+            };
+
             var doc = new DocumentSyntax()
             {
                 Tables =
                 {
-                    new TableSyntax("test")
-                    {
-                        Items =
-                        {
-                            {"a", 1},
-                            {"b", true },
-                            {"c", "Check"},
-                            {"d", "ToEscape\nWithAnotherChar\t" },
-                            {"e", 12.5 },
-                            {"f", new int[] {1,2,3,4} },
-                            {"g", new string[] {"0", "1", "2"} },
-                            {"key with space", 2}
-                        }
-                    }
+                    table
                 }
             };
 
+            table.AddLeadingComment("This is a comment");
+            table.AddLeadingTriviaNewLine();
+
+            var firstElement = table.Items.GetChildren(0);
+            firstElement.AddTrailingComment("This is an item comment");
+
+            var secondElement = table.Items.GetChildren(2);
+            secondElement.AddLeadingTriviaNewLine();
+            secondElement.AddLeadingComment("This is a comment in a middle of a table");
+            secondElement.AddLeadingTriviaNewLine();
+            secondElement.AddLeadingTriviaNewLine();
+
             var docStr = doc.ToString();
 
-            var expected = @"[test]
-a = 1
+            var expected = @"# This is a comment
+[test]
+a = 1 # This is an item comment
 b = true
+
+# This is a comment in a middle of a table
+
 c = ""Check""
 d = ""ToEscape\nWithAnotherChar\t""
 e = 12.5
