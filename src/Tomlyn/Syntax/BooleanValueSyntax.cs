@@ -26,6 +26,7 @@ namespace Tomlyn.Syntax
         {
             var kind = value ? TokenKind.True : TokenKind.False;
             Token = new SyntaxToken(kind, kind.ToText());
+            Value = value;
         }
 
         /// <summary>
