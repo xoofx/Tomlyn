@@ -32,7 +32,7 @@ namespace Tomlyn.Syntax
         IntegerBinary,
 
         Float,
-
+        
         String,
 
         StringMulti,

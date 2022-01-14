@@ -60,7 +60,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// Gets or sets the parsed datetime value.
         /// </summary>
-        public DateTime Value { get; set; }
+        public DateTimeValue Value { get; set; }
 
         public override int ChildrenCount => 1;
 

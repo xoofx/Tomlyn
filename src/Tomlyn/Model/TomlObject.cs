@@ -38,7 +38,8 @@ namespace Tomlyn.Model
             if (type == typeof(long)) return new TomlInteger((long) value);
             if (type == typeof(bool)) return new TomlBoolean((bool)value);
             if (type == typeof(double)) return new TomlFloat((double)value);
-            if (type == typeof(DateTime)) return new TomlDateTime(ObjectKind.LocalDateTime, (DateTime) value);
+            if (type == typeof(DateTime)) return new TomlDateTime(ObjectKind.LocalDateTime, new DateTimeValue(new DateTimeOffset((DateTime) value), 0, DateTimeValueOffsetKind.None));
+            if (type == typeof(DateTimeOffset)) return new TomlDateTime(ObjectKind.OffsetDateTime, new DateTimeValue((DateTimeOffset)value, 0, DateTimeValueOffsetKind.Zero));
 
             throw new InvalidOperationException($"The type `{type}` of the object is invalid. Only long, bool, double, DateTime and TomlObject are supported");
         }
@@ -98,13 +99,26 @@ namespace Tomlyn.Model
 
             if (type == typeof(DateTime))
             {
+                var newValue = new DateTimeValue(new DateTimeOffset((DateTime) value), 0, DateTimeValueOffsetKind.None);
                 if (toUpdate is TomlDateTime tomlDateTime)
                 {
-                    tomlDateTime.Value = (DateTime)value;
+                    tomlDateTime.Value = newValue;
                     return tomlDateTime;
                 }
                 // TODO: propagate trivias from previous value
-                return new TomlDateTime(ObjectKind.LocalDateTime, (DateTime)value);
+                return new TomlDateTime(ObjectKind.LocalDateTime, newValue);
+            }
+
+            if (type == typeof(DateTimeOffset))
+            {
+                var newValue = new DateTimeValue((DateTimeOffset)value, 0, DateTimeValueOffsetKind.Zero);
+                if (toUpdate is TomlDateTime tomlDateTime)
+                {
+                    tomlDateTime.Value = newValue;
+                    return tomlDateTime;
+                }
+                // TODO: propagate trivias from previous value
+                return new TomlDateTime(ObjectKind.OffsetDateTime, newValue);
             }
 
             throw new InvalidOperationException($"The type `{type}` of the object is invalid. Only long, bool, double, DateTime and TomlObject are supported");

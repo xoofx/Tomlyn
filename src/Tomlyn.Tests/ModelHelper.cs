@@ -3,6 +3,7 @@
 // See license.txt file in the project root for full license information.
 using System;
 using System.Globalization;
+using System.Linq;
 using Newtonsoft.Json.Linq;
 using Tomlyn.Model;
 
@@ -22,11 +23,8 @@ namespace Tomlyn.Tests
                     {
                         value.Add(ToJson(element));
                     }
-                    return isLikeTableArray ? (JToken)value : new JObject()
-                    {
-                        {"type", "array"},
-                        {"value", value}
-                    };
+
+                    return value;
                 }
                 case TomlBoolean tomlBoolean:
                     return new JObject
@@ -45,10 +43,10 @@ namespace Tomlyn.Tests
                             kindStr = "datetime-local";
                             break;
                         case ObjectKind.LocalDate:
-                            kindStr = "date";
+                            kindStr = "date-local";
                             break;
                         case ObjectKind.LocalTime:
-                            kindStr = "time";
+                            kindStr = "time-local";
                             break;
                     }
                     return new JObject
@@ -78,7 +76,7 @@ namespace Tomlyn.Tests
                 {
                     var json = new JObject();
                     // For the test we order by string key
-                    foreach (var keyPair in tomlTable.GetTomlEnumerator())
+                    foreach (var keyPair in tomlTable.GetTomlEnumerator().OrderBy(x => x.Key))
                     {
                         json.Add(keyPair.Key, ToJson(keyPair.Value));
                     }

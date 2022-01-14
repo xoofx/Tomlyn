@@ -36,7 +36,7 @@ e = 1980-01-20
             Assert.AreEqual(true, model["b"]);
             Assert.AreEqual(1.0, model["c"]);
             Assert.AreEqual("yo", model["d"]);
-            Assert.AreEqual(new DateTime(1980, 01, 20), model["e"]);
+            Assert.AreEqual(new DateTimeValue(1980, 01, 20), model["e"]);
         }
 
         [Test]

@@ -9,6 +9,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Tomlyn.Helpers;
+using Tomlyn.Model;
 using Tomlyn.Syntax;
 using Tomlyn.Text;
 
@@ -102,6 +103,7 @@ namespace Tomlyn.Parsing
                         NextChar();
                         break;
                     }
+                    AddError($"Invalid \\r not followed by \\n", start, start);
                     // case of \r
                     _token = new SyntaxTokenValue(TokenKind.NewLine, start, start);
                     break;
@@ -385,10 +387,10 @@ namespace Tomlyn.Parsing
             if (hasLeadingSign) _textBuilder.AppendUtf32(signPrefix.Value);
 
             // If we start with 0, it might be an hexa, octal or binary literal
-            if (!hasLeadingSign && hasLeadingZero)
+            if (hasLeadingZero)
             {
                 NextChar(); // Skip first digit character
-                if (_c == 'x' || _c == 'X' || _c == 'o' || _c == 'O' || _c == 'b' || _c == 'B')
+                if (!hasLeadingSign && (_c == 'x' || _c == 'X' || _c == 'o' || _c == 'O' || _c == 'b' || _c == 'B'))
                 {
                     string name;
                     Func<char32, bool> match;
@@ -406,6 +408,10 @@ namespace Tomlyn.Parsing
                         convert = CharHelper.HexToDecFunc;
                         shift = 4;
                         tokenKind = TokenKind.IntegerHexa;
+                        if (_c == 'X')
+                        {
+                            AddError($"Invalid capital X for hexadecimal. Use `x` instead.", _position, _position);
+                        }
                     }
                     else if (_c == 'o' || _c == 'O')
                     {
@@ -416,6 +422,10 @@ namespace Tomlyn.Parsing
                         convert = CharHelper.OctalToDecFunc;
                         shift = 3;
                         tokenKind = TokenKind.IntegerOctal;
+                        if (_c == 'O')
+                        {
+                            AddError($"Invalid capital O for octal. Use `o` instead.", _position, _position);
+                        }
                     }
                     else
                     {
@@ -426,6 +436,10 @@ namespace Tomlyn.Parsing
                         convert = CharHelper.BinaryToDecFunc;
                         shift = 1;
                         tokenKind = TokenKind.IntegerBinary;
+                        if (_c == 'B')
+                        {
+                            AddError($"Invalid capital B for binary. Use `b` instead.", _position, _position);
+                        }
                     }
 
                     end = _position;
@@ -498,7 +512,31 @@ namespace Tomlyn.Parsing
             }
 
             // Parse leading digits
-            ReadDigits(ref end, hasLeadingZero);
+            var beforeFollowingZero = _position;
+            bool hasMultipleLeadingZero = false;
+
+            // Skip leading zeros
+            var previousCharIsDigit = false;
+            if (hasLeadingZero)
+            {
+                int zeroDigit = 0;
+                previousCharIsDigit = true;
+                while (_c == '0' || _c == '_')
+                {
+                    previousCharIsDigit = _c == '0';
+                    if (previousCharIsDigit)
+                    {
+                        _textBuilder.Append(_c);
+                        zeroDigit++;
+                    }
+                    end = _position;
+                    NextChar();
+                }
+
+                hasMultipleLeadingZero = zeroDigit > 0;
+            }
+
+            ReadDigits(ref end, previousCharIsDigit);
 
             // We are in the case of a date
             if (_c == '-' || _c == ':')
@@ -558,7 +596,7 @@ namespace Tomlyn.Parsing
                     dateTimeAsString = dateTimeAsString.Substring(1);
                 }
 
-                DateTime datetime;
+                DateTimeValue datetime;
                 if (DateTimeRFC3339.TryParseOffsetDateTime(dateTimeAsString, out datetime))
                 {
                     _token = new SyntaxTokenValue(TokenKind.OffsetDateTime, start, end, datetime);
@@ -578,8 +616,9 @@ namespace Tomlyn.Parsing
                 else
                 {
                     // Try to recover the date using the standard C# (not necessarily RFC3339)
-                    if (DateTime.TryParse(dateTimeAsString, CultureInfo.InvariantCulture, DateTimeStyles.AllowInnerWhite, out datetime))
+                    if (DateTime.TryParse(dateTimeAsString, CultureInfo.InvariantCulture, DateTimeStyles.AllowInnerWhite, out var rawTime))
                     {
+                        datetime = new DateTimeValue(rawTime, 0, DateTimeValueOffsetKind.None);
                         _token = new SyntaxTokenValue(TokenKind.LocalDateTime, start, end, datetime);
 
                         // But we produce an error anyway
@@ -587,13 +626,19 @@ namespace Tomlyn.Parsing
                     }
                     else
                     {
-                        _token = new SyntaxTokenValue(TokenKind.LocalDateTime, start, end, new DateTime());
+                        datetime = new DateTimeValue(DateTimeOffset.MinValue, 0, DateTimeValueOffsetKind.None);
+                        _token = new SyntaxTokenValue(TokenKind.LocalDateTime, start, end, datetime);
                         // But we produce an error anyway
                         AddError($"Unable to parse the date time/offset `{dateTimeAsString}`", start, end);
                     }
                 }
 
                 return;
+            }
+
+            if (hasMultipleLeadingZero)
+            {
+                AddError("Multiple leading 0 are not allowed", beforeFollowingZero, beforeFollowingZero);
             }
 
             // Read any number following
@@ -641,12 +686,14 @@ namespace Tomlyn.Parsing
 
             var numberAsText = _textBuilder.ToString();
             object resolvedValue;
+            bool hasExponent = false;
             if (isFloat)
             {
                 if (!double.TryParse(numberAsText, NumberStyles.Float, CultureInfo.InvariantCulture, out var doubleValue))
                 {
                     AddError($"Unable to parse floating point `{numberAsText}`", start, end);
                 }
+
                 int firstDigit = (int) doubleValue;
                 if (firstDigit != 0 && hasLeadingZero)
                 {
@@ -742,7 +789,7 @@ namespace Tomlyn.Parsing
                     {
                         AddError("Invalid newline in a string", _position, _position);
                     }
-                    else if (CharHelper.IsControlCharacter(_c) && (!isMultiLine || !CharHelper.IsNewLine(_c)))
+                    else if (CharHelper.IsControlCharacter(_c) && (!isMultiLine || !CharHelper.IsWhiteSpaceOrNewLine(_c)))
                     {
                         AddError($"Invalid control character found {((char)_c).ToPrintableString()}", start, start);
                     }
@@ -757,27 +804,28 @@ namespace Tomlyn.Parsing
             {
                 if (_c == '"')
                 {
-                    end = _position;
-                    NextChar();
-                    if (_c == '"')
+                    int count = 0;
+                    while (_c == '"')
                     {
+                        if (count >= 5) break;
+                        count++;
                         end = _position;
                         NextChar();
-                        if (_c == '"')
-                        {
-                            end = _position;
-                            NextChar();
-                        }
-                        else
+                    }
+
+                    if (count >= 3)
+                    {
+                        for (int i = 0; i < count - 3; i++)
                         {
                             _textBuilder.Append('"');
-                            _textBuilder.Append('"');
-                            goto continue_parsing_string;
                         }
                     }
                     else
                     {
-                        _textBuilder.Append('"');
+                        for (int i = 0; i < count; i++)
+                        {
+                            _textBuilder.Append('"');
+                        }
                         goto continue_parsing_string;
                     }
                 }
@@ -867,13 +915,23 @@ namespace Tomlyn.Parsing
                     // toml-specs:  When the last non-whitespace character on a line is a \,
                     // it will be trimmed along with all whitespace (including newlines)
                     // up to the next non-whitespace character or closing delimiter. 
+                    case ' ':
+                    case '\t':
                     case '\r':
                     case '\n':
+                        var startWithSpace = _c == ' ';
+                        var startPosition = _position;
                         while (CharHelper.IsWhiteSpaceOrNewLine(_c))
                         {
                             end = _position;
                             NextChar();
                         }
+
+                        if (startWithSpace && end.Line == startPosition.Line)
+                        {
+                            AddError("Invalid escape `\\`. It must skip at least one line.", startPosition, startPosition);
+                        }
+
                         return true;
 
                     case 'u':
@@ -963,29 +1021,31 @@ namespace Tomlyn.Parsing
             {
                 if (_c == '\'')
                 {
-                    end = _position;
-                    NextChar();
-                    if (_c == '\'')
+                    int count = 0;
+                    while (_c == '\'')
                     {
+                        if (count >= 5) break;
+                        count++;
                         end = _position;
                         NextChar();
-                        if (_c == '\'')
-                        {
-                            end = _position;
-                            NextChar();
-                        }
-                        else
+                    }
+
+                    if (count >= 3)
+                    {
+                        for (int i = 0; i < count - 3; i++)
                         {
                             _textBuilder.Append('\'');
-                            _textBuilder.Append('\'');
-                            goto continue_parsing_string;
                         }
                     }
                     else
                     {
-                        _textBuilder.Append('\'');
+                        for (int i = 0; i < count; i++)
+                        {
+                            _textBuilder.Append('\'');
+                        }
                         goto continue_parsing_string;
                     }
+
                 }
                 else
                 {
@@ -1015,8 +1075,19 @@ namespace Tomlyn.Parsing
             // Read until the end of the line/file
             while (_c != Eof && _c != '\r' && _c != '\n')
             {
+                // Invalid characters for comment
+                // U+0000 to U+0008, U+000A to U+001F, U+007F
+                if (_c >= 0 && _c <= 8 || _c >= 0xa && _c <= 0x1f || _c == 0x7f)
+                {
+                    AddError($"Invalid control character U+{_c.Code:X4} in comment", _position, _position);
+                }
                 end = _position;
                 NextChar();
+            }
+
+            if (_c == '\r' && PeekChar() != '\n')
+            {
+                AddError($"Invalid control character U+{_c.Code:X4} in comment", _position, _position);
             }
 
             _token = new SyntaxTokenValue(TokenKind.Comment, start, end);

@@ -3,6 +3,7 @@
 // See license.txt file in the project root for full license information.
 using System;
 using System.Globalization;
+using Tomlyn.Model;
 
 namespace Tomlyn.Helpers
 {
@@ -79,7 +80,7 @@ namespace Tomlyn.Helpers
             "yyyy-MM-ddTHH:mm:ss.fffffff",
 
             // Specs says that T might be omitted
-            "yyyy-MM-dd HH:mm:ss",            // With Z postfix
+            "yyyy-MM-dd HH:mm:ss",
             "yyyy-MM-dd HH:mm:ss.f",
             "yyyy-MM-dd HH:mm:ss.ff",
             "yyyy-MM-dd HH:mm:ss.fff",
@@ -102,24 +103,80 @@ namespace Tomlyn.Helpers
             "HH:mm:ss.fffffff",
         };
 
-        public static bool TryParseOffsetDateTime(string str, out DateTime time)
+        public static bool TryParseOffsetDateTime(string str, out DateTimeValue time)
         {
-            return DateTime.TryParseExact(str, OffsetDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out time);
+            return TryParseExactWithPrecision(str.ToUpperInvariant(), OffsetDateTimeFormats, TryParseDateTimeOffset, DateTimeStyles.None, out time);
         }
 
-        public static bool TryParseLocalDateTime(string str, out DateTime time)
+        public static bool TryParseLocalDateTime(string str, out DateTimeValue time)
         {
-            return DateTime.TryParseExact(str, LocalDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out time);
+            return TryParseExactWithPrecision(str.ToUpperInvariant(), LocalDateTimeFormats, TryParseDateTime, DateTimeStyles.AssumeLocal, out time);
         }
 
-        public static bool TryParseLocalDate(string str, out DateTime time)
+        public static bool TryParseLocalDate(string str, out DateTimeValue time)
         {
-            return DateTime.TryParseExact(str, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out time);
+            if (DateTime.TryParseExact(str.ToUpperInvariant(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var rawtime))
+            {
+                time = new DateTimeValue(rawtime, 0, DateTimeValueOffsetKind.None);
+                return true;
+            }
+
+            time = default;
+            return false;
         }
 
-        public static bool TryParseLocalTime(string str, out DateTime time)
+        public static bool TryParseLocalTime(string str, out DateTimeValue time)
         {
-            return DateTime.TryParseExact(str, LocalTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out time);
+            return TryParseExactWithPrecision(str.ToUpperInvariant(), LocalTimeFormats, TryParseDateTime, DateTimeStyles.None, out time);
+        }
+
+        private static readonly ParseDelegate TryParseDateTime = (string text, string format, CultureInfo culture, DateTimeStyles style, out DateTimeOffset time) =>
+        {
+            time = default;
+            if (DateTime.TryParseExact(text, format, culture, style, out var rawTime))
+            {
+                time = new DateTimeOffset(rawTime);
+                return true;
+            }
+
+            return false;
+        };
+        private static readonly ParseDelegate TryParseDateTimeOffset = DateTimeOffset.TryParseExact;
+        
+        private delegate bool ParseDelegate(string text, string format, CultureInfo culture, DateTimeStyles style, out DateTimeOffset time);
+
+        private static bool TryParseExactWithPrecision(string str, string[] formats, ParseDelegate parser, DateTimeStyles style, out DateTimeValue time)
+        {
+            time = default;
+            for (int i = 0; i < formats.Length; i++)
+            {
+                var format = formats[i];
+                if (parser(str, format, CultureInfo.InvariantCulture, style, out var rawTime))
+                {
+                    // 0
+                    // fffffff
+                    int precision = i;
+                    if (precision >= LocalTimeFormats.Length)
+                    {
+                        precision -= LocalTimeFormats.Length;
+                    }
+
+                    var offsetKind = DateTimeValueOffsetKind.None;
+                    if (format.EndsWith("Z"))
+                    {
+                        offsetKind = DateTimeValueOffsetKind.Zero;
+                    }
+                    else if (format.EndsWith("zzz"))
+                    {
+                        offsetKind = DateTimeValueOffsetKind.Number;
+                    }
+
+                    time = new DateTimeValue(rawTime, precision, offsetKind);
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

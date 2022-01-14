@@ -3,6 +3,7 @@
 // See license.txt file in the project root for full license information.
 using System;
 using System.Collections.Generic;
+using Tomlyn.Model;
 using Tomlyn.Syntax;
 using Tomlyn.Text;
 
@@ -186,7 +187,7 @@ namespace Tomlyn.Parsing
                 case TokenKind.PositiveInfinite:
                 case TokenKind.NegativeInfinite:
                 case TokenKind.Float:
-                    return ParseFloat();
+                    return ParseFloat(_token.Kind);
 
                 case TokenKind.String:
                 case TokenKind.StringMulti:
@@ -284,7 +285,7 @@ namespace Tomlyn.Parsing
                     throw new InvalidOperationException("The datetime kind `{_token.Kind}` is not supported");
             }
 
-            datetime.Value = (DateTime)_token.Value;
+            datetime.Value = (DateTimeValue)_token.Value;
             datetime.Token = EatToken();
             return Close(datetime);
         }
@@ -297,7 +298,7 @@ namespace Tomlyn.Parsing
             return Close(i64);
         }
 
-        private FloatValueSyntax ParseFloat()
+        private FloatValueSyntax ParseFloat(TokenKind kind)
         {
             var f64 = Open<FloatValueSyntax>();
             f64.Value = (double)_token.Value;
@@ -374,18 +375,25 @@ namespace Tomlyn.Parsing
                 // toml-specs: Inline tables are intended to appear on a single line. 
                 // -> So we don't hide newlines
 
-                bool expectingEndOfInitializer = false;
+                bool? expectingEndOfInitializer = null;
+
+                var previousSpan = inlineTable.OpenBrace.Span;
                 while (true)
                 {
                     if (_token.Kind == TokenKind.CloseBrace)
                     {
+                        if (expectingEndOfInitializer != null && !expectingEndOfInitializer.Value)
+                        {
+                            LogError(previousSpan, $"Unexpected trailing comma `,` not permitted after the last key/value pair in an inline table.");
+                        }
+
                         _hideNewLine = previousLine;
                         _lexer.State = previousState;
                         inlineTable.CloseBrace = EatToken();
                         break;
                     }
 
-                    if (!expectingEndOfInitializer && (_token.Kind == TokenKind.BasicKey || _token.Kind == TokenKind.String))
+                    if ((expectingEndOfInitializer == null || !expectingEndOfInitializer.Value) && (_token.Kind == TokenKind.BasicKey || _token.Kind == TokenKind.String || _token.Kind == TokenKind.StringLiteral))
                     {
                         var item = Open<InlineTableItemSyntax>();
                         item.KeyValue = ParseKeyValue(false);
@@ -393,6 +401,7 @@ namespace Tomlyn.Parsing
                         if (_token.Kind == TokenKind.Comma)
                         {
                             item.Comma = EatToken();
+                            expectingEndOfInitializer = false;
                         }
                         else
                         {
@@ -402,6 +411,7 @@ namespace Tomlyn.Parsing
                         Close(item);
 
                         AddToListAndUpdateSpan(inlineTable.Items, item);
+                        previousSpan = item.Comma?.Span ?? item.KeyValue.Span;
                     }
                     else
                     {

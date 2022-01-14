@@ -8,6 +8,8 @@ namespace Tomlyn.Model
     /// </summary>
     public enum ObjectKind
     {
+        InlineTable,
+
         Table,
 
         TableArray,

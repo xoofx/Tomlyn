@@ -13,7 +13,8 @@ namespace Tomlyn.Model
     {
         private readonly TomlTable _rootTable;
         private TomlTable _currentTable;
-        private object _currentValue; 
+        private object _currentValue;
+        private bool? hasExponent;
 
         public SyntaxTransform(TomlTable rootTable)
         {

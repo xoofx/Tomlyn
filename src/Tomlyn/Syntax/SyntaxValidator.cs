@@ -35,7 +35,7 @@ namespace Tomlyn.Syntax
                 return;
             }
 
-            if (!KeyNameToObjectPath(keyValue.Key, ObjectKind.Table))
+            if (!KeyNameToObjectPath(keyValue.Key, ObjectKind.Table, true))
             {
                 return;
             }
@@ -72,7 +72,7 @@ namespace Tomlyn.Syntax
                     kind = ObjectKind.Float;
                     break;
                 case InlineTableSyntax _:
-                    kind = ObjectKind.Table;
+                    kind = ObjectKind.InlineTable;
                     break;
                 case IntegerValueSyntax _:
                     kind = ObjectKind.Integer;
@@ -84,7 +84,7 @@ namespace Tomlyn.Syntax
                     _diagnostics.Error(keyValue.Span, keyValue.Value == null ? $"A KeyValueSyntax must have a non null Value" : $"Not supported type `{keyValue.Value.Kind}` for the value of a KeyValueSyntax");
                     return;
             }
-            AddObjectPath(keyValue, kind, false);
+            AddObjectPath(keyValue, kind, false, true);
 
             base.Visit(keyValue);
             _currentPath = savedPath;
@@ -135,7 +135,7 @@ namespace Tomlyn.Syntax
                 return;
             }
 
-            AddObjectPath(table, ObjectKind.Table, false);
+            AddObjectPath(table, ObjectKind.Table, false, false);
 
             base.Visit(table);
 
@@ -146,11 +146,11 @@ namespace Tomlyn.Syntax
         {
             VerifyTable(table);
             var savedPath = _currentPath.Clone();
-            if (table.Name == null || !KeyNameToObjectPath(table.Name, ObjectKind.Table))
+            if (table.Name == null || !KeyNameToObjectPath(table.Name, ObjectKind.TableArray))
             {
                 return;
             }
-            var currentArrayTable = AddObjectPath(table, ObjectKind.TableArray, true);
+            var currentArrayTable = AddObjectPath(table, ObjectKind.TableArray, false, false);
 
             var savedIndex = _currentArrayIndex;
             _currentArrayIndex = currentArrayTable.ArrayIndex;
@@ -210,7 +210,7 @@ namespace Tomlyn.Syntax
             }
         }
 
-        private bool KeyNameToObjectPath(KeySyntax key, ObjectKind kind)
+        private bool KeyNameToObjectPath(KeySyntax key, ObjectKind kind, bool fromDottedKeys = false)
         {
             if (key.Key == null)
             {
@@ -225,7 +225,7 @@ namespace Tomlyn.Syntax
             var items = key.DotKeys;
             for (int i = 0; i < items.ChildrenCount; i++)
             {
-                AddObjectPath(key, kind, true);
+                AddObjectPath(key, kind, true, fromDottedKeys);
                 var dotItem = GetStringFromBasic(items.GetChildren(i).Key);
                 if (string.IsNullOrWhiteSpace(dotItem)) return false;
                 _currentPath.Add(dotItem);
@@ -234,15 +234,37 @@ namespace Tomlyn.Syntax
             return true;
         }
 
-        private ObjectPathValue AddObjectPath(SyntaxNode node, ObjectKind kind, bool isImplicit)
+        private ObjectPathValue AddObjectPath(SyntaxNode node, ObjectKind kind, bool isImplicit, bool fromDottedKeys)
         {
             var currentPath = _currentPath.Clone();
-            ObjectPathValue existingValue;
-            if (_maps.TryGetValue(currentPath, out existingValue))
+
+            // array-implicit.toml
+            if (kind == ObjectKind.TableArray && isImplicit)
             {
-                if (!((existingValue.IsImplicit || isImplicit) && (existingValue.Kind == kind || isImplicit && existingValue.Kind == ObjectKind.TableArray && kind == ObjectKind.Table)))
+                kind = ObjectKind.Table;
+            }
+
+            if (_maps.TryGetValue(currentPath, out var existingValue))
+            {
+                // The following tests are the trickiest to get right with the spec, as the behavior
+                // of TOML Table/TableArray with implicit/non implicit and dotted keys is quite complicated.
+
+                // Cover the various valid cases for TOML Table:
+                //   Previous.Implicit | Previous.FromDottedKeys | New.Implicit | New.FromDottedKeys
+                //           true                 false
+                //           true                 true              (true|false)         true
+                //                                                      true             false
+                bool ifNotTableOrExplicitImplicitMatches = kind != ObjectKind.Table || existingValue.IsImplicit && (!existingValue.FromDottedKeys || fromDottedKeys && existingValue.FromDottedKeys) || (isImplicit && !fromDottedKeys);
+
+                // TableArray + TableArray => valid
+                // TableArray + (Table && Implicit) => valid
+                // Table + Table ok => valid
+                bool areTypeMatching = existingValue.Kind == ObjectKind.TableArray && (kind == ObjectKind.TableArray || (kind == ObjectKind.Table && isImplicit)) ||
+                                       (existingValue.Kind == ObjectKind.Table && kind == ObjectKind.Table);
+
+                if (!(ifNotTableOrExplicitImplicitMatches && areTypeMatching))
                 {
-                    _diagnostics.Error(node.Span, $"The element `{node.ToString().TrimEnd('\r','\n').ToPrintableString()}` with the key `{currentPath}` is already defined at {existingValue.Node.Span.Start} with `{existingValue.Node.ToString().TrimEnd('\r', '\n').ToPrintableString()}` and cannot be redefined");
+                    _diagnostics.Error(node.Span, $"The key `{currentPath}` is already defined at {existingValue.Node.Span.Start} with `{existingValue.Node.ToString().TrimEnd('\r', '\n').ToPrintableString()}` and cannot be redefined");
                 }
                 else if (existingValue.Kind == ObjectKind.TableArray)
                 {
@@ -251,7 +273,7 @@ namespace Tomlyn.Syntax
             }
             else
             {
-                existingValue = new ObjectPathValue(node, kind, isImplicit);
+                existingValue = new ObjectPathValue(node, kind, isImplicit, fromDottedKeys);
                 _maps.Add(currentPath, existingValue);
             }
             return existingValue;
@@ -267,12 +289,6 @@ namespace Tomlyn.Syntax
             else
             {
                 result = ((StringValueSyntax) value).Value;
-            }
-
-            if (string.IsNullOrEmpty(result))
-            {
-                _diagnostics.Error(value.Span, $"A `{value.Kind}` must have non null/non empty text value");
-                return string.Empty;
             }
             return result;
         }
@@ -299,10 +315,6 @@ namespace Tomlyn.Syntax
                 if (i == 0)
                 {
                     firstKind = value.Kind;
-                }
-                else if (firstKind != value.Kind)
-                {
-                    _diagnostics.Error(value.Span, $"The array item of type `{value.Kind.ToString().ToLowerInvariant()}` doesn't match the type of the first item: `{firstKind.ToString().ToLowerInvariant()}`");
                 }
 
                 if (i + 1 < items.ChildrenCount && item.Comma == null)
@@ -395,8 +407,10 @@ namespace Tomlyn.Syntax
         [DebuggerDisplay("{Node} - {Kind}")]
         private class ObjectPathValue
         {
-            public ObjectPathValue(SyntaxNode node, ObjectKind kind, bool isImplicit)
+
+            public ObjectPathValue(SyntaxNode node, ObjectKind kind, bool isImplicit, bool fromDottedKeys)
             {
+                FromDottedKeys = fromDottedKeys;
                 Node = node;
                 Kind = kind;
                 IsImplicit = isImplicit;
@@ -408,6 +422,8 @@ namespace Tomlyn.Syntax
             public readonly ObjectKind Kind;
 
             public readonly bool IsImplicit;
+
+            public readonly bool FromDottedKeys;
 
             public int ArrayIndex;
         }
@@ -462,6 +478,12 @@ namespace Tomlyn.Syntax
             {
                 return Key ?? $"[{Index}]";
             }
+        }
+
+        private enum KeySource
+        {
+            Table,
+            KeyValue
         }
     }
 }

@@ -20,7 +20,7 @@ namespace Tomlyn.Model
         {
             if (double.IsNaN(Value))
             {
-                return BitConverter.DoubleToInt64Bits(Value) > 0 ? "+nan" : "nan";
+                return "nan";
             }
             if (double.IsPositiveInfinity(Value))
             {
@@ -35,6 +35,7 @@ namespace Tomlyn.Model
 
         private static string AppendDecimalPoint(string text)
         {
+            if (text == "0") return text;
             for (var i = 0; i < text.Length; i++)
             {
                 var c = text[i];

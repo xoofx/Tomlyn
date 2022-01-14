@@ -4,12 +4,15 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
+using Tomlyn.Model;
 using Tomlyn.Syntax;
 
 namespace Tomlyn.Tests
@@ -36,6 +39,7 @@ namespace Tomlyn.Tests
 
         private static void ValidateSpec(string type, string inputName, string toml, string json)
         {
+            Console.WriteLine($"Testing {inputName}");
             var doc = Toml.Parse(toml, inputName);
             var roundtrip = doc.ToString();
             Dump(toml, doc, roundtrip);
@@ -46,25 +50,24 @@ namespace Tomlyn.Tests
                     // Only in the case of a valid spec we check for rountrip
                     Assert.AreEqual(toml, roundtrip, "The roundtrip doesn't match");
 
-
                     // Read the original json
-                    var srcJson = JObject.Parse(json);
+                    var expectedJson = (JObject)NormalizeJson(JObject.Parse(json));
                     // Convert the syntax tree into a model
                     var model = doc.ToModel();
                     // Convert the model into the expected json
-                    var modelJson = ModelHelper.ToJson(model);
+                    var computedJson = ModelHelper.ToJson(model);
 
                     // Write back the result to a string
-                    var srcJsonAsString = srcJson.ToString(Formatting.Indented);
-                    var dstJsonAsString = modelJson.ToString(Formatting.Indented);
+                    var expectedJsonAsString = expectedJson.ToString(Formatting.Indented);
+                    var computedJsonAsString = computedJson.ToString(Formatting.Indented);
 
                     DisplayHeader("json");
-                    Console.WriteLine(srcJsonAsString);
+                    Console.WriteLine(computedJsonAsString);
 
                     DisplayHeader("expected json");
-                    Console.WriteLine(dstJsonAsString);
+                    Console.WriteLine(expectedJsonAsString);
 
-                    Assert.AreEqual(srcJsonAsString, dstJsonAsString);
+                    Assert.AreEqual(expectedJsonAsString, computedJsonAsString);
                     break;
                 case InvalidSpec:
                     Assert.True(doc.HasErrors, "The TOML requires parsing/validation errors");
@@ -77,6 +80,51 @@ namespace Tomlyn.Tests
                 Assert.AreEqual(roundtrip, roundtripUtf8, "The UTF8 version doesn't match with the UTF16 version");
             }
         }
+
+        private static JToken NormalizeJson(JToken token)
+        {
+            if (token is JArray array)
+            {
+                var newArray = new JArray();
+                foreach (var item in array)
+                {
+                    newArray.Add(NormalizeJson(item));
+                }
+
+                return newArray;
+            }
+            else if (token is JObject obj)
+            {
+                var newObject = new JObject();
+
+                var items = new List<KeyValuePair<string, JToken?>>();
+                foreach (var item in obj)
+                {
+                    items.Add(item);
+                }
+
+                foreach (var item in items.OrderBy(x => x.Key))
+                {
+                    newObject.Add(item.Key, NormalizeJson(item.Value));
+                }
+
+                return newObject;
+            }
+            else if (token is JValue value && value.Value is string str)
+            {
+                if (string.CompareOrdinal(str, "inf") == 0) return new JValue("+inf");
+                if (str.Length > 0 && char.IsDigit(str[0]) && str.Contains('.') && str.Contains('e'))
+                {
+                    if (double.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out var doubleValue))
+                    {
+                        return new JValue(new TomlFloat(doubleValue).ToString());
+                    }
+                }
+            }
+
+            return token;
+        }
+
 
         public static void Dump(string input, DocumentSyntax doc, string roundtrip)
         {
@@ -118,7 +166,7 @@ namespace Tomlyn.Tests
             {
                 var functionName = Path.GetFileName(file);
 
-                var input = File.ReadAllText(file, Encoding.UTF8);
+                var input = Encoding.UTF8.GetString(File.ReadAllBytes(file));
 
                 string json = null;
                 if (type == "valid")
