@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.0 (14 Jan 2021)
+- Add support for TOML 1.0.0
+
 ## 0.2.0 (13 Apr 2020)
 - Fix ToString for all nodes involving trivias and comments.
 
