@@ -14,35 +14,35 @@ namespace Tomlyn.Model
     /// <remarks>
     /// This object keep the order of the inserted key=values
     /// </remarks>
-    public sealed class TomlTable : TomlObject, IDictionary<string, object>
+    public sealed class TomlTable : TomlObject, IDictionary<string, object?>
     {
         // TODO: optimize the internal by avoiding two structures
-        private readonly List<KeyValuePair<string, TomlObject>> _order;
-        private readonly Dictionary<string, TomlObject> _map;
+        private readonly List<KeyValuePair<string, TomlObject?>> _order;
+        private readonly Dictionary<string, TomlObject?> _map;
 
         /// <summary>
         /// Creates an instance of a <see cref="TomlTable"/>
         /// </summary>
         public TomlTable() : base(ObjectKind.Table)
         {
-            _order = new List<KeyValuePair<string, TomlObject>>();
-            _map = new Dictionary<string, TomlObject>();
+            _order = new List<KeyValuePair<string, TomlObject?>>();
+            _map = new Dictionary<string, TomlObject?>();
         }
 
-        public IEnumerator<KeyValuePair<string, object>> GetEnumerator()
+        public IEnumerator<KeyValuePair<string, object?>> GetEnumerator()
         {
             foreach (var keyPair in _order)
             {
-                yield return new KeyValuePair<string, object>(keyPair.Key, ToObject(keyPair.Value));
+                yield return new KeyValuePair<string, object?>(keyPair.Key, ToObject(keyPair.Value));
             }
         }
 
 
-        public IEnumerable<KeyValuePair<string, TomlObject>> GetTomlEnumerator()
+        public IEnumerable<KeyValuePair<string, TomlObject?>> GetTomlEnumerator()
         {
             foreach (var keyPair in _order)
             {
-                yield return new KeyValuePair<string, TomlObject>(keyPair.Key, keyPair.Value);
+                yield return new KeyValuePair<string, TomlObject?>(keyPair.Key, keyPair.Value);
             }
         }
 
@@ -51,7 +51,7 @@ namespace Tomlyn.Model
             return GetEnumerator();
         }
 
-        public void Add(KeyValuePair<string, object> item)
+        public void Add(KeyValuePair<string, object?> item)
         {
             Add(item.Key, item.Value);
         }
@@ -62,17 +62,17 @@ namespace Tomlyn.Model
             _order.Clear();
         }
 
-        public bool Contains(KeyValuePair<string, object> item)
+        public bool Contains(KeyValuePair<string, object?> item)
         {
             throw new NotSupportedException();
         }
 
-        public void CopyTo(KeyValuePair<string, object>[] array, int arrayIndex)
+        public void CopyTo(KeyValuePair<string, object?>[] array, int arrayIndex)
         {
             throw new NotSupportedException();
         }
 
-        public bool Remove(KeyValuePair<string, object> item)
+        public bool Remove(KeyValuePair<string, object?> item)
         {
             throw new NotSupportedException();
         }
@@ -81,12 +81,12 @@ namespace Tomlyn.Model
 
         public bool IsReadOnly => false;
 
-        public void Add(string key, object value)
+        public void Add(string key, object? value)
         {
             if (value == null) throw new ArgumentNullException(nameof(value));
             var toml = ToTomlObject(value);
             _map.Add(key, toml);
-            _order.Add(new KeyValuePair<string, TomlObject>(key, toml));
+            _order.Add(new KeyValuePair<string, TomlObject?>(key, toml));
         }
 
         public bool ContainsKey(string key)
@@ -112,9 +112,9 @@ namespace Tomlyn.Model
             return false;
         }
 
-        public bool TryGetValue(string key, out object value)
+        public bool TryGetValue(string key, out object? value)
         {
-            TomlObject node;
+            TomlObject? node;
             if (_map.TryGetValue(key, out node))
             {
                 value = ToObject(node);
@@ -125,18 +125,18 @@ namespace Tomlyn.Model
             return false;
         }
 
-        public bool TryGetToml(string key, out TomlObject value)
+        public bool TryGetToml(string key, out TomlObject? value)
         {
             return _map.TryGetValue(key, out value);
         }
 
-        public object this[string key]
+        public object? this[string key]
         {
             get => ToObject(_map[key]);
             set
             {
                 // If the value exist already, try to create it
-                if (_map.TryGetValue(key, out var node))
+                if (_map.TryGetValue(key, out var node) && node is not null)
                 {
                     node = UpdateObject(node, value);
                     _map[key] = node;
@@ -161,11 +161,11 @@ namespace Tomlyn.Model
             }
         }
 
-        public ICollection<object> Values
+        public ICollection<object?> Values
         {
             get
             {
-                var list = new List<object>();
+                var list = new List<object?>();
                 foreach (var valuePair in _order)
                 {
                     list.Add(ToObject(valuePair.Value));

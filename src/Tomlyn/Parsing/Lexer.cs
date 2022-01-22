@@ -21,7 +21,7 @@ namespace Tomlyn.Parsing
     internal class Lexer<TSourceView, TCharReader> : ITokenProvider<TSourceView> where TSourceView : struct, ISourceView<TCharReader> where TCharReader : struct, CharacterIterator
     {
         private SyntaxTokenValue _token;
-        private List<DiagnosticMessage> _errors;
+        private List<DiagnosticMessage>? _errors;
         private TCharReader _reader;
         private const int Eof = -1;
         private TSourceView _sourceView;
@@ -34,10 +34,9 @@ namespace Tomlyn.Parsing
         /// Initialize a new instance of this <see cref="Lexer{TSourceView,TCharReader}" />.
         /// </summary>
         /// <param name="sourceView">The text to analyze</param>
-        /// <param name="sourcePath">The file path used for error reporting only.</param>
         /// <exception cref="ArgumentNullException"></exception>
         /// <exception cref="System.ArgumentNullException">If text is null</exception>
-        public Lexer(TSourceView sourceView, string sourcePath = null)
+        public Lexer(TSourceView sourceView)
         {
             _sourceView = sourceView;
             _reader = sourceView.GetIterator();
@@ -384,7 +383,7 @@ namespace Tomlyn.Parsing
 
             // Reset parsing of integer
             _textBuilder.Length = 0;
-            if (hasLeadingSign) _textBuilder.AppendUtf32(signPrefix.Value);
+            if (hasLeadingSign) _textBuilder.AppendUtf32(signPrefix!.Value);
 
             // If we start with 0, it might be an hexa, octal or binary literal
             if (hasLeadingZero)
@@ -591,7 +590,7 @@ namespace Tomlyn.Parsing
 
                 if (hasLeadingSign)
                 {
-                    AddError($"Invalid prefix `{signPrefix.Value}` for the following offset/local date/time `{dateTimeAsString}`", start, end);
+                    AddError($"Invalid prefix `{signPrefix!.Value}` for the following offset/local date/time `{dateTimeAsString}`", start, end);
                     // Still try to recover
                     dateTimeAsString = dateTimeAsString.Substring(1);
                 }
@@ -686,7 +685,6 @@ namespace Tomlyn.Parsing
 
             var numberAsText = _textBuilder.ToString();
             object resolvedValue;
-            bool hasExponent = false;
             if (isFloat)
             {
                 if (!double.TryParse(numberAsText, NumberStyles.Float, CultureInfo.InvariantCulture, out var doubleValue))

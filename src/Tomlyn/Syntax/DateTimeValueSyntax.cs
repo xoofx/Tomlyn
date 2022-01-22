@@ -11,7 +11,7 @@ namespace Tomlyn.Syntax
     /// </summary>
     public sealed class DateTimeValueSyntax : ValueSyntax
     {
-        private SyntaxToken _token;
+        private SyntaxToken? _token;
 
         /// <summary>
         /// Creates an instance of <see cref="DateTimeValueSyntax"/>
@@ -51,7 +51,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// Gets or sets the datetime token.
         /// </summary>
-        public SyntaxToken Token
+        public SyntaxToken? Token
         {
             get => _token;
             set => ParentToThis(ref _token, value, value != null && value.TokenKind.IsDateTime(), $"The token kind `{value?.TokenKind}` is not a datetime token");
@@ -69,7 +69,7 @@ namespace Tomlyn.Syntax
             visitor.Visit(this);
         }
 
-        protected override SyntaxNode GetChildrenImpl(int index)
+        protected override SyntaxNode? GetChildrenImpl(int index)
         {
             return Token;
         }

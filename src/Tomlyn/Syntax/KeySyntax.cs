@@ -10,7 +10,7 @@ namespace Tomlyn.Syntax
     /// </summary>
     public sealed class KeySyntax : ValueSyntax
     {
-        private BareKeyOrStringValueSyntax _key;
+        private BareKeyOrStringValueSyntax? _key;
 
         /// <summary>
         /// Creates a new instance of a <see cref="KeySyntax"/>
@@ -45,7 +45,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// The base of the key before the dot
         /// </summary>
-        public BareKeyOrStringValueSyntax Key
+        public BareKeyOrStringValueSyntax? Key
         {
             get => _key;
             set => ParentToThis(ref _key, value); // TODO: add validation for type of key (basic key or string)
@@ -63,7 +63,7 @@ namespace Tomlyn.Syntax
 
         public override int ChildrenCount => 2;
 
-        protected override SyntaxNode GetChildrenImpl(int index)
+        protected override SyntaxNode? GetChildrenImpl(int index)
         {
             if (index == 0) return Key;
             return DotKeys;

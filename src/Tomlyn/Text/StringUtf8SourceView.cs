@@ -17,7 +17,7 @@ namespace Tomlyn.Text
 
         public string SourcePath { get; }
 
-        public string GetString(int offset, int length)
+        public string? GetString(int offset, int length)
         {
             if (offset + length <= _text.Length)
             {

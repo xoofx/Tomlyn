@@ -10,10 +10,10 @@ namespace Tomlyn.Syntax
     /// </summary>
     public sealed class KeyValueSyntax : SyntaxNode
     {
-        private KeySyntax _key;
-        private SyntaxToken _equalToken;
-        private ValueSyntax _value;
-        private SyntaxToken _endOfLineToken;
+        private KeySyntax? _key;
+        private SyntaxToken? _equalToken;
+        private ValueSyntax? _value;
+        private SyntaxToken? _endOfLineToken;
 
         /// <summary>
         /// Creates an instance of <see cref="KeyValueSyntax"/>
@@ -57,7 +57,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// Gets or sets the key.
         /// </summary>
-        public KeySyntax Key
+        public KeySyntax? Key
         {
             get => _key;
             set => ParentToThis(ref _key, value);
@@ -66,7 +66,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// Gets or sets the `=` token
         /// </summary>
-        public SyntaxToken EqualToken
+        public SyntaxToken? EqualToken
         {
             get => _equalToken;
             set => ParentToThis(ref _equalToken, value, TokenKind.Equal);
@@ -75,7 +75,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// Gets or sets the value
         /// </summary>
-        public ValueSyntax Value
+        public ValueSyntax? Value
         {
             get => _value;
             set => ParentToThis(ref _value, value);
@@ -84,7 +84,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// Gets or sets the new-line token.
         /// </summary>
-        public SyntaxToken EndOfLineToken
+        public SyntaxToken? EndOfLineToken
         {
             get => _endOfLineToken;
             set => ParentToThis(ref _endOfLineToken, value, TokenKind.NewLine, TokenKind.Eof);
@@ -97,7 +97,7 @@ namespace Tomlyn.Syntax
             visitor.Visit(this);
         }
 
-        protected override SyntaxNode GetChildrenImpl(int index)
+        protected override SyntaxNode? GetChildrenImpl(int index)
         {
             switch (index)
             {

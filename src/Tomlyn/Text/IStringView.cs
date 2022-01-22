@@ -5,7 +5,7 @@ namespace Tomlyn.Text
 {
     internal interface IStringView
     {
-        string GetString(int offset, int length);
+        string? GetString(int offset, int length);
     }
 
     internal interface IStringView<out TCharIterator> : IStringView where TCharIterator : struct, CharacterIterator

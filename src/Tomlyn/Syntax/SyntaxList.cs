@@ -58,9 +58,9 @@ namespace Tomlyn.Syntax
             node.Parent = this;
         }
 
-        public new TSyntaxNode GetChildren(int index)
+        public new TSyntaxNode? GetChildren(int index)
         {
-            return (TSyntaxNode)base.GetChildren(index);
+            return (TSyntaxNode?)base.GetChildren(index);
         }
 
         protected override SyntaxNode GetChildrenImpl(int index)

@@ -20,18 +20,14 @@ namespace Tomlyn.Model
         /// </summary>
         public ObjectKind Kind { get; }
 
-        internal static object ToObject(TomlObject tomlObj)
+        internal static object? ToObject(TomlObject? tomlObj)
         {
             return tomlObj is TomlValue value ? value.ValueAsObject : tomlObj;
         }
 
-        internal static TomlObject ToTomlObject(object value)
+        internal static TomlObject? ToTomlObject(object? value)
         {
-            if (value == null)
-            {
-                throw new ArgumentNullException(nameof(value));
-            }
-
+            if (value == null) return null;
             if (value is TomlObject tomlObj) return tomlObj;
             var type = value.GetType();
             if (type == typeof(string)) return new TomlString((string)value);
@@ -44,7 +40,7 @@ namespace Tomlyn.Model
             throw new InvalidOperationException($"The type `{type}` of the object is invalid. Only long, bool, double, DateTime and TomlObject are supported");
         }
 
-        internal static TomlObject UpdateObject(TomlObject toUpdate, object value)
+        internal static TomlObject UpdateObject(TomlObject? toUpdate, object? value)
         {
             if (value == null)
             {

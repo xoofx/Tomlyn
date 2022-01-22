@@ -8,10 +8,10 @@ namespace Tomlyn.Syntax
     /// </summary>
     public abstract class TableSyntaxBase : SyntaxNode
     {
-        private SyntaxToken _openBracket;
-        private KeySyntax _name;
-        private SyntaxToken _closeBracket;
-        private SyntaxToken _endOfLineToken;
+        private SyntaxToken? _openBracket;
+        private KeySyntax? _name;
+        private SyntaxToken? _closeBracket;
+        private SyntaxToken? _endOfLineToken;
 
         internal TableSyntaxBase(SyntaxKind kind) : base(kind)
         {
@@ -21,7 +21,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// Gets or sets the open bracket (simple `[` for <see cref="TableSyntax"/>, double `[[` for <see cref="TableArraySyntax"/>)
         /// </summary>
-        public SyntaxToken OpenBracket
+        public SyntaxToken? OpenBracket
         {
             get => _openBracket;
             set => ParentToThis(ref _openBracket, value, OpenTokenKind);
@@ -30,7 +30,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// Gets or sets the name of this table
         /// </summary>
-        public KeySyntax Name
+        public KeySyntax? Name
         {
             get => _name;
             set => ParentToThis(ref _name, value);
@@ -39,7 +39,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// Gets or sets the close bracket (simple `]` for <see cref="TableSyntax"/>, double `]]` for <see cref="TableArraySyntax"/>)
         /// </summary>
-        public SyntaxToken CloseBracket
+        public SyntaxToken? CloseBracket
         {
             get => _closeBracket;
             set => ParentToThis(ref _closeBracket, value, CloseTokenKind);
@@ -48,7 +48,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// Gets the new-line.
         /// </summary>
-        public SyntaxToken EndOfLineToken
+        public SyntaxToken? EndOfLineToken
         {
             get => _endOfLineToken;
             set => ParentToThis(ref _endOfLineToken, value, TokenKind.NewLine, TokenKind.Eof);
@@ -65,7 +65,7 @@ namespace Tomlyn.Syntax
 
         internal abstract TokenKind CloseTokenKind { get; }
 
-        protected override SyntaxNode GetChildrenImpl(int index)
+        protected override SyntaxNode? GetChildrenImpl(int index)
         {
             switch (index)
             {

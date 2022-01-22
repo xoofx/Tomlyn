@@ -10,8 +10,8 @@ namespace Tomlyn.Syntax
     /// </summary>
     public sealed class InlineTableItemSyntax : SyntaxNode
     {
-        private KeyValueSyntax _keyValue;
-        private SyntaxToken _comma;
+        private KeyValueSyntax? _keyValue;
+        private SyntaxToken? _comma;
 
         /// <summary>
         /// Creates an instance of <see cref="InlineTableItemSyntax"/>
@@ -32,7 +32,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// Gets or sets the <see cref="KeyValueSyntax"/>.
         /// </summary>
-        public KeyValueSyntax KeyValue
+        public KeyValueSyntax? KeyValue
         {
             get => _keyValue;
             set => ParentToThis(ref _keyValue, value);
@@ -41,7 +41,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// Gets or sets the comma, mandatory to separate entries in an inline table.
         /// </summary>
-        public SyntaxToken Comma
+        public SyntaxToken? Comma
         {
             get => _comma;
             set => ParentToThis(ref _comma, value, TokenKind.Comma);
@@ -54,9 +54,9 @@ namespace Tomlyn.Syntax
 
         public override int ChildrenCount => 2;
 
-        protected override SyntaxNode GetChildrenImpl(int index)
+        protected override SyntaxNode? GetChildrenImpl(int index)
         {
-            return index == 0 ? (SyntaxNode)KeyValue : Comma;
+            return index == 0 ? (SyntaxNode?)KeyValue : Comma;
         }
     }
 }

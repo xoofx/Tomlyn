@@ -13,7 +13,7 @@ namespace Tomlyn.Syntax
         /// </summary>
         /// <param name="kind">A token kind</param>
         /// <returns>A textual representation of a token kind or null if not applicable (e.g TokenKind.Integer)</returns>
-        public static string ToText(this TokenKind kind)
+        public static string? ToText(this TokenKind kind)
         {
             switch (kind)
             {

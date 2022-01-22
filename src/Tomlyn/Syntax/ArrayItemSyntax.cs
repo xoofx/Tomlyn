@@ -8,8 +8,8 @@ namespace Tomlyn.Syntax
     /// </summary>
     public sealed class ArrayItemSyntax : SyntaxNode
     {
-        private ValueSyntax _value;
-        private SyntaxToken _comma;
+        private ValueSyntax? _value;
+        private SyntaxToken? _comma;
 
         /// <summary>
         /// Creates an instance of <see cref="ArrayItemSyntax"/>
@@ -21,7 +21,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// Gets or sets the value of this item.
         /// </summary>
-        public ValueSyntax Value
+        public ValueSyntax? Value
         {
             get => _value;
             set => ParentToThis(ref _value, value);
@@ -30,7 +30,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// Gets or sets the comma of this item (mandatory to separate elements in an array)
         /// </summary>
-        public SyntaxToken Comma
+        public SyntaxToken? Comma
         {
             get => _comma;
             set => ParentToThis(ref _comma, value, TokenKind.Comma);
@@ -43,9 +43,9 @@ namespace Tomlyn.Syntax
 
         public override int ChildrenCount => 2;
 
-        protected override SyntaxNode GetChildrenImpl(int index)
+        protected override SyntaxNode? GetChildrenImpl(int index)
         {
-            return index == 0 ? (SyntaxNode)Value : Comma;
+            return index == 0 ? (SyntaxNode?)Value : Comma;
         }
     }
 }

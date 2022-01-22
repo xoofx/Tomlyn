@@ -26,12 +26,12 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// Gets the leading trivia attached to this node. Might be null if no leading trivias.
         /// </summary>
-        public List<SyntaxTrivia> LeadingTrivia { get; set; }
+        public List<SyntaxTrivia>? LeadingTrivia { get; set; }
 
         /// <summary>
         /// Gets the trailing trivia attached to this node. Might be null if no trailing trivias.
         /// </summary>
-        public List<SyntaxTrivia> TrailingTrivia { get; set; }
+        public List<SyntaxTrivia>? TrailingTrivia { get; set; }
 
         /// <summary>
         /// Gets the number of children
@@ -43,7 +43,7 @@ namespace Tomlyn.Syntax
         /// </summary>
         /// <param name="index">Index of the children</param>
         /// <returns>A children at the specified index</returns>
-        public SyntaxNode GetChildren(int index)
+        public SyntaxNode? GetChildren(int index)
         {
             if (index < 0) throw ThrowHelper.GetIndexNegativeArgumentOutOfRangeException();
             if (index > ChildrenCount) throw ThrowHelper.GetIndexArgumentOutOfRangeException(ChildrenCount);
@@ -56,7 +56,7 @@ namespace Tomlyn.Syntax
         /// <param name="index">Index of the children</param>
         /// <returns>A children at the specified index</returns>
         /// <remarks>The index is safe to use</remarks>
-        protected abstract SyntaxNode GetChildrenImpl(int index);
+        protected abstract SyntaxNode? GetChildrenImpl(int index);
 
         public override string ToString()
         {
@@ -95,9 +95,9 @@ namespace Tomlyn.Syntax
             WriteTriviaTo(TrailingTrivia, writer);
         }
 
-        private static void WriteTriviaTo(List<SyntaxTrivia> trivias, TextWriter writer)
+        private static void WriteTriviaTo(List<SyntaxTrivia>? trivias, TextWriter writer)
         {
-            if (trivias == null) return;
+            if (trivias is null) return;
             foreach (var trivia in trivias)
             {
                 if (trivia == null) continue;
@@ -111,7 +111,7 @@ namespace Tomlyn.Syntax
         /// <typeparam name="TSyntaxNode">Type of the node</typeparam>
         /// <param name="set">The previous child node parented to this instance</param>
         /// <param name="node">The new child node to parent to this instance</param>
-        protected void ParentToThis<TSyntaxNode>(ref TSyntaxNode set, TSyntaxNode node) where TSyntaxNode : SyntaxNode
+        protected void ParentToThis<TSyntaxNode>(ref TSyntaxNode? set, TSyntaxNode? node) where TSyntaxNode : SyntaxNode
         {
             if (node?.Parent != null) throw ThrowHelper.GetExpectingNoParentException();
             if (set != null)
@@ -132,9 +132,9 @@ namespace Tomlyn.Syntax
         /// <param name="set">The previous child node parented to this instance</param>
         /// <param name="node">The new child node to parent to this instance</param>
         /// <param name="expectedKind">The expected kind of token</param>
-        protected void ParentToThis<TSyntaxNode>(ref TSyntaxNode set, TSyntaxNode node, TokenKind expectedKind) where TSyntaxNode : SyntaxToken
+        protected void ParentToThis<TSyntaxNode>(ref TSyntaxNode? set, TSyntaxNode? node, TokenKind expectedKind) where TSyntaxNode : SyntaxToken
         {
-            ParentToThis(ref set, node, node.TokenKind == expectedKind, expectedKind);
+            ParentToThis(ref set, node, node?.TokenKind == expectedKind, expectedKind);
         }
 
         /// <summary>
@@ -146,7 +146,7 @@ namespace Tomlyn.Syntax
         /// <param name="node">The new child node to parent to this instance</param>
         /// <param name="expectedKindSuccess">true if kind is matching, false otherwise</param>
         /// <param name="expectedMessage">The message to display if the kind is not matching</param>
-        protected void ParentToThis<TSyntaxNode, TExpected>(ref TSyntaxNode set, TSyntaxNode node, bool expectedKindSuccess, TExpected expectedMessage) where TSyntaxNode : SyntaxToken
+        protected void ParentToThis<TSyntaxNode, TExpected>(ref TSyntaxNode? set, TSyntaxNode? node, bool expectedKindSuccess, TExpected expectedMessage) where TSyntaxNode : SyntaxToken
         {
             if (node != null && !expectedKindSuccess) throw new InvalidOperationException($"Unexpected node kind `{node.TokenKind}` while expecting `{expectedMessage}`");
             ParentToThis(ref set, node);
@@ -160,9 +160,9 @@ namespace Tomlyn.Syntax
         /// <param name="node">The new child node to parent to this instance</param>
         /// <param name="expectedKind1">The expected kind of token (option1)</param>
         /// <param name="expectedKind2">The expected kind of token (option2)</param>
-        protected void ParentToThis<TSyntaxNode>(ref TSyntaxNode set, TSyntaxNode node, TokenKind expectedKind1, TokenKind expectedKind2) where TSyntaxNode : SyntaxToken
+        protected void ParentToThis<TSyntaxNode>(ref TSyntaxNode? set, TSyntaxNode? node, TokenKind expectedKind1, TokenKind expectedKind2) where TSyntaxNode : SyntaxToken
         {
-            ParentToThis(ref set, node, node.TokenKind == expectedKind1 || node.TokenKind == expectedKind2, new ExpectedTuple2<TokenKind, TokenKind>(expectedKind1, expectedKind2));
+            ParentToThis(ref set, node, node?.TokenKind == expectedKind1 || node?.TokenKind == expectedKind2, new ExpectedTuple2<TokenKind, TokenKind>(expectedKind1, expectedKind2));
         }
 
         private readonly struct ExpectedTuple2<T1, T2>

@@ -12,7 +12,7 @@ namespace Tomlyn.Syntax
     /// </summary>
     public sealed class FloatValueSyntax : ValueSyntax
     {
-        private SyntaxToken _token;
+        private SyntaxToken? _token;
 
         private const string FloatFormat = "g16";
 
@@ -51,7 +51,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// The token storing the float value.
         /// </summary>
-        public SyntaxToken Token
+        public SyntaxToken? Token
         {
             get => _token;
             set => ParentToThis(ref _token, value, value != null && value.TokenKind.IsFloat(), TokenKind.Float);
@@ -69,7 +69,7 @@ namespace Tomlyn.Syntax
 
         public override int ChildrenCount => 1;
 
-        protected override SyntaxNode GetChildrenImpl(int index)
+        protected override SyntaxNode? GetChildrenImpl(int index)
         {
             return Token;
         }

@@ -11,7 +11,7 @@ namespace Tomlyn.Syntax
     /// </summary>
     public sealed class BareKeySyntax : BareKeyOrStringValueSyntax
     {
-        private SyntaxToken _key;
+        private SyntaxToken? _key;
 
         /// <summary>
         /// Creates a new instance of a <see cref="BareKeySyntax"/>
@@ -33,7 +33,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// A textual representation of the key
         /// </summary>
-        public SyntaxToken Key
+        public SyntaxToken? Key
         {
             get => _key;
             set => ParentToThis(ref _key, value, TokenKind.BasicKey);
@@ -46,7 +46,7 @@ namespace Tomlyn.Syntax
             visitor.Visit(this);
         }
 
-        protected override SyntaxNode GetChildrenImpl(int index)
+        protected override SyntaxNode? GetChildrenImpl(int index)
         {
             return Key;
         }

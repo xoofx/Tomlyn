@@ -68,12 +68,12 @@ namespace Tomlyn.Text
         /// </summary>
         public static string EscapeForToml(this string text)
         {
-            StringBuilder builder = null;
+            StringBuilder? builder = null;
             for (int i = 0; i < text.Length; i++)
             {
                 var c = text[i];
                 var str = EscapeChar(text[i]);
-                if (str != null)
+                if (str is not null)
                 {
                     if (builder == null)
                     {
@@ -90,7 +90,7 @@ namespace Tomlyn.Text
             return builder?.ToString() ?? text;
         }
 
-        private static string EscapeChar(char c)
+        private static string? EscapeChar(char c)
         {
             if (c < ' ' || c == '"' || c == '\\')
             {
@@ -120,14 +120,15 @@ namespace Tomlyn.Text
         /// <summary>
         /// Converts a string that may have control characters to a printable string
         /// </summary>
-        public static string ToPrintableString(this string text)
+        public static string? ToPrintableString(this string? text)
         {
-            StringBuilder builder = null;
+            if (text is null) return null;
+            StringBuilder? builder = null;
             for (int i = 0; i < text.Length; i++)
             {
                 var c = text[i];
                 var str = text[i].ToPrintableString();
-                if (str != null)
+                if (str is not null)
                 {
                     if (builder == null)
                     {
@@ -144,7 +145,7 @@ namespace Tomlyn.Text
             return builder?.ToString() ?? text;
         }
 
-        public static string ToPrintableString(this char c)
+        public static string? ToPrintableString(this char c)
         {
             if (c < ' ' || IsWhiteSpace(c))
             {

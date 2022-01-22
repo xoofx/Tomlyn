@@ -10,8 +10,8 @@ namespace Tomlyn.Syntax
     /// </summary>
     public sealed class InlineTableSyntax : ValueSyntax
     {
-        private SyntaxToken _openBrace;
-        private SyntaxToken _closeBrace;
+        private SyntaxToken? _openBrace;
+        private SyntaxToken? _closeBrace;
 
         /// <summary>
         /// Creates a new instance of an <see cref="InlineTableSyntax"/>
@@ -44,7 +44,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// The token open brace `{`
         /// </summary>
-        public SyntaxToken OpenBrace
+        public SyntaxToken? OpenBrace
         {
             get => _openBrace;
             set => ParentToThis(ref _openBrace, value, TokenKind.OpenBrace);
@@ -58,7 +58,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// The token close brace `}`
         /// </summary>
-        public SyntaxToken CloseBrace
+        public SyntaxToken? CloseBrace
         {
             get => _closeBrace;
             set => ParentToThis(ref _closeBrace, value, TokenKind.CloseBrace);
@@ -71,7 +71,7 @@ namespace Tomlyn.Syntax
 
         public override int ChildrenCount => 3;
 
-        protected override SyntaxNode GetChildrenImpl(int index)
+        protected override SyntaxNode? GetChildrenImpl(int index)
         {
             switch (index)
             {

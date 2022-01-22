@@ -86,7 +86,7 @@ namespace Tomlyn.Syntax
             DefaultVisit(inlineTable);
         }
 
-        public virtual void DefaultVisit(SyntaxNode node)
+        public virtual void DefaultVisit(SyntaxNode? node)
         {
             if (node == null) return;
 
@@ -104,7 +104,7 @@ namespace Tomlyn.Syntax
             VisitTrivias(node.TrailingTrivia);
         }
 
-        private void VisitTrivias(List<SyntaxTrivia> trivias)
+        private void VisitTrivias(List<SyntaxTrivia>? trivias)
         {
             if (trivias != null)
             {

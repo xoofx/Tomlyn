@@ -11,7 +11,7 @@ namespace Tomlyn.Syntax
     /// </summary>
     public sealed class StringValueSyntax : BareKeyOrStringValueSyntax
     {
-        private SyntaxToken _token;
+        private SyntaxToken? _token;
 
         /// <summary>
         /// Creates a new instance of <see cref="StringValueSyntax"/>
@@ -34,7 +34,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// The token of the string.
         /// </summary>
-        public SyntaxToken Token
+        public SyntaxToken? Token
         {
             get => _token;
             set => ParentToThis(ref _token, value, value != null && value.TokenKind.IsString(), "string");
@@ -43,7 +43,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// The associated parsed string value
         /// </summary>
-        public string Value { get; set; }
+        public string? Value { get; set; }
 
         public override void Accept(SyntaxVisitor visitor)
         {
@@ -52,7 +52,7 @@ namespace Tomlyn.Syntax
 
         public override int ChildrenCount => 1;
 
-        protected override SyntaxNode GetChildrenImpl(int index)
+        protected override SyntaxNode? GetChildrenImpl(int index)
         {
             return Token;
         }

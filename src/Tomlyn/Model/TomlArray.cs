@@ -10,21 +10,21 @@ namespace Tomlyn.Model
     /// <summary>
     /// Runtime representation of a TOML array
     /// </summary>
-    public sealed class TomlArray : TomlObject, IList<object>
+    public sealed class TomlArray : TomlObject, IList<object?>
     {
-        private readonly List<TomlObject> _items;
+        private readonly List<TomlObject?> _items;
 
         public TomlArray() : base(ObjectKind.Array)
         {
-            _items = new List<TomlObject>();
+            _items = new List<TomlObject?>();
         }
 
         public TomlArray(int capacity) : base(ObjectKind.Array)
         {
-            _items = new List<TomlObject>(capacity);
+            _items = new List<TomlObject?>(capacity);
         }
 
-        public IEnumerator<object> GetEnumerator()
+        public IEnumerator<object?> GetEnumerator()
         {
             foreach (var item in _items)
             {
@@ -32,7 +32,7 @@ namespace Tomlyn.Model
             }
         }
 
-        public IEnumerable<TomlObject> GetTomlEnumerator()
+        public IEnumerable<TomlObject?> GetTomlEnumerator()
         {
             return _items;
         }
@@ -42,7 +42,7 @@ namespace Tomlyn.Model
             return GetEnumerator();
         }
 
-        public void Add(object item)
+        public void Add(object? item)
         {
             _items.Add(ToTomlObject(item));
         }
@@ -52,32 +52,32 @@ namespace Tomlyn.Model
             _items.Clear();
         }
 
-        public bool Contains(object item)
+        public bool Contains(object? item)
         {
             var toml = ToTomlObject(item);
-            return _items.Contains(toml);
+            return toml != null && _items.Contains(toml);
         }
 
-        public void CopyTo(object[] array, int arrayIndex)
+        public void CopyTo(object?[] array, int arrayIndex)
         {
             throw new NotImplementedException();
         }
 
-        public bool Remove(object item)
+        public bool Remove(object? item)
         {
             var toml = ToTomlObject(item);
-            return _items.Remove(toml);
+            return toml != null && _items.Remove(toml);
         }
 
         public int Count => _items.Count;
         public bool IsReadOnly => false;
-        public int IndexOf(object item)
+        public int IndexOf(object? item)
         {
             var toml = ToTomlObject(item);
             return _items.IndexOf(toml);
         }
 
-        public void Insert(int index, object item)
+        public void Insert(int index, object? item)
         {
             var toml = ToTomlObject(item);
             _items.Insert(index, toml);
@@ -88,7 +88,7 @@ namespace Tomlyn.Model
             _items.RemoveAt(index);
         }
 
-        public object this[int index]
+        public object? this[int index]
         {
             get => ToObject(_items[index]);
             set => _items[index] = ToTomlObject(value);

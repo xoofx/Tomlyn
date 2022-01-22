@@ -18,6 +18,7 @@
     <PackageLicenseUrl>https://github.com/xoofx/Tomlyn/blob/master/license.txt</PackageLicenseUrl>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <Nullable>enable</Nullable>
     <!--Add support for sourcelink-->
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <IncludeSymbols>true</IncludeSymbols>

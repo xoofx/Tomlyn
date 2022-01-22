@@ -20,7 +20,7 @@ namespace Tomlyn.Parsing
         /// <param name="end">The end.</param>
         /// <param name="value">Optional parse value of the token</param>
         /// <exception cref="System.ArgumentOutOfRangeException"></exception>
-        public SyntaxTokenValue(TokenKind kind, TextPosition start, TextPosition end, object value = null)
+        public SyntaxTokenValue(TokenKind kind, TextPosition start, TextPosition end, object? value = null)
         {
             if (start.Offset > end.Offset) throw new ArgumentOutOfRangeException(nameof(start), $"[{nameof(start)}] index must be <= to [{nameof(end)}]");
             Kind = kind;
@@ -47,14 +47,14 @@ namespace Tomlyn.Parsing
         /// <summary>
         /// The parsed value
         /// </summary>
-        public readonly object Value;
+        public readonly object? Value;
 
         public override string ToString()
         {
             return $"{Kind}({Start}:{End})";
         }
 
-        public string GetText(string text)
+        public string? GetText(string text)
         {
             if (Kind == TokenKind.Eof)
             {
@@ -63,7 +63,7 @@ namespace Tomlyn.Parsing
             return End.Offset < text.Length ? text.Substring(Start.Offset, End.Offset - Start.Offset + 1) : null;
         }
 
-        public string GetText<TTextView>(TTextView text) where TTextView : IStringView
+        public string? GetText<TTextView>(TTextView text) where TTextView : IStringView
         {
             if (Kind == TokenKind.Eof)
             {
@@ -77,7 +77,7 @@ namespace Tomlyn.Parsing
             return Kind == other.Kind && Start.Equals(other.Start) && End.Equals(other.End);
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             if (ReferenceEquals(null, obj)) return false;
             return obj is SyntaxTokenValue && Equals((SyntaxTokenValue) obj);

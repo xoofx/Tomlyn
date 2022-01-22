@@ -10,8 +10,8 @@ namespace Tomlyn.Syntax
     /// </summary>
     public sealed class DottedKeyItemSyntax : ValueSyntax
     {
-        private SyntaxToken _dot;
-        private BareKeyOrStringValueSyntax _key;
+        private SyntaxToken? _dot;
+        private BareKeyOrStringValueSyntax? _key;
 
         /// <summary>
         /// Creates an instance of <see cref="DottedKeyItemSyntax"/>
@@ -34,7 +34,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// The token `.`
         /// </summary>
-        public SyntaxToken Dot
+        public SyntaxToken? Dot
         {
             get => _dot;
             set => ParentToThis(ref _dot, value, TokenKind.Dot);
@@ -43,7 +43,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// The following key or string node.
         /// </summary>
-        public BareKeyOrStringValueSyntax Key
+        public BareKeyOrStringValueSyntax? Key
         {
             get => _key;
             set => ParentToThis(ref _key, value);
@@ -56,9 +56,9 @@ namespace Tomlyn.Syntax
 
         public override int ChildrenCount => 2;
 
-        protected override SyntaxNode GetChildrenImpl(int index)
+        protected override SyntaxNode? GetChildrenImpl(int index)
         {
-            return index == 0 ? (SyntaxNode)Dot : Key;
+            return index == 0 ? (SyntaxNode?)Dot : Key;
         }
     }
 }

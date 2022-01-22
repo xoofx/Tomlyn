@@ -217,16 +217,16 @@ namespace Tomlyn.Syntax
                 _diagnostics.Error(key.Span, $"The property KeySyntax.Key cannot be null");
             }
 
-            var name = GetStringFromBasic(key.Key);
+            var name = GetStringFromBasic(key.Key!);
             if (string.IsNullOrWhiteSpace(name)) return false;
 
-            _currentPath.Add(name);
+            _currentPath.Add(name!);
 
             var items = key.DotKeys;
             for (int i = 0; i < items.ChildrenCount; i++)
             {
                 AddObjectPath(key, kind, true, fromDottedKeys);
-                var dotItem = GetStringFromBasic(items.GetChildren(i).Key);
+                var dotItem = GetStringFromBasic(items.GetChildren(i)!.Key!)!;
                 if (string.IsNullOrWhiteSpace(dotItem)) return false;
                 _currentPath.Add(dotItem);
             }
@@ -279,9 +279,9 @@ namespace Tomlyn.Syntax
             return existingValue;
         }
 
-        private string GetStringFromBasic(BareKeyOrStringValueSyntax value)
+        private string? GetStringFromBasic(BareKeyOrStringValueSyntax value)
         {
-            string result;
+            string? result;
             if (value is BareKeySyntax basicKey)
             {
                 result = basicKey.Key?.Text;
@@ -310,8 +310,8 @@ namespace Tomlyn.Syntax
             SyntaxKind firstKind = default;
             for(int i = 0; i < items.ChildrenCount; i++)
             {
-                var item = items.GetChildren(i);
-                var value = item.Value;
+                var item = items.GetChildren(i)!;
+                var value = item.Value!;
                 if (i == 0)
                 {
                     firstKind = value.Kind;
@@ -441,7 +441,7 @@ namespace Tomlyn.Syntax
             }
 
 
-            public readonly string Key;
+            public readonly string? Key;
 
             public readonly int Index;
 
@@ -450,7 +450,7 @@ namespace Tomlyn.Syntax
                 return string.Equals(Key, other.Key) && Index == other.Index;
             }
 
-            public override bool Equals(object obj)
+            public override bool Equals(object? obj)
             {
                 if (ReferenceEquals(null, obj)) return false;
                 return obj is ObjectPathItem other && Equals(other);

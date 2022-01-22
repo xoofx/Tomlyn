@@ -10,8 +10,8 @@ namespace Tomlyn.Syntax
     /// </summary>
     public sealed class ArraySyntax : ValueSyntax
     {
-        private SyntaxToken _openBracket;
-        private SyntaxToken _closeBracket;
+        private SyntaxToken? _openBracket;
+        private SyntaxToken? _closeBracket;
 
         /// <summary>
         /// Creates an instance of an <see cref="ArraySyntax"/>
@@ -66,7 +66,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// Gets or sets the open bracket `[` token
         /// </summary>
-        public SyntaxToken OpenBracket
+        public SyntaxToken? OpenBracket
         {
             get => _openBracket;
             set => ParentToThis(ref _openBracket, value, TokenKind.OpenBracket);
@@ -80,7 +80,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// Gets or sets the close bracket `]` token
         /// </summary>
-        public SyntaxToken CloseBracket
+        public SyntaxToken? CloseBracket
         {
             get => _closeBracket;
             set => ParentToThis(ref _closeBracket, value, TokenKind.CloseBracket);
@@ -93,7 +93,7 @@ namespace Tomlyn.Syntax
 
         public override int ChildrenCount => 3;
 
-        protected override SyntaxNode GetChildrenImpl(int index)
+        protected override SyntaxNode? GetChildrenImpl(int index)
         {
             switch (index)
             {

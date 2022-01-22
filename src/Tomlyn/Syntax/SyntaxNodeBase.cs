@@ -22,6 +22,6 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// Gets the parent of this node.
         /// </summary>
-        public SyntaxNode Parent { get; internal set; }
+        public SyntaxNode? Parent { get; internal set; }
     }
 }

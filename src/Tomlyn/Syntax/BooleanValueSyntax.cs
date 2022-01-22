@@ -8,7 +8,7 @@ namespace Tomlyn.Syntax
     /// </summary>
     public sealed class BooleanValueSyntax : ValueSyntax
     {
-        private SyntaxToken _token;
+        private SyntaxToken? _token;
         private bool _value;
 
         /// <summary>
@@ -32,7 +32,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// The boolean token value (true or false)
         /// </summary>
-        public SyntaxToken Token
+        public SyntaxToken? Token
         {
             get => _token;
             set { ParentToThis(ref _token, value, TokenKind.True, TokenKind.False); }
@@ -54,7 +54,7 @@ namespace Tomlyn.Syntax
 
         public override int ChildrenCount => 1;
 
-        protected override SyntaxNode GetChildrenImpl(int index)
+        protected override SyntaxNode? GetChildrenImpl(int index)
         {
             return Token;
         }

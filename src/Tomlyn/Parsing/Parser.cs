@@ -19,8 +19,8 @@ namespace Tomlyn.Parsing
         private SyntaxTokenValue _token;
         private bool _hideNewLine;
         private readonly List<SyntaxTrivia> _currentTrivias;
-        private TableSyntaxBase _currentTable = null;
-        private DiagnosticsBag _diagnostics;
+        private TableSyntaxBase? _currentTable;
+        private DiagnosticsBag? _diagnostics;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Parser{TSourceView}"/> class.
@@ -98,7 +98,7 @@ namespace Tomlyn.Parsing
             list.Add(node);
         }
 
-        private bool TryParseTableEntry(out SyntaxNode nextEntry)
+        private bool TryParseTableEntry(out SyntaxNode? nextEntry)
         {
             nextEntry = null;
             while (true)
@@ -170,7 +170,7 @@ namespace Tomlyn.Parsing
             }
         }
 
-        private ValueSyntax ParseValue()
+        private ValueSyntax? ParseValue()
         {
             switch (_token.Kind)
             {
@@ -258,7 +258,7 @@ namespace Tomlyn.Parsing
         private BooleanValueSyntax ParseBoolean()
         {
             var boolean = Open<BooleanValueSyntax>();
-            boolean.Value = (bool)_token.Value;
+            boolean.Value = (bool)(_token.Value ?? false);
             boolean.Token = EatToken();            
             return Close(boolean);
         }
@@ -285,7 +285,7 @@ namespace Tomlyn.Parsing
                     throw new InvalidOperationException("The datetime kind `{_token.Kind}` is not supported");
             }
 
-            datetime.Value = (DateTimeValue)_token.Value;
+            datetime.Value = (DateTimeValue)(_token.Value ?? (DateTimeValue)default);
             datetime.Token = EatToken();
             return Close(datetime);
         }
@@ -293,7 +293,7 @@ namespace Tomlyn.Parsing
         private IntegerValueSyntax ParseInteger()
         {
             var i64 = Open<IntegerValueSyntax>();
-            i64.Value = (long)_token.Value;
+            i64.Value = (long)(_token.Value ?? 0L);
             i64.Token = EatToken();            
             return Close(i64);
         }
@@ -301,7 +301,7 @@ namespace Tomlyn.Parsing
         private FloatValueSyntax ParseFloat(TokenKind kind)
         {
             var f64 = Open<FloatValueSyntax>();
-            f64.Value = (double)_token.Value;
+            f64.Value = (double)(_token.Value ?? 0.0);
             f64.Token = EatToken();
             return Close(f64);
         }
@@ -472,7 +472,7 @@ namespace Tomlyn.Parsing
             return Close(key);
         }
 
-        private BareKeyOrStringValueSyntax ParseBaseKey()
+        private BareKeyOrStringValueSyntax? ParseBaseKey()
         {
             if (_token.Kind == TokenKind.BasicKey)
             {
@@ -492,7 +492,7 @@ namespace Tomlyn.Parsing
         private StringValueSyntax ParseString()
         {
             var str = Open<StringValueSyntax>();
-            str.Value = (string)_token.Value;
+            str.Value = _token.Value as string ?? string.Empty;
             str.Token = EatToken();            
             return Close(str);
         }
@@ -611,19 +611,19 @@ namespace Tomlyn.Parsing
             return syntax;
         }
 
-        private string ToPrintable(SyntaxTokenValue localToken)
+        private string? ToPrintable(SyntaxTokenValue localToken)
         {
-            return CharHelper.ToPrintableString(ToText(localToken));
+            return ToText(localToken).ToPrintableString();
         }
 
-        private string ToText(SyntaxTokenValue localToken)
+        private string? ToText(SyntaxTokenValue localToken)
         {
             return localToken.GetText(_lexer.Source);
         }
 
-        private string ToPrintable(SourceSpan span)
+        private string? ToPrintable(SourceSpan span)
         {
-            return CharHelper.ToPrintableString(_lexer.Source.GetString(span.Offset, span.Length));
+            return _lexer.Source.GetString(span.Offset, span.Length).ToPrintableString();
         }
 
         private void NextToken()
@@ -683,7 +683,7 @@ namespace Tomlyn.Parsing
         private void Log(DiagnosticMessage diagnosticMessage)
         {
             if (diagnosticMessage == null) throw new ArgumentNullException(nameof(diagnosticMessage));
-            _diagnostics.Add(diagnosticMessage);
+            _diagnostics!.Add(diagnosticMessage);
         }
     }
 }

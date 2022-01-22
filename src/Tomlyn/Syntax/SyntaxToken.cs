@@ -20,7 +20,7 @@ namespace Tomlyn.Syntax
         /// </summary>
         /// <param name="tokenKind">The type of token</param>
         /// <param name="text">The associated textual representation</param>
-        public SyntaxToken(TokenKind tokenKind, string text) : this()
+        public SyntaxToken(TokenKind tokenKind, string? text) : this()
         {
             TokenKind = tokenKind;
             Text = text;
@@ -34,7 +34,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// Gets or sets the associated text
         /// </summary>
-        public string Text { get; set; }
+        public string? Text { get; set; }
 
         public override void Accept(SyntaxVisitor visitor)
         {
@@ -43,7 +43,7 @@ namespace Tomlyn.Syntax
         
         public override int ChildrenCount => 0;
 
-        protected override SyntaxNode GetChildrenImpl(int index)
+        protected override SyntaxNode? GetChildrenImpl(int index)
         {
             return null;
         }

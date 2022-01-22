@@ -10,7 +10,7 @@ namespace Tomlyn.Syntax
     /// </summary>
     public sealed class IntegerValueSyntax : ValueSyntax
     {
-        private SyntaxToken _token;
+        private SyntaxToken? _token;
 
         /// <summary>
         /// Creates an <see cref="IntegerValueSyntax"/>
@@ -32,7 +32,7 @@ namespace Tomlyn.Syntax
         /// <summary>
         /// The integer token with its textual representation
         /// </summary>
-        public SyntaxToken Token
+        public SyntaxToken? Token
         {
             get => _token;
             set => ParentToThis(ref _token, value, value != null && value.TokenKind.IsInteger(), "decimal/hex/binary/octal integer");
@@ -49,7 +49,7 @@ namespace Tomlyn.Syntax
         }
         public override int ChildrenCount => 1;
 
-        protected override SyntaxNode GetChildrenImpl(int index)
+        protected override SyntaxNode? GetChildrenImpl(int index)
         {
             return Token;
         }

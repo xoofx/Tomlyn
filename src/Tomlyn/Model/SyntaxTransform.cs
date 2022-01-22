@@ -13,9 +13,8 @@ namespace Tomlyn.Model
     {
         private readonly TomlTable _rootTable;
         private TomlTable _currentTable;
-        private object _currentValue;
-        private bool? hasExponent;
-
+        private object? _currentValue;
+        
         public SyntaxTransform(TomlTable rootTable)
         {
             _rootTable = rootTable ?? throw new ArgumentNullException(nameof(rootTable));
@@ -24,33 +23,33 @@ namespace Tomlyn.Model
 
         public override void Visit(KeyValueSyntax keyValue)
         {
-            keyValue.Value.Accept(this);
-            SetKeyValue(keyValue.Key, _currentValue, keyValue.Kind);
+            keyValue.Value!.Accept(this);
+            SetKeyValue(keyValue.Key!, _currentValue, keyValue.Kind);
         }
 
         public override void Visit(TableSyntax table)
         {
             _currentTable = _rootTable;
-            _currentTable = SetKeyValue(table.Name, null, table.Kind);
+            _currentTable = SetKeyValue(table.Name!, null, table.Kind);
             base.Visit(table);
         }
 
         public override void Visit(TableArraySyntax table)
         {
             _currentTable = _rootTable;
-            _currentTable = SetKeyValue(table.Name, null, table.Kind);
+            _currentTable = SetKeyValue(table.Name!, null, table.Kind);
             base.Visit(table);
         }
 
-        private TomlTable SetKeyValue(KeySyntax key, object value, SyntaxKind kind)
+        private TomlTable SetKeyValue(KeySyntax key, object? value, SyntaxKind kind)
         {
             var currentTable = _currentTable;
-            var name = GetStringFromBasic(key.Key);
+            var name = GetStringFromBasic(key.Key!) ?? string.Empty;
             var items = key.DotKeys;
             for (int i = 0; i < items.ChildrenCount; i++)
             {
                 currentTable = GetTable(currentTable, name, false);
-                name = GetStringFromBasic(items.GetChildren(i).Key);
+                name = GetStringFromBasic(items.GetChildren(i)!.Key!) ?? string.Empty;
             }
 
             var isTableArray = kind == SyntaxKind.TableArray;
@@ -60,7 +59,7 @@ namespace Tomlyn.Model
             }
             else
             {
-                currentTable[name] = value;
+                currentTable[name] = value!;
             }
 
             return currentTable;
@@ -86,7 +85,7 @@ namespace Tomlyn.Model
 
                 if (!(subTableObject is TomlTable))
                 {
-                    throw new InvalidOperationException($"Cannot transform the key `{key}` to a table while the existing underlying object is a `{subTableObject.GetType()}");
+                    throw new InvalidOperationException($"Cannot transform the key `{key}` to a table while the existing underlying object is a `{subTableObject!.GetType()}");
                 }
                 return (TomlTable) subTableObject;
             }
@@ -96,13 +95,13 @@ namespace Tomlyn.Model
             return newTable;
         }
 
-        private string GetStringFromBasic(BareKeyOrStringValueSyntax value)
+        private string? GetStringFromBasic(BareKeyOrStringValueSyntax? value)
         {
             if (value is BareKeySyntax basicKey)
             {
-                return basicKey.Key.Text;
+                return basicKey.Key?.Text;
             }
-            return ((StringValueSyntax) value).Value;
+            return ((StringValueSyntax?) value)?.Value;
         }
 
         public override void Visit(BooleanValueSyntax boolValue)
@@ -150,7 +149,7 @@ namespace Tomlyn.Model
             var items = array.Items;
             for(int i = 0; i < items.ChildrenCount; i++)
             {
-                var item = items.GetChildren(i);
+                var item = items.GetChildren(i)!;
                 item.Accept(this);
                 tomlArray.Add(_currentValue);
             }
