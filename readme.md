@@ -12,7 +12,7 @@ Tomlyn is a TOML parser, validator and authoring library for .NET Framework and 
 - Provides a validator with the `Toml.Validate` method.
 - Provides accurate parsing and validation error messages with precise source location.
 - Allow to work on the syntax tree directly (preserving styles) through the `Toml.Parse`.
-- Allow to work with a runtime representation `Toml.ToModel` (but cannot be saved back to TOML).
+- Allow to work with a runtime representation `Toml.ToModel` and `Toml.ToModel<T>` (but cannot be saved back to TOML).
 - Supports for .NET Standard 2.0+.
 
 ## Usage
