@@ -39,6 +39,45 @@ namespace Tomlyn
         }
 
         /// <summary>
+        /// Parses a text to directly to a model.
+        /// </summary>
+        /// <param name="text">A string representing a TOML document</param>
+        /// <param name="sourcePath">An optional path/file name to identify errors</param>
+        /// <param name="options">The options for the mapping.</param>
+        /// <returns>A parsed TOML document</returns>
+        public static T ParseToModel<T>(string text, string? sourcePath = null, TomlModelOptions? options = null) where T: class, new()
+        {
+            var syntax = Parse(text, sourcePath);
+            if (syntax.HasErrors)
+            {
+                throw new TomlException(syntax.Diagnostics);
+            }
+            return ToModel<T>(syntax, options);
+        }
+
+        /// <summary>
+        /// Parses a text to directly to a model.
+        /// </summary>
+        /// <param name="text">A string representing a TOML document</param>
+        /// <param name="model">The output model.</param>
+        /// <param name="diagnostics">The diagnostics if this method returns false.</param>
+        /// <param name="sourcePath">An optional path/file name to identify errors</param>
+        /// <param name="options">The options for the mapping.</param>
+        /// <returns>A parsed TOML document</returns>
+        public static bool TryParseToModel<T>(string text, out T? model, out DiagnosticsBag? diagnostics, string? sourcePath = null, TomlModelOptions? options = null) where T : class, new()
+        {
+            var syntax = Parse(text, sourcePath);
+            if (syntax.HasErrors)
+            {
+                diagnostics = syntax.Diagnostics;
+                model = null;
+                return false;
+            }
+
+            return TryToModel<T>(syntax, out model, out diagnostics, options);
+        }
+
+        /// <summary>
         /// Parses a UTF8 byte array to a TOML document.
         /// </summary>
         /// <param name="utf8Bytes">A UTF8 string representing a TOML document</param>
@@ -69,6 +108,14 @@ namespace Tomlyn
             return TomlTable.From(syntax);
         }
 
+        /// <summary>
+        /// Converts a <see cref="DocumentSyntax"/> to the specified runtime object.
+        /// </summary>
+        /// <typeparam name="T">The runtime object to map the syntax to</typeparam>
+        /// <param name="syntax">The syntax to map from.</param>
+        /// <param name="options">The options for the mapping.</param>
+        /// <returns>The result of mapping <see cref="DocumentSyntax"/> to a runtime model of type T </returns>
+        /// <exception cref="TomlException">If there were errors when mapping to properties.</exception>
         public static T ToModel<T>(this DocumentSyntax syntax, TomlModelOptions? options = null) where T : class, new()
         {
             if (!TryToModel<T>(syntax, out var data, out var diagnostics, options))
@@ -79,11 +126,20 @@ namespace Tomlyn
             return data;
         }
 
-        public static bool TryToModel<T>(this DocumentSyntax syntax, out T data, out DiagnosticsBag? diagnostics, TomlModelOptions? options = null) where T : class, new()
+        /// <summary>
+        /// Tries to convert a <see cref="DocumentSyntax"/> to the specified runtime object.
+        /// </summary>
+        /// <typeparam name="T">The runtime object to map the syntax to</typeparam>
+        /// <param name="syntax">The syntax to map from.</param>
+        /// <param name="model">The output model.</param>
+        /// <param name="diagnostics">The diagnostics if this method returns false.</param>
+        /// <param name="options">The options for the mapping.</param>
+        /// <returns><c>true</c> if the mapping was successful; <c>false</c> otherwise. In that case the output <paramref name="diagnostics"/> will contain error messages.</returns>
+        public static bool TryToModel<T>(this DocumentSyntax syntax, out T model, out DiagnosticsBag? diagnostics, TomlModelOptions? options = null) where T : class, new()
         {
-            data = new T();
+            model = new T();
             var context = new DynamicModelContext(options ?? new TomlModelOptions());
-            SyntaxTransform visitor = new SyntaxTransform(context, data);
+            SyntaxTransform visitor = new SyntaxTransform(context, model);
             visitor.Visit(syntax);
             if (context.Diagnostics.HasErrors)
             {
