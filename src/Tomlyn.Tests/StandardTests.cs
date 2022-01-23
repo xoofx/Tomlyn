@@ -97,7 +97,7 @@ namespace Tomlyn.Tests
             {
                 var newObject = new JObject();
 
-                var items = new List<KeyValuePair<string, JToken?>>();
+                var items = new List<KeyValuePair<string, JToken>>();
                 foreach (var item in obj)
                 {
                     items.Add(item);
@@ -185,9 +185,7 @@ namespace Tomlyn.Tests
             get
             {
                 var assembly = Assembly.GetExecutingAssembly();
-                var codebase = new Uri(assembly.CodeBase);
-                var path = codebase.LocalPath;
-                return Path.GetDirectoryName(path);
+                return Path.GetDirectoryName(assembly.Location);
             }
         }
     }

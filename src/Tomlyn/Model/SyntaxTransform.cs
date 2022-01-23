@@ -1,168 +1,350 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
 // Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
+
 using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using Tomlyn.Model.Accessors;
 using Tomlyn.Syntax;
 
-namespace Tomlyn.Model
+namespace Tomlyn.Model;
+
+/// <summary>
+/// Transform syntax to a model.
+/// </summary>
+internal class SyntaxTransform : SyntaxVisitor
 {
-    /// <summary>
-    /// Internal class used to transform a <see cref="DocumentSyntax"/> into a <see cref="TomlTable"/>
-    /// </summary>
-    internal class SyntaxTransform : SyntaxVisitor
+    private readonly DynamicModelContext _context;
+    private object? _currentObject;
+    private DynamicAccessor? _currentObjectAccessor;
+    private Type? _currentTargetType;
+    private object? _currentValue;
+    private readonly Stack<ObjectPath> _objectStack;
+    private readonly HashSet<object> _tableArrays;
+
+    public SyntaxTransform(DynamicModelContext context, object rootObject)
     {
-        private readonly TomlTable _rootTable;
-        private TomlTable _currentTable;
-        private object? _currentValue;
-        
-        public SyntaxTransform(TomlTable rootTable)
-        {
-            _rootTable = rootTable ?? throw new ArgumentNullException(nameof(rootTable));
-            _currentTable = _rootTable;
-        }
+        _context = context;
+        _objectStack = new Stack<ObjectPath>();
+        _tableArrays = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        PushObject(rootObject);
+    }
 
-        public override void Visit(KeyValueSyntax keyValue)
-        {
-            keyValue.Value!.Accept(this);
-            SetKeyValue(keyValue.Key!, _currentValue, keyValue.Kind);
-        }
+    private void PushObject(object obj)
+    {
+        var accessor = _context.GetAccessor(obj.GetType());
+        _objectStack.Push(new ObjectPath(obj, accessor));
+        _currentObject = obj;
+        _currentObjectAccessor = accessor;
+    }
 
-        public override void Visit(TableSyntax table)
+    private void PopStack(int targetCount)
+    {
+        while (_objectStack.Count > targetCount)
         {
-            _currentTable = _rootTable;
-            _currentTable = SetKeyValue(table.Name!, null, table.Kind);
-            base.Visit(table);
+            PopObject();
         }
+    }
 
-        public override void Visit(TableArraySyntax table)
-        {
-            _currentTable = _rootTable;
-            _currentTable = SetKeyValue(table.Name!, null, table.Kind);
-            base.Visit(table);
-        }
+    private object PopObject()
+    {
+        _ = _objectStack.Pop();
+        var currentObjectPath= _objectStack.Peek();
+        _currentObject = currentObjectPath.Value;
+        _currentObjectAccessor = currentObjectPath.DynamicAccessor;
+        return _currentObject;
+    }
 
-        private TomlTable SetKeyValue(KeySyntax key, object? value, SyntaxKind kind)
+    public override void Visit(KeyValueSyntax keyValue)
+    {
+        var stackCount = _objectStack.Count;
+        try
         {
-            var currentTable = _currentTable;
-            var name = GetStringFromBasic(key.Key!) ?? string.Empty;
-            var items = key.DotKeys;
-            for (int i = 0; i < items.ChildrenCount; i++)
+            var currentValue = _currentValue;
+            var currentTargetType = _currentTargetType;
+            if (!TryFollowKeyPath(keyValue.Key!, keyValue.Kind, out var name))
             {
-                currentTable = GetTable(currentTable, name, false);
-                name = GetStringFromBasic(items.GetChildren(i)!.Key!) ?? string.Empty;
+                return;
             }
 
-            var isTableArray = kind == SyntaxKind.TableArray;
-            if (kind == SyntaxKind.Table || isTableArray)
+            var objectAccessor = ((ObjectDynamicAccessor)_currentObjectAccessor!);
+            if (objectAccessor.TryGetPropertyType(keyValue.Span, name, out _currentTargetType))
             {
-                currentTable = GetTable(currentTable, name, isTableArray);
+                keyValue.Value!.Accept(this);
+                objectAccessor = ((ObjectDynamicAccessor)_currentObjectAccessor!);
+                objectAccessor.TrySetPropertyValue(keyValue.Span, _currentObject!, name, _currentValue);
+            }
+
+            _currentValue = currentValue;
+            _currentTargetType = currentTargetType;
+        }
+        finally
+        {
+            PopStack(stackCount);
+        }
+    }
+
+    public override void Visit(TableSyntax table)
+    {
+        var stackCount = _objectStack.Count;
+        try
+        {
+            if (!TryFollowKeyPath(table.Name!, table.Kind, out _))
+            {
+                return;
+            }
+
+            base.Visit(table);
+        }
+        finally
+        {
+            PopStack(stackCount);
+        }
+    }
+
+    public override void Visit(TableArraySyntax table)
+    {
+        var stackCount = _objectStack.Count;
+        try
+        {
+            if (!TryFollowKeyPath(table.Name!, table.Kind, out _))
+            {
+                return;
+            }
+
+            base.Visit(table);
+        }
+        finally
+        {
+
+            PopStack(stackCount);
+        }
+    }
+
+    private bool TryFollowKeyPath(KeySyntax key, SyntaxKind kind, out string name)
+    {
+        name = GetStringFromBasic(key.Key!) ?? string.Empty;
+        var items = key.DotKeys;
+        SyntaxNode item = key;
+        for (int i = 0; i < items.ChildrenCount; i++)
+        {
+            if (!GetOrCreateSubObject(item.Span, name, ObjectKind.Table))
+            {
+                return false;
+            }
+            var nextItem = items.GetChildren(i);
+            item = nextItem!;
+            name = GetStringFromBasic(nextItem!.Key!) ?? string.Empty;
+        }
+
+        if (kind == SyntaxKind.Table || kind == SyntaxKind.TableArray)
+        {
+            if (!GetOrCreateSubObject(key.Span, name, GetKindFromSyntaxKind(kind)))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static ObjectKind GetKindFromSyntaxKind(SyntaxKind kind)
+    {
+        switch (kind)
+        {
+            case SyntaxKind.Array:
+                return ObjectKind.Array;
+            case SyntaxKind.InlineTable:
+                return ObjectKind.InlineTable;
+            case SyntaxKind.Table:
+                return ObjectKind.Table;
+            case SyntaxKind.TableArray:
+                return ObjectKind.TableArray;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(kind), kind, $"Invalid {kind}");
+        }
+    }
+
+    private bool GetOrCreateSubObject(SourceSpan span, string key, ObjectKind kind)
+    {
+        var accessor = _currentObjectAccessor as ObjectDynamicAccessor;
+        if (accessor is null)
+        {
+            _context.Diagnostics.Error(span, $"Unable to set a key on an object accessor {_currentObjectAccessor!.TargetType.FullName}");
+            return false;
+        }
+
+        if (!accessor.TryGetPropertyValue(span, _currentObject!, key, out var currentObject))
+        {
+            if (!accessor.TryCreateAndSetDefaultPropertyValue(span, _currentObject!, key, kind, out currentObject))
+            {
+                return false;
+            }
+
+            if (currentObject is not null && kind == ObjectKind.TableArray)
+            {
+                _tableArrays.Add(currentObject);
+            }
+        }
+
+        if (currentObject is not null)
+        {
+            // Special handling of table arrays
+            if (_tableArrays.Contains(currentObject))
+            {
+                var listAccessor = (ListDynamicAccessor)_context.GetAccessor(currentObject.GetType());
+                if (kind == ObjectKind.TableArray)
+                {
+                    var instance = _context.CreateInstance(listAccessor.ElementType, ObjectKind.Table);
+                    listAccessor.AddElement(currentObject, instance);
+                    currentObject = instance;
+                }
+                else
+                {
+                    currentObject = listAccessor.GetLastElement(currentObject);
+                }
+            }
+        }
+
+        if (currentObject is not null)
+        {
+            PushObject(currentObject);
+            return true;
+        }
+
+        return false;
+    }
+
+    private string? GetStringFromBasic(BareKeyOrStringValueSyntax value)
+    {
+        if (value is BareKeySyntax basicKey)
+        {
+            return basicKey.Key?.Text;
+        }
+        return ((StringValueSyntax) value).Value;
+    }
+
+    public override void Visit(BooleanValueSyntax boolValue)
+    {
+        _currentValue = boolValue.Value;
+    }
+
+    public override void Visit(StringValueSyntax stringValue)
+    {
+        _currentValue = stringValue.Value;
+    }
+
+    public override void Visit(DateTimeValueSyntax dateTimeValueSyntax)
+    {
+        switch (dateTimeValueSyntax.Kind)
+        {
+            case SyntaxKind.OffsetDateTime:
+                _currentValue = new TomlDateTime(ObjectKind.OffsetDateTime, dateTimeValueSyntax.Value);
+                break;
+            case SyntaxKind.LocalDateTime:
+                _currentValue = new TomlDateTime(ObjectKind.LocalDateTime, dateTimeValueSyntax.Value);
+                break;
+            case SyntaxKind.LocalDate:
+                _currentValue = new TomlDateTime(ObjectKind.LocalDate, dateTimeValueSyntax.Value);
+                break;
+            case SyntaxKind.LocalTime:
+                _currentValue = new TomlDateTime(ObjectKind.LocalTime, dateTimeValueSyntax.Value);
+                break;
+        }
+    }
+
+    public override void Visit(FloatValueSyntax floatValueSyntax)
+    {
+        _currentValue = floatValueSyntax.Value;
+    }
+
+    public override void Visit(IntegerValueSyntax integerValueSyntax)
+    {
+        _currentValue = integerValueSyntax.Value;
+    }
+
+    public override void Visit(ArraySyntax array)
+    {
+        var stackCount = _objectStack.Count;
+        var list = _context.CreateInstance(_currentTargetType!, ObjectKind.Array);
+        var fastList = list as IList;
+        var accessor = _context.GetAccessor(list.GetType());
+        var listAccessor = accessor as ListDynamicAccessor;
+
+        // Fail if we don't have a list accessor
+        if (listAccessor is null)
+        {
+            _context.Diagnostics.Error(array.Span, $"Invalid list type {list.GetType().FullName}. Getting a {accessor} instead.");
+            return;
+        }
+
+        PushObject(list);
+        var items = array.Items;
+        for(int i = 0; i < items.ChildrenCount; i++)
+        {
+            PushObject(list);
+            var item = items.GetChildren(i)!;
+            item.Accept(this);
+
+            // Make sure that we can convert the item to the destination value
+            if (!_context.TryConvertValue(item.Span, _currentValue, listAccessor.ElementType, out var itemValue))
+            {
+                continue;
+            }
+
+            if (fastList is not null)
+            {
+                fastList.Add(itemValue);
             }
             else
             {
-                currentTable[name] = value!;
-            }
-
-            return currentTable;
-        }
-
-        private TomlTable GetTable(TomlTable table, string key, bool createTableArrayItem)
-        {
-            if (table.TryGetValue(key, out var subTableObject))
-            {
-                if (subTableObject is TomlTableArray tomlArray)
-                {
-                    if (createTableArrayItem)
-                    {
-                        var newTableForArray = new TomlTable();
-                        tomlArray.Add(newTableForArray);
-                        subTableObject = newTableForArray;
-                    }
-                    else
-                    {
-                        subTableObject = tomlArray[tomlArray.Count - 1];
-                    }
-                }
-
-                if (!(subTableObject is TomlTable))
-                {
-                    throw new InvalidOperationException($"Cannot transform the key `{key}` to a table while the existing underlying object is a `{subTableObject!.GetType()}");
-                }
-                return (TomlTable) subTableObject;
-            }
-
-            var newTable = new TomlTable();
-            table[key] = createTableArrayItem ? (TomlObject)new TomlTableArray(1) { newTable } : newTable;
-            return newTable;
-        }
-
-        private string? GetStringFromBasic(BareKeyOrStringValueSyntax? value)
-        {
-            if (value is BareKeySyntax basicKey)
-            {
-                return basicKey.Key?.Text;
-            }
-            return ((StringValueSyntax?) value)?.Value;
-        }
-
-        public override void Visit(BooleanValueSyntax boolValue)
-        {
-            _currentValue = boolValue.Value;
-        }
-
-        public override void Visit(StringValueSyntax stringValue)
-        {
-            _currentValue = stringValue.Value;
-        }
-
-        public override void Visit(DateTimeValueSyntax dateTimeValueSyntax)
-        {
-            switch (dateTimeValueSyntax.Kind)
-            {
-                case SyntaxKind.OffsetDateTime:
-                    _currentValue = new TomlDateTime(ObjectKind.OffsetDateTime, dateTimeValueSyntax.Value);
-                    break;
-                case SyntaxKind.LocalDateTime:
-                    _currentValue = new TomlDateTime(ObjectKind.LocalDateTime, dateTimeValueSyntax.Value);
-                    break;
-                case SyntaxKind.LocalDate:
-                    _currentValue = new TomlDateTime(ObjectKind.LocalDate, dateTimeValueSyntax.Value);
-                    break;
-                case SyntaxKind.LocalTime:
-                    _currentValue = new TomlDateTime(ObjectKind.LocalTime, dateTimeValueSyntax.Value);
-                    break;
+                listAccessor.AddElement(list, itemValue);
             }
         }
+        PopStack(stackCount);
+        _currentValue = list;
+    }
 
-        public override void Visit(FloatValueSyntax floatValueSyntax)
+    public override void Visit(InlineTableSyntax inlineTable)
+    {
+        var stackCount = _objectStack.Count;
+        var currentObject = _context.CreateInstance(_currentTargetType!, ObjectKind.InlineTable);
+        PushObject(currentObject);
+        base.Visit(inlineTable);
+        PopStack(stackCount);
+        _currentValue = currentObject;
+    }
+
+    private struct ObjectPath
+    {
+        public ObjectPath(object value, DynamicAccessor dynamicAccessor)
         {
-            _currentValue = floatValueSyntax.Value;
+            Value = value;
+            DynamicAccessor = dynamicAccessor;
         }
 
-        public override void Visit(IntegerValueSyntax integerValueSyntax)
+        public readonly object Value;
+
+        public readonly DynamicAccessor DynamicAccessor;
+    }
+
+    private class ReferenceEqualityComparer : IEqualityComparer<object>
+    {
+        public static readonly ReferenceEqualityComparer Instance = new ReferenceEqualityComparer();
+
+        private ReferenceEqualityComparer()
         {
-            _currentValue = integerValueSyntax.Value;
         }
 
-        public override void Visit(ArraySyntax array)
+        public bool Equals(object x, object y)
         {
-            var tomlArray = new TomlArray(array.ChildrenCount);
-            var items = array.Items;
-            for(int i = 0; i < items.ChildrenCount; i++)
-            {
-                var item = items.GetChildren(i)!;
-                item.Accept(this);
-                tomlArray.Add(_currentValue);
-            }
-            _currentValue = tomlArray;
+            return ReferenceEquals(x, y);
         }
 
-        public override void Visit(InlineTableSyntax inlineTable)
+        public int GetHashCode(object obj)
         {
-            var parentTable = _currentTable;
-            _currentTable = new TomlTable();
-            base.Visit(inlineTable);
-            _currentValue = _currentTable;
-            _currentTable = parentTable;
+            return RuntimeHelpers.GetHashCode(obj);
         }
     }
 }

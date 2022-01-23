@@ -19,11 +19,6 @@ namespace Tomlyn
     public static class Toml
     {
         /// <summary>
-        /// Default member renamer.
-        /// </summary>
-        public static readonly Func<PropertyInfo, string> GetDefaultPropertyName = GetDefaultPropertyNameImpl;
-
-        /// <summary>
         /// Parses a text to a TOML document.
         /// </summary>
         /// <param name="text">A string representing a TOML document</param>
@@ -81,15 +76,14 @@ namespace Tomlyn
                 // Will be fixed with ReturnWhen false
                 throw new TomlException(diagnostics!);
             }
-
             return data;
         }
 
         public static bool TryToModel<T>(this DocumentSyntax syntax, out T data, out DiagnosticsBag? diagnostics, TomlModelOptions? options = null) where T : class, new()
         {
             data = new T();
-            var context = new TomlModelContext(options ?? new TomlModelOptions());
-            ObjectVisitor visitor = new ObjectVisitor(data, context);
+            var context = new DynamicModelContext(options ?? new TomlModelOptions());
+            SyntaxTransform visitor = new SyntaxTransform(context, data);
             visitor.Visit(syntax);
             if (context.Diagnostics.HasErrors)
             {
@@ -113,53 +107,6 @@ namespace Tomlyn
             var validator = new SyntaxValidator(doc.Diagnostics);
             validator.Visit(doc);
             return doc;
-        }
-
-
-        private static string GetDefaultPropertyNameImpl(PropertyInfo prop)
-        {
-            string? name = null;
-            foreach (var attribute in prop.GetCustomAttributes())
-            {
-                // Allow to dynamically bind to JsonPropertyNameAttribute even if we are not targeting netstandard2.0
-                if (attribute.GetType().FullName == "System.Text.Json.Serialization.JsonPropertyNameAttribute")
-                {
-                    var nameProperty = attribute.GetType().GetProperty("Name");
-                    if (nameProperty != null)
-                    {
-                        name = nameProperty.GetValue(attribute) as string;
-                    }
-
-                    break;
-                }
-
-                if (attribute is DataMemberAttribute attr && !string.IsNullOrEmpty(attr.Name))
-                {
-                    name = attr.Name;
-                    break;
-                }
-            }
-
-            name ??= prop.Name;
-
-            if (prop.PropertyType != typeof(string) && !typeof(IDictionary).IsAssignableFrom(prop.PropertyType) && typeof(IEnumerable).IsAssignableFrom(prop.PropertyType))
-            {
-                name = name.Length > 1 ? name.EndsWith("s") ? name.Substring(0, name.Length - 1) : name : name;
-            }
-
-            var builder = new StringBuilder();
-            var pc = (char)0;
-            foreach (var c in name)
-            {
-                if (char.IsUpper(c) && !char.IsUpper(pc) && pc != 0 && pc != '_')
-                {
-                    builder.Append('_');
-                }
-
-                builder.Append(char.ToLowerInvariant(c));
-            }
-
-            return builder.ToString();
         }
     }
 }

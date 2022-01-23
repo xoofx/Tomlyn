@@ -15,7 +15,7 @@ using System;
 /// <param name="DateTime"></param>
 /// <param name="SecondPrecision"></param>
 /// <param name="OffsetKind"></param>
-public record struct DateTimeValue(DateTimeOffset DateTime, int SecondPrecision, DateTimeValueOffsetKind OffsetKind)
+public record struct DateTimeValue(DateTimeOffset DateTime, int SecondPrecision, DateTimeValueOffsetKind OffsetKind) 
 {
     public DateTimeValue(int year, int month, int day) : this(new DateTimeOffset(new DateTime(year, month, day)), 0, DateTimeValueOffsetKind.None)
     {

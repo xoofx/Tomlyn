@@ -23,7 +23,15 @@ namespace Tomlyn.Model
         /// <summary>
         /// Creates an instance of a <see cref="TomlTable"/>
         /// </summary>
-        public TomlTable() : base(ObjectKind.Table)
+        public TomlTable() : this(false)
+        {
+        }
+
+        /// <summary>
+        /// Creates an instance of <see cref="TomlTable"/>.
+        /// </summary>
+        /// <param name="inline"></param>
+        public TomlTable(bool inline) : base(inline ? ObjectKind.InlineTable : ObjectKind.Table)
         {
             _order = new List<KeyValuePair<string, TomlObject?>>();
             _map = new Dictionary<string, TomlObject?>();
@@ -178,10 +186,7 @@ namespace Tomlyn.Model
         {
             if (documentSyntax == null) throw new ArgumentNullException(nameof(documentSyntax));
             if (documentSyntax.HasErrors) throw new InvalidOperationException($"The document has errors: {documentSyntax.Diagnostics}");
-            var root = new TomlTable();
-            var syntaxTransform = new SyntaxTransform(root);
-            syntaxTransform.Visit(documentSyntax);
-            return root;
+            return documentSyntax.ToModel<TomlTable>();
         }
     }
 }

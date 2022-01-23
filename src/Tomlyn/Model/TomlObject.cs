@@ -36,6 +36,34 @@ namespace Tomlyn.Model
             if (type == typeof(double)) return new TomlFloat((double)value);
             if (type == typeof(DateTime)) return new TomlDateTime(ObjectKind.LocalDateTime, new DateTimeValue(new DateTimeOffset((DateTime) value), 0, DateTimeValueOffsetKind.None));
             if (type == typeof(DateTimeOffset)) return new TomlDateTime(ObjectKind.OffsetDateTime, new DateTimeValue((DateTimeOffset)value, 0, DateTimeValueOffsetKind.Zero));
+            if (value is DateTimeValue dateTimeValue)
+            {
+                switch (dateTimeValue.OffsetKind)
+                {
+                    //case SyntaxKind.OffsetDateTime:
+                    //    _currentValue = new TomlDateTime(ObjectKind.OffsetDateTime, dateTimeValueSyntax.Value);
+                    //    break;
+                    //case SyntaxKind.LocalDateTime:
+                    //    _currentValue = new TomlDateTime(ObjectKind.LocalDateTime, dateTimeValueSyntax.Value);
+                    //    break;
+                    //case SyntaxKind.LocalDate:
+                    //    _currentValue = new TomlDateTime(ObjectKind.LocalDate, dateTimeValueSyntax.Value);
+                    //    break;
+                    //case SyntaxKind.LocalTime:
+                    //    _currentValue = new TomlDateTime(ObjectKind.LocalTime, dateTimeValueSyntax.Value);
+                    //    break;
+                    case DateTimeValueOffsetKind.None:
+                        break;
+                    case DateTimeValueOffsetKind.Zero:
+                        break;
+                    case DateTimeValueOffsetKind.Number:
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException();
+                }
+
+                return new TomlDateTime(ObjectKind.OffsetDateTime, new DateTimeValue((DateTimeOffset)value, 0, DateTimeValueOffsetKind.Zero));
+            }
 
             throw new InvalidOperationException($"The type `{type}` of the object is invalid. Only long, bool, double, DateTime and TomlObject are supported");
         }
