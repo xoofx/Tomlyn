@@ -60,11 +60,6 @@ public class TomlModelOptions
         if (name is null)
         {
             name ??= prop.Name;
-
-            if (prop.PropertyType != typeof(string) && !typeof(IDictionary).IsAssignableFrom(prop.PropertyType) && typeof(IEnumerable).IsAssignableFrom(prop.PropertyType))
-            {
-                name = name.Length > 1 ? name.EndsWith("s") ? name.Substring(0, name.Length - 1) : name : name;
-            }
         }
 
         var builder = new StringBuilder();
@@ -77,6 +72,7 @@ public class TomlModelOptions
             }
 
             builder.Append(char.ToLowerInvariant(c));
+            pc = c;
         }
 
         return builder.ToString();

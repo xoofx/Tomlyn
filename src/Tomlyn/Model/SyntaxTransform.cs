@@ -181,15 +181,15 @@ internal class SyntaxTransform : SyntaxVisitor
             {
                 return false;
             }
-
-            if (currentObject is not null && kind == ObjectKind.TableArray)
-            {
-                _tableArrays.Add(currentObject);
-            }
         }
 
         if (currentObject is not null)
         {
+            if (kind == ObjectKind.TableArray)
+            {
+                _tableArrays.Add(currentObject);
+            }
+
             // Special handling of table arrays
             if (_tableArrays.Contains(currentObject))
             {
@@ -267,43 +267,47 @@ internal class SyntaxTransform : SyntaxVisitor
     public override void Visit(ArraySyntax array)
     {
         var stackCount = _objectStack.Count;
-        var list = _context.CreateInstance(_currentTargetType!, ObjectKind.Array);
-        var fastList = list as IList;
-        var accessor = _context.GetAccessor(list.GetType());
-        var listAccessor = accessor as ListDynamicAccessor;
-
-        // Fail if we don't have a list accessor
-        if (listAccessor is null)
+        try
         {
-            _context.Diagnostics.Error(array.Span, $"Invalid list type {list.GetType().FullName}. Getting a {accessor} instead.");
-            return;
-        }
+            var list = _context.CreateInstance(_currentTargetType!, ObjectKind.Array);
+            var fastList = list as IList;
+            var accessor = _context.GetAccessor(list.GetType());
+            var listAccessor = accessor as ListDynamicAccessor;
 
-        PushObject(list);
-        var items = array.Items;
-        for(int i = 0; i < items.ChildrenCount; i++)
+            // Fail if we don't have a list accessor
+            if (listAccessor is null)
+            {
+                _context.Diagnostics.Error(array.Span, $"Invalid list type {list.GetType().FullName}. Getting a {accessor} instead.");
+                return;
+            }
+
+            var items = array.Items;
+            for (int i = 0; i < items.ChildrenCount; i++)
+            {
+                var item = items.GetChildren(i)!;
+                item.Accept(this);
+
+                // Make sure that we can convert the item to the destination value
+                if (!_context.TryConvertValue(item.Span, _currentValue, listAccessor.ElementType, out var itemValue))
+                {
+                    continue;
+                }
+
+                if (fastList is not null)
+                {
+                    fastList.Add(itemValue);
+                }
+                else
+                {
+                    listAccessor.AddElement(list, itemValue);
+                }
+            }
+            _currentValue = list;
+        }
+        finally
         {
-            PushObject(list);
-            var item = items.GetChildren(i)!;
-            item.Accept(this);
-
-            // Make sure that we can convert the item to the destination value
-            if (!_context.TryConvertValue(item.Span, _currentValue, listAccessor.ElementType, out var itemValue))
-            {
-                continue;
-            }
-
-            if (fastList is not null)
-            {
-                fastList.Add(itemValue);
-            }
-            else
-            {
-                listAccessor.AddElement(list, itemValue);
-            }
+            PopStack(stackCount);
         }
-        PopStack(stackCount);
-        _currentValue = list;
     }
 
     public override void Visit(InlineTableSyntax inlineTable)

@@ -2,7 +2,9 @@
 // Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Text.Json.Serialization;
 using Newtonsoft.Json;
 using NUnit.Framework;
 using Tomlyn.Model;
@@ -262,6 +264,104 @@ better = 43
             AssertJson(input, json);
         }
 
+        [Test]
+        public void TestReflectionModel()
+        {
+            var input = @"name = ""this is a name""
+values = [""a"", ""b"", ""c"", 1]
+
+int_values = 1
+int_value = 2
+double_value = 2.5
+
+[[sub]]
+id = ""id1""
+publish = true
+
+[[sub]]
+id = ""id2""
+publish = false
+
+[[sub]]
+id = ""id3""";
+            var syntax = Toml.Parse(input);
+            Assert.False(syntax.HasErrors, "The document should not have any errors");
+
+            StandardTests.Dump(input, syntax, syntax.ToString());
+
+            var model = syntax.ToModel<TestModel>();
+
+            Assert.AreEqual("this is a name", model.Name);
+            Assert.AreEqual(new List<string>() {"a", "b", "c", "1"}, model.Values);
+            Assert.AreEqual(new List<int>() { 1 }, model.IntValues);
+            Assert.AreEqual(2, model.IntValue);
+            Assert.AreEqual(2.5, model.DoubleValue);
+            Assert.AreEqual(3, model.SubModels.Count);
+            var sub = model.SubModels[0];
+            Assert.AreEqual("id1", sub.Id);
+            Assert.True(sub.Publish);
+            sub = model.SubModels[1];
+            Assert.AreEqual("id2", sub.Id);
+            Assert.False(sub.Publish);
+            sub = model.SubModels[2];
+            Assert.AreEqual("id3", sub.Id);
+            Assert.False(sub.Publish);
+        }
+
+        [Test]
+        public void TestReflectionModelWithErrors()
+        {
+            var input = @"name = ""this is a name""
+values = [""a"", ""b"", ""c"", 1]
+
+int_values1 = 1  # error
+int_value = 2
+double_value = 2.5
+
+[[sub]]
+id2 = ""id1"" # error
+publish = true
+
+[[sub]]
+id = ""id2""
+publish = false
+
+[[sub]]
+id3 = ""id3"" # error
+"; 
+            var syntax = Toml.Parse(input);
+            Assert.False(syntax.HasErrors, "The document should not have any errors");
+
+            StandardTests.Dump(input, syntax, syntax.ToString());
+
+            var result = syntax.TryToModel<TestModel>(out var model, out var diagnostics);
+
+            Assert.False(result);
+            Assert.NotNull(diagnostics);
+            Assert.NotNull(model);
+
+            foreach (var diagnostic in diagnostics)
+            {
+                Console.WriteLine(diagnostic);
+            }
+
+            // Expecting 3 errors
+            Assert.AreEqual(3, diagnostics.Count);
+
+            // The model is still partially valid
+            Assert.AreEqual("this is a name", model.Name);
+
+            var diag = diagnostics[0];
+            Assert.AreEqual(3, diag.Span.Start.Line);
+            StringAssert.Contains("int_values1", diag.Message);
+            diag = diagnostics[1];
+            Assert.AreEqual(8, diag.Span.Start.Line);
+            StringAssert.Contains("id2", diag.Message);
+            diag = diagnostics[2];
+            Assert.AreEqual(16, diag.Span.Start.Line);
+            StringAssert.Contains("id3", diag.Message);
+        }
+
         private static void AssertJson(string input, string expectedJson)
         {
             var syntax = Toml.Parse(input);
@@ -280,6 +380,35 @@ better = 43
             Console.WriteLine(jsonResult);
 
             AssertHelper.AreEqualNormalizeNewLine(expectedJson, jsonResult);
+        }
+
+        public class TestModel
+        {
+            public TestModel()
+            {
+                Values = new List<string>();
+                SubModels = new List<TestSubModel>();
+            }
+
+            public string Name { get; set; }
+            
+            public List<string> Values { get; }
+
+            public List<int> IntValues { get; set; }
+
+            public int IntValue { get; set; }
+
+            public double DoubleValue { get; set; }
+
+            [JsonPropertyName("sub")]
+            public List<TestSubModel> SubModels { get; }
+        }
+
+        public class TestSubModel
+        {
+            public string Id { get; set; }
+
+            public bool Publish { get; set; }
         }
     }
 }

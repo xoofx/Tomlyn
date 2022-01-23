@@ -79,7 +79,7 @@ internal class DynamicModelContext
                     return true;
             }
 
-            if (value is IConvertible convertible)
+            if (value is IConvertible)
             {
                 outputValue = Convert.ChangeType(value, changeType);
                 return true;
