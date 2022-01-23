@@ -341,7 +341,9 @@ internal class SyntaxTransform : SyntaxVisitor
         {
         }
 
+#pragma warning disable CS0108, CS0114
         public bool Equals(object x, object y)
+#pragma warning restore CS0108, CS0114
         {
             return ReferenceEquals(x, y);
         }

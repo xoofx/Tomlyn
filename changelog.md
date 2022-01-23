@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.4.1 (23 Jan 2021)
+- Fix readme on NuGet
+
 ## 0.4.0 (23 Jan 2021)
 - Add support for `Toml.ToModel<T>` and `Toml.TryToModel<T>`
 

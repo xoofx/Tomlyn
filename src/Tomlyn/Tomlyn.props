@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
-    <VersionPrefix>0.4.0</VersionPrefix>
+    <VersionPrefix>0.4.1</VersionPrefix>
     <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>10.0</LangVersion>
     <Description>Tomlyn is a TOML parser, validator and authoring library for .NET.</Description>
@@ -13,9 +13,10 @@
     <VersionSuffix Condition="'$(VersionSuffix)' != '' AND '$(BuildNumber)' != ''">$(VersionSuffix)-$(BuildNumber)</VersionSuffix>
     <PackageTags>toml;parser</PackageTags>
     <PackageReleaseNotes>https://github.com/xoofx/Tomlyn/blob/master/changelog.md</PackageReleaseNotes>
-    <PackageIconUrl>https://raw.githubusercontent.com/xoofx/Tomlyn/master/img/logo.png</PackageIconUrl>
+    <PackageReadmeFile>readme.md</PackageReadmeFile>
+    <PackageIcon>logo.png</PackageIcon>
     <PackageProjectUrl>https://github.com/xoofx/Tomlyn</PackageProjectUrl>
-    <PackageLicenseUrl>https://github.com/xoofx/Tomlyn/blob/master/license.txt</PackageLicenseUrl>
+    <PackageLicenseExpression>BSD-2-Clause</PackageLicenseExpression>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <Nullable>enable</Nullable>
@@ -26,6 +27,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="../../img/logo.png" Pack="true" PackagePath="" />
+    <None Include="../../readme.md" Pack="true" PackagePath="/"/>
     <!--Add support for sourcelink-->
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.0.*" PrivateAssets="All" />
   </ItemGroup>
