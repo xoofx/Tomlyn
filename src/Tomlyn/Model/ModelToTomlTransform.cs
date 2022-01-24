@@ -196,6 +196,10 @@ internal class ModelToTomlTransform
 
             foreach (var prop in properties)
             {
+                // Skip any null properties
+                if (prop.Value is null) continue;
+                var name = prop.Key;
+
                 if (inline && !isFirst)
                 {
                     _writer.Write(", ");
@@ -212,15 +216,15 @@ internal class ModelToTomlTransform
 
                 if (!inline)
                 {
-                    WriteLeadingTrivia(prop.Key);
+                    WriteLeadingTrivia(name);
                 }
 
-                WriteKeyValue(prop.Key, prop.Value, propToInline);
+                WriteKeyValue(name, prop.Value, propToInline);
                 if (!inline)
                 {
-                    WriteTrailingTrivia(prop.Key);
+                    WriteTrailingTrivia(name);
                     _writer.WriteLine();
-                    WriteTrailingTriviaAfterEndOfLine(prop.Key);
+                    WriteTrailingTriviaAfterEndOfLine(name);
                 }
 
                 hasElements = true;
@@ -240,7 +244,9 @@ internal class ModelToTomlTransform
         bool isFirst = true;
         foreach (var value in accessor.GetElements(currentObject))
         {
-            if (value is null) continue;
+            // Skip any null value
+            if (value is null) continue; // TODO: should emit an error?
+
             var itemAccessor = _context.GetAccessor(value.GetType());
 
             if (inline)

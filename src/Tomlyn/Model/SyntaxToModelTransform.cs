@@ -473,7 +473,8 @@ internal class SyntaxToModelTransform : SyntaxVisitor
                 metadata ??= new TomlPropertyMetadata();
                 metadata.LeadingTrivia = trivias;
             }
-            var lastChildren = tableSyntax.GetChildren(tableSyntax.ChildrenCount - 1);
+
+            var lastChildren = tableSyntax.CloseBracket;
             trivias = ConvertTrivias(lastChildren?.TrailingTrivia);
             if (trivias != null && trivias.Count > 0)
             {
@@ -493,7 +494,6 @@ internal class SyntaxToModelTransform : SyntaxVisitor
         return metadata;
     }
 
-
     private List<TomlSyntaxTriviaMetadata>? ConvertTrivias(List<SyntaxTrivia>? trivias)
     {
         if (trivias == null || trivias.Count == 0) return null;
@@ -506,7 +506,6 @@ internal class SyntaxToModelTransform : SyntaxVisitor
 
         return trailingDestTrivias;
     }
-
 
     private struct ObjectPath
     {
