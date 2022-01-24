@@ -92,7 +92,7 @@ namespace Tomlyn.Text
 
         private static string? EscapeChar(char c)
         {
-            if (c < ' ' || c == '"' || c == '\\')
+            if (c < ' ' || c == '"' || c == '\\' || char.IsControl(c))
             {
                 switch (c)
                 {
@@ -111,7 +111,7 @@ namespace Tomlyn.Text
                     case '\\':
                         return @"\\";
                     default:
-                        return $"\\u{(int)c:X};";
+                        return $"\\u{(ushort)c:X4}";
                 }
             }
             return null;

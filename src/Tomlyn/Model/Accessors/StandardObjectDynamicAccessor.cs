@@ -13,10 +13,12 @@ namespace Tomlyn.Model.Accessors;
 internal class StandardObjectDynamicAccessor : ObjectDynamicAccessor
 {
     private readonly Dictionary<string, PropertyInfo> _props;
+    private readonly List<KeyValuePair<string, PropertyInfo>> _orderedProps;
 
-    public StandardObjectDynamicAccessor(DynamicModelContext context, Type type) : base(context, type)
+    public StandardObjectDynamicAccessor(DynamicModelReadContext context, Type type) : base(context, type)
     {
         _props = new Dictionary<string, PropertyInfo>();
+        _orderedProps = new List<KeyValuePair<string, PropertyInfo>>();
         Initialize();
     }
 
@@ -37,7 +39,16 @@ internal class StandardObjectDynamicAccessor : ObjectDynamicAccessor
             if (!_props.ContainsKey(name))
             {
                 _props[name] = prop;
+                _orderedProps.Add(new KeyValuePair<string, PropertyInfo>(name, prop));
             }
+        }
+    }
+
+    public override IEnumerable<KeyValuePair<string, object>> GetProperties(object obj)
+    {
+        foreach (var prop in _orderedProps)
+        {
+            yield return new KeyValuePair<string, object>(prop.Key, prop.Value.GetValue(obj));
         }
     }
 

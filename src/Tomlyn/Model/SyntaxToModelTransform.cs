@@ -14,9 +14,9 @@ namespace Tomlyn.Model;
 /// <summary>
 /// Transform syntax to a model.
 /// </summary>
-internal class SyntaxTransform : SyntaxVisitor
+internal class SyntaxToModelTransform : SyntaxVisitor
 {
-    private readonly DynamicModelContext _context;
+    private readonly DynamicModelReadContext _context;
     private object? _currentObject;
     private DynamicAccessor? _currentObjectAccessor;
     private Type? _currentTargetType;
@@ -24,7 +24,7 @@ internal class SyntaxTransform : SyntaxVisitor
     private readonly Stack<ObjectPath> _objectStack;
     private readonly HashSet<object> _tableArrays;
 
-    public SyntaxTransform(DynamicModelContext context, object rootObject)
+    public SyntaxToModelTransform(DynamicModelReadContext context, object rootObject)
     {
         _context = context;
         _objectStack = new Stack<ObjectPath>();
@@ -75,6 +75,7 @@ internal class SyntaxTransform : SyntaxVisitor
                 keyValue.Value!.Accept(this);
                 objectAccessor = ((ObjectDynamicAccessor)_currentObjectAccessor!);
                 objectAccessor.TrySetPropertyValue(keyValue.Span, _currentObject!, name, _currentValue);
+                AddMetadataToCurrentObject(name, keyValue);
             }
 
             _currentValue = currentValue;
@@ -86,15 +87,34 @@ internal class SyntaxTransform : SyntaxVisitor
         }
     }
 
+
+    private void AddMetadataToCurrentObject(string name, SyntaxNode syntax)
+    {
+        if (_currentObject is ITomlMetadataProvider metadataProvider)
+        {
+            var propertiesMetadata = metadataProvider.PropertiesMetadata ?? new TomlPropertiesMetadata();
+
+            var propertyMetadata = GetTomlPropertyMetadata(syntax);
+            if (propertyMetadata is not null)
+            {
+                propertiesMetadata.SetProperty(name, propertyMetadata);
+            }
+
+            metadataProvider.PropertiesMetadata = propertiesMetadata;
+        }
+    }
+
+
     public override void Visit(TableSyntax table)
     {
         var stackCount = _objectStack.Count;
         try
         {
-            if (!TryFollowKeyPath(table.Name!, table.Kind, out _))
+            if (!TryFollowKeyPath(table.Name!, table.Kind, out var name))
             {
                 return;
             }
+            AddMetadataToCurrentObject(name, table);
 
             base.Visit(table);
         }
@@ -109,11 +129,11 @@ internal class SyntaxTransform : SyntaxVisitor
         var stackCount = _objectStack.Count;
         try
         {
-            if (!TryFollowKeyPath(table.Name!, table.Kind, out _))
+            if (!TryFollowKeyPath(table.Name!, table.Kind, out var name))
             {
                 return;
             }
-
+            AddMetadataToCurrentObject(name, table);
             base.Visit(table);
         }
         finally
@@ -319,6 +339,174 @@ internal class SyntaxTransform : SyntaxVisitor
         PopStack(stackCount);
         _currentValue = currentObject;
     }
+
+    /// <summary>
+    /// Create metadata for model.
+    /// </summary>
+    /// <param name="syntax">The syntax used to collect the metadata from.</param>
+    /// <returns>The metadata to attach to the property; null if no metadata.</returns>
+    private TomlPropertyMetadata? GetTomlPropertyMetadata(SyntaxNode syntax)
+    {
+        TomlPropertyMetadata? metadata = null;
+        if (syntax is KeyValueSyntax keyValue)
+        {
+            switch (keyValue.Value)
+            {
+                case DateTimeValueSyntax dateTimeValueSyntax:
+                {
+                    var tokenKind = dateTimeValueSyntax.Token?.TokenKind ?? TokenKind.Invalid;
+                    var dateDisplayKind = TomlPropertyDisplayKind.Default;
+                    switch (tokenKind)
+                    {
+                        case TokenKind.OffsetDateTime:
+                            dateDisplayKind = TomlPropertyDisplayKind.OffsetDateTime;
+                            break;
+                        case TokenKind.LocalDateTime:
+                            dateDisplayKind = TomlPropertyDisplayKind.LocalDateTime;
+                            break;
+                        case TokenKind.LocalDate:
+                            dateDisplayKind = TomlPropertyDisplayKind.LocalDate;
+                            break;
+                        case TokenKind.LocalTime:
+                            dateDisplayKind = TomlPropertyDisplayKind.LocalTime;
+                            break;
+                    }
+
+                    if (dateDisplayKind != TomlPropertyDisplayKind.Default)
+                    {
+                        metadata = new TomlPropertyMetadata
+                        {
+                            DisplayKind = dateDisplayKind
+                        };
+                    }
+                }
+                    break;
+                case StringValueSyntax stringValueSyntax:
+                {
+                    var tokenKind = stringValueSyntax.Token?.TokenKind ?? TokenKind.Invalid;
+                    var stringDisplayKind = TomlPropertyDisplayKind.Default;
+                    switch (tokenKind)
+                    {
+                        case TokenKind.StringMulti:
+                            stringDisplayKind = TomlPropertyDisplayKind.StringMulti;
+                            break;
+                        case TokenKind.StringLiteral:
+                            stringDisplayKind = TomlPropertyDisplayKind.StringLiteral;
+                            break;
+                        case TokenKind.StringLiteralMulti:
+                            stringDisplayKind = TomlPropertyDisplayKind.StringLiteralMulti;
+                            break;
+                    }
+
+                    if (stringDisplayKind != TomlPropertyDisplayKind.Default)
+                    {
+                        metadata = new TomlPropertyMetadata
+                        {
+                            DisplayKind = stringDisplayKind
+                        };
+                    }
+                }
+                    break;
+                case InlineTableSyntax inlineTableSyntax:
+                    metadata = new TomlPropertyMetadata
+                    {
+                        DisplayKind = TomlPropertyDisplayKind.InlineTable
+                    };
+                    break;
+                case IntegerValueSyntax integerValueSyntax:
+                {
+                    var tokenKind = integerValueSyntax.Token?.TokenKind ?? TokenKind.Invalid;
+                    var integerDisplayKind = TomlPropertyDisplayKind.Default;
+                    switch (tokenKind)
+                    {
+                        case TokenKind.IntegerHexa:
+                            integerDisplayKind = TomlPropertyDisplayKind.IntegerHexadecimal;
+                            break;
+                        case TokenKind.IntegerOctal:
+                            integerDisplayKind = TomlPropertyDisplayKind.IntegerOctal;
+                            break;
+                        case TokenKind.IntegerBinary:
+                            integerDisplayKind = TomlPropertyDisplayKind.IntegerBinary;
+                            break;
+                    }
+
+                    if (integerDisplayKind != TomlPropertyDisplayKind.Default)
+                    {
+                        metadata = new TomlPropertyMetadata
+                        {
+                            DisplayKind = integerDisplayKind
+                        };
+                    }
+                }
+                    break;
+            }
+
+            // Add leading and trailing trivias
+            var trivias = ConvertTrivias(keyValue.LeadingTrivia);
+            if (trivias != null && trivias.Count > 0)
+            {
+                metadata ??= new TomlPropertyMetadata();
+                metadata.LeadingTrivia = trivias;
+            }
+
+            var lastChildren = keyValue.Value?.GetChildren(keyValue.Value.ChildrenCount - 1);
+            trivias = ConvertTrivias(lastChildren?.TrailingTrivia);
+            if (trivias != null && trivias.Count > 0)
+            {
+                metadata ??= new TomlPropertyMetadata();
+                metadata.TrailingTrivia = trivias;
+            }
+
+            // Get trailing trivia after end of line
+            trivias = ConvertTrivias(keyValue.EndOfLineToken?.TrailingTrivia);
+            if (trivias != null && trivias.Count > 0)
+            {
+                metadata ??= new TomlPropertyMetadata();
+                metadata.TrailingTriviaAfterEndOfLine = trivias;
+            }
+        }
+        else if (syntax is TableSyntaxBase tableSyntax)
+        {
+            var trivias = ConvertTrivias(tableSyntax.LeadingTrivia);
+            if (trivias != null && trivias.Count > 0)
+            {
+                metadata ??= new TomlPropertyMetadata();
+                metadata.LeadingTrivia = trivias;
+            }
+            var lastChildren = tableSyntax.GetChildren(tableSyntax.ChildrenCount - 1);
+            trivias = ConvertTrivias(lastChildren?.TrailingTrivia);
+            if (trivias != null && trivias.Count > 0)
+            {
+                metadata ??= new TomlPropertyMetadata();
+                metadata.TrailingTrivia = trivias;
+            }
+
+            // Get trailing trivia after end of line
+            trivias = ConvertTrivias(tableSyntax.EndOfLineToken?.TrailingTrivia);
+            if (trivias != null && trivias.Count > 0)
+            {
+                metadata ??= new TomlPropertyMetadata();
+                metadata.TrailingTriviaAfterEndOfLine = trivias;
+            }
+        }
+
+        return metadata;
+    }
+
+
+    private List<TomlSyntaxTriviaMetadata>? ConvertTrivias(List<SyntaxTrivia>? trivias)
+    {
+        if (trivias == null || trivias.Count == 0) return null;
+
+        var trailingDestTrivias = new List<TomlSyntaxTriviaMetadata>();
+        foreach (var trailingTrivia in trivias)
+        {
+            trailingDestTrivias.Add(trailingTrivia);
+        }
+
+        return trailingDestTrivias;
+    }
+
 
     private struct ObjectPath
     {

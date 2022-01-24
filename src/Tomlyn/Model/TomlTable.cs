@@ -14,7 +14,7 @@ namespace Tomlyn.Model
     /// <remarks>
     /// This object keep the order of the inserted key=values
     /// </remarks>
-    public sealed class TomlTable : TomlObject, IDictionary<string, object?>
+    public sealed class TomlTable : TomlObject, IDictionary<string, object?>, ITomlMetadataProvider
     {
         // TODO: optimize the internal by avoiding two structures
         private readonly List<KeyValuePair<string, TomlObject?>> _order;
@@ -36,6 +36,9 @@ namespace Tomlyn.Model
             _order = new List<KeyValuePair<string, TomlObject?>>();
             _map = new Dictionary<string, TomlObject?>();
         }
+
+        /// <inheritdoc/>
+        public TomlPropertiesMetadata? PropertiesMetadata { get; set; }
 
         public IEnumerator<KeyValuePair<string, object?>> GetEnumerator()
         {
@@ -77,7 +80,12 @@ namespace Tomlyn.Model
 
         public void CopyTo(KeyValuePair<string, object?>[] array, int arrayIndex)
         {
-            throw new NotSupportedException();
+            if (arrayIndex + _order.Count > array.Length) throw new ArgumentOutOfRangeException(nameof(arrayIndex));
+            for (var i = 0; i < _order.Count; i++)
+            {
+                var item = _order[i];
+                array[i + arrayIndex] = new KeyValuePair<string, object?>(item.Key, ToObject(item.Value));
+            }
         }
 
         public bool Remove(KeyValuePair<string, object?> item)
@@ -188,5 +196,6 @@ namespace Tomlyn.Model
             if (documentSyntax.HasErrors) throw new InvalidOperationException($"The document has errors: {documentSyntax.Diagnostics}");
             return documentSyntax.ToModel<TomlTable>();
         }
+
     }
 }

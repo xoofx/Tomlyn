@@ -3,6 +3,8 @@
 // See license.txt file in the project root for full license information.
 using System;
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Reflection;
 using System.Runtime.Serialization;
 using System.Text;
@@ -64,7 +66,7 @@ namespace Tomlyn
         /// <param name="sourcePath">An optional path/file name to identify errors</param>
         /// <param name="options">The options for the mapping.</param>
         /// <returns>A parsed TOML document</returns>
-        public static bool TryParseToModel<T>(string text, out T? model, out DiagnosticsBag? diagnostics, string? sourcePath = null, TomlModelOptions? options = null) where T : class, new()
+        public static bool TryParseToModel<T>(string text, [NotNullWhen(true)] out T? model, [NotNullWhen(false)] out DiagnosticsBag? diagnostics, string? sourcePath = null, TomlModelOptions? options = null) where T : class, new()
         {
             var syntax = Parse(text, sourcePath);
             if (syntax.HasErrors)
@@ -135,11 +137,11 @@ namespace Tomlyn
         /// <param name="diagnostics">The diagnostics if this method returns false.</param>
         /// <param name="options">The options for the mapping.</param>
         /// <returns><c>true</c> if the mapping was successful; <c>false</c> otherwise. In that case the output <paramref name="diagnostics"/> will contain error messages.</returns>
-        public static bool TryToModel<T>(this DocumentSyntax syntax, out T model, out DiagnosticsBag? diagnostics, TomlModelOptions? options = null) where T : class, new()
+        public static bool TryToModel<T>(this DocumentSyntax syntax, [NotNullWhen(true)] out T? model, [NotNullWhen(false)] out DiagnosticsBag? diagnostics, TomlModelOptions? options = null) where T : class, new()
         {
             model = new T();
-            var context = new DynamicModelContext(options ?? new TomlModelOptions());
-            SyntaxTransform visitor = new SyntaxTransform(context, model);
+            var context = new DynamicModelReadContext(options ?? new TomlModelOptions());
+            SyntaxToModelTransform visitor = new SyntaxToModelTransform(context, model);
             visitor.Visit(syntax);
             if (context.Diagnostics.HasErrors)
             {
@@ -163,6 +165,15 @@ namespace Tomlyn
             var validator = new SyntaxValidator(doc.Diagnostics);
             validator.Visit(doc);
             return doc;
+        }
+
+        public static string ToString<T>(T model, TomlModelOptions? options = null) where T : class
+        {
+            var writer = new StringWriter();
+            var context = new DynamicModelWriteContext(options ?? new TomlModelOptions(), writer);
+            var serializer = new ModelToTomlTransform(model, context);
+            serializer.Run();
+            return writer.ToString();
         }
     }
 }

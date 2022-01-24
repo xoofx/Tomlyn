@@ -30,7 +30,7 @@ internal readonly struct ReflectionObjectInfo
 
     public static ReflectionObjectInfo Get(Type type)
     {
-        if (type == typeof(string) || type.IsPrimitive)
+        if (type == typeof(string) || type.IsPrimitive || type == typeof(TomlDateTime) || type == typeof(DateTime) || type == typeof(DateTimeOffset) || type == typeof(DateTimeValue))
         {
             return new ReflectionObjectInfo(ReflectionObjectKind.Primitive);
         }

@@ -68,6 +68,19 @@ namespace Tomlyn.Tests
                     Console.WriteLine(expectedJsonAsString);
 
                     Assert.AreEqual(expectedJsonAsString, computedJsonAsString);
+
+                    DisplayHeader("toml from model");
+                    var tomlFromModel = Toml.ToString(model);
+                    Console.WriteLine(tomlFromModel);
+
+                    var model2 = Toml.ParseToModel<TomlTable>(tomlFromModel);
+                    var computedJson2 = ModelHelper.ToJson(model2);
+                    var computedJson2AsString = computedJson2.ToString(Formatting.Indented);
+
+                    DisplayHeader("json2");
+                    Console.WriteLine(computedJson2AsString);
+
+                    Assert.AreEqual(expectedJsonAsString, computedJson2AsString);
                     break;
                 case InvalidSpec:
                     Assert.True(doc.HasErrors, "The TOML requires parsing/validation errors");

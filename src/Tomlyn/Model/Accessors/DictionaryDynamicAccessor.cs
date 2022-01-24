@@ -3,6 +3,7 @@
 // See license.txt file in the project root for full license information.
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection;
@@ -14,7 +15,7 @@ internal class DictionaryDynamicAccessor : ObjectDynamicAccessor
 {
     private readonly DictionaryAccessor _dictionaryAccessor;
 
-    public DictionaryDynamicAccessor(DynamicModelContext context, Type type, Type keyType, Type valueType) : base(context, type)
+    public DictionaryDynamicAccessor(DynamicModelReadContext context, Type type, Type keyType, Type valueType) : base(context, type)
     {
         if (TargetType == typeof(TomlTable))
         {
@@ -28,9 +29,14 @@ internal class DictionaryDynamicAccessor : ObjectDynamicAccessor
             }
             else
             {
-                _dictionaryAccessor = new SlowDictionaryAccessor(TargetType, keyType, valueType);
+                _dictionaryAccessor = new SlowDictionaryAccessor(context, TargetType, keyType, valueType);
             }
         }
+    }
+
+    public override IEnumerable<KeyValuePair<string, object?>> GetProperties(object obj)
+    {
+        return _dictionaryAccessor.GetElements(obj);
     }
 
     public override bool TryGetPropertyValue(SourceSpan span, object obj, string name, out object? value)
@@ -117,6 +123,8 @@ internal class DictionaryDynamicAccessor : ObjectDynamicAccessor
 
         public Type ValueType { get; }
 
+        public abstract IEnumerable<KeyValuePair<string, object?>> GetElements(object dictionary);
+
         public abstract bool TryGetValue(object dictionary, object key, out object? value);
 
         public abstract void SetKeyValue(object dictionary, object key, object value);
@@ -128,6 +136,11 @@ internal class DictionaryDynamicAccessor : ObjectDynamicAccessor
 
         private TomlTableAccessor() : base(typeof(string), typeof(object))
         {
+        }
+
+        public override IEnumerable<KeyValuePair<string, object?>> GetElements(object dictionary)
+        {
+            return ((TomlTable)dictionary);
         }
 
         public override bool TryGetValue(object dictionary, object key, out object? value)
@@ -149,24 +162,31 @@ internal class DictionaryDynamicAccessor : ObjectDynamicAccessor
         {
         }
 
+        public override IEnumerable<KeyValuePair<string, object?>> GetElements(object dictionary)
+        {
+            return ((IDictionary<string, object?>)dictionary);
+        }
+
         public override bool TryGetValue(object dictionary, object key, out object? value)
         {
-            return ((IDictionary<string, object>)dictionary).TryGetValue((string)key, out value);
+            return ((IDictionary<string, object?>)dictionary).TryGetValue((string)key, out value);
         }
 
         public override void SetKeyValue(object dictionary, object key, object value)
         {
-            ((IDictionary<string, object>)dictionary)[(string)key] = value;
+            ((IDictionary<string, object?>)dictionary)[(string)key] = value;
         }
     }
 
     private sealed class SlowDictionaryAccessor : DictionaryAccessor
     {
+        private readonly DynamicModelReadContext _context;
         private readonly PropertyInfo _propSetter;
         private readonly MethodInfo _methodTryGetValue;
 
-        public SlowDictionaryAccessor(Type dictionaryType, Type keyType, Type valueType) : base(keyType, valueType)
+        public SlowDictionaryAccessor(DynamicModelReadContext context, Type dictionaryType, Type keyType, Type valueType) : base(keyType, valueType)
         {
+            _context = context;
             // Find the property setter
             PropertyInfo? propSetter = null;
             foreach (var prop in dictionaryType.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.FlattenHierarchy))
@@ -197,6 +217,16 @@ internal class DictionaryDynamicAccessor : ObjectDynamicAccessor
             Debug.Assert(methodTryGetValue is not null);
             _methodTryGetValue = methodTryGetValue!;
 
+        }
+
+        public override IEnumerable<KeyValuePair<string, object?>> GetElements(object dictionary)
+        {
+            var it = (IEnumerable)dictionary;
+            var enumerator = (IDictionaryEnumerator)it.GetEnumerator();
+            while (enumerator.MoveNext())
+            {
+                yield return new KeyValuePair<string, object?>((string)_context.ConvertTo!(enumerator.Key, typeof(string)), enumerator.Value);
+            }
         }
 
         public override bool TryGetValue(object dictionary, object key, out object? value)

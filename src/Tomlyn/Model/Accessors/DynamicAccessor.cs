@@ -4,13 +4,13 @@ namespace Tomlyn.Model.Accessors;
 
 internal abstract class DynamicAccessor
 {
-    protected DynamicAccessor(DynamicModelContext context, Type targetType)
+    protected DynamicAccessor(DynamicModelReadContext context, Type targetType)
     {
         Context = context;
         TargetType = targetType;
     }
 
-    public DynamicModelContext Context { get; }
+    public DynamicModelReadContext Context { get; }
     
     public Type TargetType { get; }
 

@@ -4,7 +4,7 @@ namespace Tomlyn.Model.Accessors;
 
 internal sealed class PrimitiveDynamicAccessor : DynamicAccessor
 {
-    public PrimitiveDynamicAccessor(DynamicModelContext context, Type targetType, bool isNullable) : base(context, targetType)
+    public PrimitiveDynamicAccessor(DynamicModelReadContext context, Type targetType, bool isNullable) : base(context, targetType)
     {
         IsNullable = isNullable;
     }

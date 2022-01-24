@@ -1,16 +1,17 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using Tomlyn.Model.Accessors;
 using Tomlyn.Syntax;
 
 namespace Tomlyn.Model;
 
-internal class DynamicModelContext
+internal class DynamicModelReadContext
 {
     private readonly Dictionary<Type, DynamicAccessor> _accessors;
 
-    public DynamicModelContext(TomlModelOptions options)
+    public DynamicModelReadContext(TomlModelOptions options)
     {
         GetPropertyName = options.GetPropertyName;
         CreateInstance = options.CreateInstance;

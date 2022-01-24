@@ -34,46 +34,17 @@ namespace Tomlyn.Model
             switch (Kind)
             {
                 case ObjectKind.OffsetDateTime:
-                    if (Value.OffsetKind == DateTimeValueOffsetKind.None || Value.OffsetKind == DateTimeValueOffsetKind.Zero)
-                    {
-                        var time = Value.DateTime.ToUniversalTime();
-                        if (time.Millisecond == 0) return time.ToString($"yyyy-MM-dd'T'HH:mm:ssZ", CultureInfo.InvariantCulture);
-                        return time.ToString($"yyyy-MM-dd'T'HH:mm:ss.{GetFormatPrecision(Value.SecondPrecision)}Z", CultureInfo.InvariantCulture);
-                    }
-                    else
-                    {
-                        var time = Value.DateTime.ToLocalTime();
-                        if (time.Millisecond == 0) return time.ToString($"yyyy-MM-dd'T'HH:mm:sszzz", CultureInfo.InvariantCulture);
-                        return time.ToString($"yyyy-MM-dd'T'HH:mm:ss.{GetFormatPrecision(Value.SecondPrecision)}zzz", CultureInfo.InvariantCulture);
-                    }
+                    return Value.ToString(TomlPropertyDisplayKind.OffsetDateTime);
                 case ObjectKind.LocalDateTime:
-                    if (Value.DateTime.Millisecond == 0) return Value.DateTime.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
-                    return Value.DateTime.ToString($"yyyy-MM-dd'T'HH:mm:ss.{GetFormatPrecision(Value.SecondPrecision)}", CultureInfo.InvariantCulture);
+                    return Value.ToString(TomlPropertyDisplayKind.LocalDateTime);
                 case ObjectKind.LocalDate:
-                    return Value.DateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                    return Value.ToString(TomlPropertyDisplayKind.LocalDate);
                 case ObjectKind.LocalTime:
-                    return Value.DateTime.Millisecond == 0 ? Value.DateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture) : Value.DateTime.ToString($"HH:mm:ss.{GetFormatPrecision(Value.SecondPrecision)}", CultureInfo.InvariantCulture);
+                    return Value.ToString(TomlPropertyDisplayKind.LocalTime);
             }
             // Return empty, should never happen as the constructor is protecting us
             return string.Empty;
         }
-
-        private string GetFormatPrecision(int precision)
-        {
-            switch (precision)
-            {
-                case 1: return "f";
-                case 2: return "ff";
-                case 3: return "fff";
-                case 4: return "ffff";
-                case 5: return "fffff";
-                case 6: return "ffffff";
-                case 7: return "fffffff";
-                default:
-                    return "fff";
-            }
-        }
-
 
         TypeCode IConvertible.GetTypeCode()
         {

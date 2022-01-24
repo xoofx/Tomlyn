@@ -12,7 +12,7 @@ internal class ListDynamicAccessor : DynamicAccessor
     private readonly PropertyInfo? _propCount;
     private readonly MethodInfo? _addMethod;
 
-    public ListDynamicAccessor(DynamicModelContext context, Type type, Type elementType) : base(context, type)
+    public ListDynamicAccessor(DynamicModelReadContext context, Type type, Type elementType) : base(context, type)
     {
         ElementType = elementType;
 
@@ -58,7 +58,40 @@ internal class ListDynamicAccessor : DynamicAccessor
     }
 
     public Type ElementType { get; }
-    
+
+    public IEnumerable<object?> GetElements(object obj)
+    {
+        if (obj is IEnumerable<object?> it)
+        {
+            return it;
+        }
+        else if (obj is IEnumerable oldIt)
+        {
+            return EnumToEnumObject(oldIt);
+        }
+        else
+        {
+            return EnumFromCollection(obj);
+        }
+    }
+
+    private IEnumerable<object?> EnumFromCollection(object obj)
+    {
+        var count = GetCount(obj);
+        for (int i = 0; i < count; i++)
+        {
+            yield return GetElementAt(obj, i);
+        }
+    }
+
+    private static IEnumerable<object?> EnumToEnumObject(IEnumerable it)
+    {
+        foreach (var obj in it)
+        {
+            yield return obj;
+        }
+    }
+
     public int GetCount(object list)
     {
         switch (list)
@@ -74,7 +107,7 @@ internal class ListDynamicAccessor : DynamicAccessor
         }
     }
     
-    public object? GetElement(object list, int index)
+    public object? GetElementAt(object list, int index)
     {
         switch (list)
         {
@@ -100,7 +133,7 @@ internal class ListDynamicAccessor : DynamicAccessor
             case TomlTableArray array:
                 return array[array.Count - 1];
             default:
-                return GetElement(list, GetCount(list) - 1);
+                return GetElementAt(list, GetCount(list) - 1);
         }
     }
 

@@ -306,6 +306,11 @@ id = ""id3""";
             sub = model.SubModels[2];
             Assert.AreEqual("id3", sub.Id);
             Assert.False(sub.Publish);
+
+
+            var result = Toml.ToString(model);
+
+
         }
 
         [Test]
@@ -371,15 +376,30 @@ id3 = ""id3"" # error
 
             var model = syntax.ToModel();
 
-            var serializer = JsonSerializer.Create(new JsonSerializerSettings() { Formatting = Formatting.Indented });
-            var writer = new StringWriter();
-            serializer.Serialize(writer, model);
-            var jsonResult = writer.ToString();
+            var jsonResult = ToJson(model);
 
             StandardTests.DisplayHeader("json");
             Console.WriteLine(jsonResult);
 
             AssertHelper.AreEqualNormalizeNewLine(expectedJson, jsonResult);
+
+            StandardTests.DisplayHeader("toml");
+            var toml = Toml.ToString(model);
+            Console.WriteLine(toml);
+
+            StandardTests.DisplayHeader("json2");
+            var model2 = Toml.ParseToModel<TomlTable>(toml);
+            var json2 = ToJson(model2);
+            Console.WriteLine(json2);
+            AssertHelper.AreEqualNormalizeNewLine(expectedJson, json2);
+        }
+
+        private static string ToJson(object model)
+        {
+            var serializer = JsonSerializer.Create(new JsonSerializerSettings() { Formatting = Formatting.Indented });
+            var writer = new StringWriter();
+            serializer.Serialize(writer, model);
+            return writer.ToString();
         }
 
         public class TestModel
