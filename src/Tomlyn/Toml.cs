@@ -24,62 +24,6 @@ namespace Tomlyn
         public static readonly string Version = ((AssemblyFileVersionAttribute)typeof(Toml).Assembly.GetCustomAttributes(typeof(AssemblyFileVersionAttribute), false)[0]).Version;
 
         /// <summary>
-        /// Gets all the token from the specified toml text.
-        /// </summary>
-        /// <param name="text">A toml text.</param>
-        /// <param name="sourcePath">The source path associated with the text.</param>
-        /// <param name="includeHidden"><c>true</c></param>
-        /// <param name="diagnostics">An optional diagnostics that will contain diagnostics messages generated while lexing.</param>
-        /// <returns>A list of tokens.</returns>
-        public static IEnumerable<SyntaxTokenValue> Tokenize(string text, string? sourcePath = null,
-            bool includeHidden = true, DiagnosticsBag? diagnostics = null)
-        {
-            var textView = new StringSourceView(text, sourcePath ?? string.Empty);
-            var lexer = new Lexer<StringSourceView, StringCharacterIterator>(textView);
-            while (lexer.MoveNext())
-            {
-                var token = lexer.Token;
-                if (includeHidden || !token.Kind.IsHidden())
-                {
-                    yield return lexer.Token;
-                }
-            }
-
-            if (diagnostics is not null)
-            {
-                diagnostics.AddRange(lexer.Errors);
-            }
-        }
-
-        /// <summary>
-        /// Gets all the token from the specified toml text.
-        /// </summary>
-        /// <param name="utf8Bytes">A toml text.</param>
-        /// <param name="sourcePath">The source path associated with the text.</param>
-        /// <param name="includeHidden"><c>true</c></param>
-        /// <param name="diagnostics">An optional diagnostics that will contain diagnostics messages generated while lexing.</param>
-        /// <returns>A list of tokens.</returns>
-        public static IEnumerable<SyntaxTokenValue> Tokenize(byte[] utf8Bytes, string? sourcePath = null,
-            bool includeHidden = true, DiagnosticsBag? diagnostics = null)
-        {
-            var textView = new StringUtf8SourceView(utf8Bytes, sourcePath ?? string.Empty);
-            var lexer = new Lexer<StringUtf8SourceView, StringCharacterUtf8Iterator>(textView);
-            while (lexer.MoveNext())
-            {
-                var token = lexer.Token;
-                if (includeHidden || !token.Kind.IsHidden())
-                {
-                    yield return lexer.Token;
-                }
-            }
-
-            if (diagnostics is not null)
-            {
-                diagnostics.AddRange(lexer.Errors);
-            }
-        }
-
-        /// <summary>
         /// Parses a text to a TOML document.
         /// </summary>
         /// <param name="text">A string representing a TOML document</param>
