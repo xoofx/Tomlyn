@@ -220,8 +220,11 @@ internal class ModelToTomlTransform
                     WriteLeadingTrivia(name);
                 }
 
-                WriteKeyValue(name, prop.Value, propToInline);
-                if (!inline)
+                var valueAccessor = WriteKeyValue(name, prop.Value, propToInline);
+
+                // Special case to not output duplicated new lines that were already handled
+                // WriteKeyValue
+                if (!inline && (valueAccessor is PrimitiveDynamicAccessor || propToInline))
                 {
                     WriteTrailingTrivia(name);
                     _writer.WriteLine();
@@ -277,10 +280,8 @@ internal class ModelToTomlTransform
         }
     }
 
-    private void WriteKeyValue(string name, object? value, bool inline)
+    private DynamicAccessor WriteKeyValue(string name, object value, bool inline)
     {
-        if (value is null) return;
-
         var accessor = _context.GetAccessor(value.GetType());
 
         switch (accessor)
@@ -348,6 +349,8 @@ internal class ModelToTomlTransform
             default:
                 throw new ArgumentOutOfRangeException(nameof(accessor));
         }
+
+        return accessor;
     }
 
     private TomlPropertyDisplayKind GetDisplayKind(string name)

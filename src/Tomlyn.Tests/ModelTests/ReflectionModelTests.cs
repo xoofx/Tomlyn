@@ -172,6 +172,32 @@ id3 = ""id3"" # error
             StringAssert.Contains("id3", diag.Message);
         }
 
+        [Test]
+        public void TestCommentRoundtripWithModel()
+        {
+            var input = @"
+# This is comment before
+name = 1 # This is a comment
+
+# This is a comment before a table
+[table] # a comment after an table
+key = 1
+
+# A Comment before a table array
+[[array]] # a comment after a table array
+key2 = 3
+# This is a comment after a key
+";
+            StandardTests.DisplayHeader("input");
+            Console.WriteLine(input);
+            var model = Toml.ToModel(input);
+            var toml2 = Toml.FromModel(model);
+            StandardTests.DisplayHeader("toml - write back");
+            Console.WriteLine(toml2);
+            
+            Assert.AreEqual(input, toml2);
+        }
+
         public class SimpleModel
         {
             public SimpleModel()
