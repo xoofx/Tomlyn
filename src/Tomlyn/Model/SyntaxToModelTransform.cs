@@ -257,21 +257,7 @@ internal class SyntaxToModelTransform : SyntaxVisitor
 
     public override void Visit(DateTimeValueSyntax dateTimeValueSyntax)
     {
-        switch (dateTimeValueSyntax.Kind)
-        {
-            case SyntaxKind.OffsetDateTime:
-                _currentValue = new TomlDateTime(ObjectKind.OffsetDateTime, dateTimeValueSyntax.Value);
-                break;
-            case SyntaxKind.LocalDateTime:
-                _currentValue = new TomlDateTime(ObjectKind.LocalDateTime, dateTimeValueSyntax.Value);
-                break;
-            case SyntaxKind.LocalDate:
-                _currentValue = new TomlDateTime(ObjectKind.LocalDate, dateTimeValueSyntax.Value);
-                break;
-            case SyntaxKind.LocalTime:
-                _currentValue = new TomlDateTime(ObjectKind.LocalTime, dateTimeValueSyntax.Value);
-                break;
-        }
+        _currentValue = dateTimeValueSyntax.Value;
     }
 
     public override void Visit(FloatValueSyntax floatValueSyntax)
@@ -358,8 +344,11 @@ internal class SyntaxToModelTransform : SyntaxVisitor
                     var dateDisplayKind = TomlPropertyDisplayKind.Default;
                     switch (tokenKind)
                     {
-                        case TokenKind.OffsetDateTime:
-                            dateDisplayKind = TomlPropertyDisplayKind.OffsetDateTime;
+                        case TokenKind.OffsetDateTimeByZ:
+                            dateDisplayKind = TomlPropertyDisplayKind.OffsetDateTimeByZ;
+                            break;
+                        case TokenKind.OffsetDateTimeByNumber:
+                            dateDisplayKind = TomlPropertyDisplayKind.OffsetDateTimeByNumber;
                             break;
                         case TokenKind.LocalDateTime:
                             dateDisplayKind = TomlPropertyDisplayKind.LocalDateTime;

@@ -16,9 +16,8 @@ namespace Tomlyn.Model
     /// </remarks>
     public sealed class TomlTable : TomlObject, IDictionary<string, object?>, ITomlMetadataProvider
     {
-        // TODO: optimize the internal by avoiding two structures
-        private readonly List<KeyValuePair<string, TomlObject?>> _order;
-        private readonly Dictionary<string, TomlObject?> _map;
+        private readonly List<KeyValuePair<string, ValueHolder>> _order;
+        private readonly Dictionary<string, ValueHolder> _map;
 
         /// <summary>
         /// Creates an instance of a <see cref="TomlTable"/>
@@ -33,8 +32,8 @@ namespace Tomlyn.Model
         /// <param name="inline"></param>
         public TomlTable(bool inline) : base(inline ? ObjectKind.InlineTable : ObjectKind.Table)
         {
-            _order = new List<KeyValuePair<string, TomlObject?>>();
-            _map = new Dictionary<string, TomlObject?>();
+            _order = new List<KeyValuePair<string, ValueHolder>>();
+            _map = new Dictionary<string, ValueHolder>();
         }
 
         /// <inheritdoc/>
@@ -42,18 +41,10 @@ namespace Tomlyn.Model
 
         public IEnumerator<KeyValuePair<string, object?>> GetEnumerator()
         {
+            
             foreach (var keyPair in _order)
             {
-                yield return new KeyValuePair<string, object?>(keyPair.Key, ToObject(keyPair.Value));
-            }
-        }
-
-
-        public IEnumerable<KeyValuePair<string, TomlObject?>> GetTomlEnumerator()
-        {
-            foreach (var keyPair in _order)
-            {
-                yield return new KeyValuePair<string, TomlObject?>(keyPair.Key, keyPair.Value);
+                yield return new KeyValuePair<string, object?>(keyPair.Key, keyPair.Value.Target);
             }
         }
 
@@ -62,7 +53,7 @@ namespace Tomlyn.Model
             return GetEnumerator();
         }
 
-        public void Add(KeyValuePair<string, object?> item)
+        void ICollection<KeyValuePair<string, object?>>.Add(KeyValuePair<string, object?> item)
         {
             Add(item.Key, item.Value);
         }
@@ -73,24 +64,44 @@ namespace Tomlyn.Model
             _order.Clear();
         }
 
-        public bool Contains(KeyValuePair<string, object?> item)
+        bool ICollection<KeyValuePair<string, object?>>.Contains(KeyValuePair<string, object?> item)
         {
-            throw new NotSupportedException();
+            foreach (var pair in _order)
+            {
+                if (pair.Key == item.Key)
+                {
+                    return pair.Value.Target == item.Value;
+                }
+            }
+
+            return false;
         }
 
-        public void CopyTo(KeyValuePair<string, object?>[] array, int arrayIndex)
+        void ICollection<KeyValuePair<string, object?>>.CopyTo(KeyValuePair<string, object?>[] array, int arrayIndex)
         {
             if (arrayIndex + _order.Count > array.Length) throw new ArgumentOutOfRangeException(nameof(arrayIndex));
             for (var i = 0; i < _order.Count; i++)
             {
                 var item = _order[i];
-                array[i + arrayIndex] = new KeyValuePair<string, object?>(item.Key, ToObject(item.Value));
+                array[i + arrayIndex] = new KeyValuePair<string, object?>(item.Key, item.Value.Target);
             }
         }
 
-        public bool Remove(KeyValuePair<string, object?> item)
+        bool ICollection<KeyValuePair<string, object?>>.Remove(KeyValuePair<string, object?> item)
         {
-            throw new NotSupportedException();
+            foreach (var keyPair in _order)
+            {
+                if (keyPair.Key == item.Key)
+                {
+                    if (keyPair.Value == item.Value)
+                    {
+                        Remove(item.Key);
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         public int Count => _map.Count;
@@ -100,9 +111,9 @@ namespace Tomlyn.Model
         public void Add(string key, object? value)
         {
             if (value == null) throw new ArgumentNullException(nameof(value));
-            var toml = ToTomlObject(value);
-            _map.Add(key, toml);
-            _order.Add(new KeyValuePair<string, TomlObject?>(key, toml));
+            var valueHolder = new ValueHolder(value);
+            _map.Add(key, valueHolder);
+            _order.Add(new KeyValuePair<string, ValueHolder>(key, valueHolder));
         }
 
         public bool ContainsKey(string key)
@@ -130,32 +141,25 @@ namespace Tomlyn.Model
 
         public bool TryGetValue(string key, out object? value)
         {
-            TomlObject? node;
-            if (_map.TryGetValue(key, out node))
+            value = null;
+            if (_map.TryGetValue(key, out var valueHolder))
             {
-                value = ToObject(node);
+                value = valueHolder.Target;
                 return true;
             }
 
-            value = null;
             return false;
-        }
-
-        public bool TryGetToml(string key, out TomlObject? value)
-        {
-            return _map.TryGetValue(key, out value);
         }
 
         public object? this[string key]
         {
-            get => ToObject(_map[key]);
+            get => _map[key].Target;
             set
             {
-                // If the value exist already, try to create it
-                if (_map.TryGetValue(key, out var node) && node is not null)
+                // The the holder exists, update it.
+                if (_map.TryGetValue(key, out var node))
                 {
-                    node = UpdateObject(node, value);
-                    _map[key] = node;
+                    node.Target = value;
                 }
                 else
                 {
@@ -184,7 +188,7 @@ namespace Tomlyn.Model
                 var list = new List<object?>();
                 foreach (var valuePair in _order)
                 {
-                    list.Add(ToObject(valuePair.Value));
+                    list.Add(valuePair.Value.Target);
                 }
                 return list;
             }
@@ -197,5 +201,14 @@ namespace Tomlyn.Model
             return documentSyntax.ToModel<TomlTable>();
         }
 
+        private class ValueHolder
+        {
+            public ValueHolder(object? target)
+            {
+                Target = target;
+            }
+
+            public object? Target { get; set; }
+        }
     }
 }

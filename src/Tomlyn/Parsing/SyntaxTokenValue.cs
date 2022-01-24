@@ -10,7 +10,7 @@ namespace Tomlyn.Parsing
     /// <summary>
     /// A lightweight token struct to avoid GC allocations.
     /// </summary>
-    internal readonly struct SyntaxTokenValue : IEquatable<SyntaxTokenValue>
+    public readonly struct SyntaxTokenValue : IEquatable<SyntaxTokenValue>
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="SyntaxTokenValue"/> struct.
@@ -63,7 +63,7 @@ namespace Tomlyn.Parsing
             return End.Offset < text.Length ? text.Substring(Start.Offset, End.Offset - Start.Offset + 1) : null;
         }
 
-        public string? GetText<TTextView>(TTextView text) where TTextView : IStringView
+        internal string? GetText<TTextView>(TTextView text) where TTextView : IStringView
         {
             if (Kind == TokenKind.Eof)
             {

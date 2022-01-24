@@ -24,7 +24,9 @@ namespace Tomlyn.Model
 
         Float,
 
-        OffsetDateTime,
+        OffsetDateTimeByZ,
+
+        OffsetDateTimeByNumber,
 
         LocalDateTime,
 

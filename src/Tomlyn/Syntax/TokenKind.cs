@@ -18,7 +18,8 @@ namespace Tomlyn.Syntax
 
         Comment,
 
-        OffsetDateTime,
+        OffsetDateTimeByZ,
+        OffsetDateTimeByNumber,
         LocalDateTime,
         LocalDate,
         LocalTime,

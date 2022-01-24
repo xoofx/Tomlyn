@@ -70,7 +70,8 @@ public enum TomlPropertyDisplayKind
 {
     Default = 0,
 
-    OffsetDateTime,
+    OffsetDateTimeByZ,
+    OffsetDateTimeByNumber,
     LocalDateTime,
     LocalDate,
     LocalTime,

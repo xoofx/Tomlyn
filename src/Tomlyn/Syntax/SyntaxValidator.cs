@@ -52,8 +52,11 @@ namespace Tomlyn.Syntax
                 case DateTimeValueSyntax time:
                     switch (time.Kind)
                     {
-                        case SyntaxKind.OffsetDateTime:
-                            kind = ObjectKind.OffsetDateTime;
+                        case SyntaxKind.OffsetDateTimeByZ:
+                            kind = ObjectKind.OffsetDateTimeByZ;
+                            break;
+                        case SyntaxKind.OffsetDateTimeByNumber:
+                            kind = ObjectKind.OffsetDateTimeByNumber;
                             break;
                         case SyntaxKind.LocalDateTime:
                             kind = ObjectKind.LocalDateTime;

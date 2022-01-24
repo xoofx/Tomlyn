@@ -25,6 +25,17 @@ namespace Tomlyn.Syntax
             _messages = new List<DiagnosticMessage>();
         }
 
+        /// <summary>
+        /// Creates a new instance of a <see cref="DiagnosticsBag"/>.
+        /// </summary>
+        /// <param name="messages">An existing list of messages.</param>
+        public DiagnosticsBag(IEnumerable<DiagnosticMessage> messages) : this()
+        {
+            foreach (var message in messages)
+            {
+                Add(message);
+            }
+        }
 
         /// <summary>
         /// Gets the number of messages.
@@ -54,6 +65,18 @@ namespace Tomlyn.Syntax
             if (message.Kind == DiagnosticMessageKind.Error)
             {
                 HasErrors = true;
+            }
+        }
+
+        /// <summary>
+        /// Adds the specified list of messages to this bag.
+        /// </summary>
+        /// <param name="messages">A list of messages.</param>
+        public void AddRange(IEnumerable<DiagnosticMessage> messages)
+        {
+            foreach (var diagnosticMessage in messages)
+            {
+                Add(diagnosticMessage);
             }
         }
 

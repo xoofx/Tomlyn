@@ -24,12 +24,22 @@
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <!--MSBuildGitHash-->
+    <MSBuildGitHashSuppressDirtyWarning>True</MSBuildGitHashSuppressDirtyWarning>
   </PropertyGroup>
 
   <ItemGroup>
     <None Include="../../img/logo.png" Pack="true" PackagePath="" />
     <None Include="../../readme.md" Pack="true" PackagePath="/"/>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(GITHUB_ACTIONS)' != ''">
+    <!-- git versioning -->
+    <PackageReference Include="MSBuildGitHash" Version="2.0.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
     <!--Add support for sourcelink-->
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.0.*" PrivateAssets="All" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.*" PrivateAssets="All" />
   </ItemGroup>
 </Project>

@@ -9,6 +9,17 @@ namespace Tomlyn.Syntax
     public static class TokenKindExtensions
     {
         /// <summary>
+        /// Returns <c>true</c> if the specified token kind is considered as hidden (comments, whitespaces or newline)
+        /// </summary>
+        /// <param name="tokenKind">The token kind.</param>
+        /// <param name="hideNewLine">Makes the newline hidden by default. Default is true.</param>
+        /// <returns><c>true</c> if the specified token kind is considered as hidden; <c>false</c> otherwise</returns>
+        public static bool IsHidden(this TokenKind tokenKind, bool hideNewLine = true)
+        {
+            return tokenKind == TokenKind.Whitespaces || tokenKind == TokenKind.Comment || (tokenKind == TokenKind.NewLine && hideNewLine);
+        }
+
+        /// <summary>
         /// Gets a textual representation of a token kind or null if not applicable (e.g TokenKind.Integer)
         /// </summary>
         /// <param name="kind">A token kind</param>
@@ -106,7 +117,8 @@ namespace Tomlyn.Syntax
         {
             switch (kind)
             {
-                case TokenKind.OffsetDateTime:
+                case TokenKind.OffsetDateTimeByZ:
+                case TokenKind.OffsetDateTimeByNumber:
                 case TokenKind.LocalDateTime:
                 case TokenKind.LocalDate:
                 case TokenKind.LocalTime:

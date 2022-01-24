@@ -10,6 +10,7 @@ namespace System.Diagnostics.CodeAnalysis
     internal class NotNullWhenAttribute : Attribute
     {
         // ReSharper disable once UnusedParameter.Local
+        [ExcludeFromCodeCoverage]
         public NotNullWhenAttribute(bool returnValue)
         {
         }

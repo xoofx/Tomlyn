@@ -12,29 +12,26 @@ namespace Tomlyn.Model
     /// </summary>
     public sealed class TomlArray : TomlObject, IList<object?>
     {
-        private readonly List<TomlObject?> _items;
+        private readonly List<object?> _list;
 
         public TomlArray() : base(ObjectKind.Array)
         {
-            _items = new List<TomlObject?>();
+            _list = new List<object?>();
         }
 
         public TomlArray(int capacity) : base(ObjectKind.Array)
         {
-            _items = new List<TomlObject?>(capacity);
+            _list = new List<object?>(capacity);
         }
 
-        public IEnumerator<object?> GetEnumerator()
+        public List<object?>.Enumerator GetEnumerator()
         {
-            foreach (var item in _items)
-            {
-                yield return ToObject(item);
-            }
+            return _list.GetEnumerator();
         }
 
-        public IEnumerable<TomlObject?> GetTomlEnumerator()
+        IEnumerator<object?>  IEnumerable<object?>.GetEnumerator()
         {
-            return _items;
+            return _list.GetEnumerator();
         }
 
         IEnumerator IEnumerable.GetEnumerator()
@@ -44,54 +41,52 @@ namespace Tomlyn.Model
 
         public void Add(object? item)
         {
-            _items.Add(ToTomlObject(item));
+            _list.Add(item);
         }
 
         public void Clear()
         {
-            _items.Clear();
+            _list.Clear();
         }
 
         public bool Contains(object? item)
         {
-            var toml = ToTomlObject(item);
-            return toml != null && _items.Contains(toml);
+            return item != null && _list.Contains(item);
         }
 
         public void CopyTo(object?[] array, int arrayIndex)
         {
-            throw new NotImplementedException();
+            _list.CopyTo(array, arrayIndex);
         }
 
         public bool Remove(object? item)
         {
-            var toml = ToTomlObject(item);
-            return toml != null && _items.Remove(toml);
+            return item != null && _list.Remove(item);
         }
 
-        public int Count => _items.Count;
+        public int Count => _list.Count;
+
         public bool IsReadOnly => false;
+
         public int IndexOf(object? item)
         {
-            var toml = ToTomlObject(item);
-            return _items.IndexOf(toml);
+            return _list.IndexOf(item);
         }
 
         public void Insert(int index, object? item)
         {
-            var toml = ToTomlObject(item);
-            _items.Insert(index, toml);
+            _list.Insert(index, item);
         }
 
         public void RemoveAt(int index)
         {
-            _items.RemoveAt(index);
+            _list.RemoveAt(index);
         }
 
         public object? this[int index]
         {
-            get => ToObject(_items[index]);
-            set => _items[index] = ToTomlObject(value);
+            get => _list[index];
+            set => _list[index] = value;
         }
     }
 }

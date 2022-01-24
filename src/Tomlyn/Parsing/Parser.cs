@@ -201,7 +201,8 @@ namespace Tomlyn.Parsing
                 case TokenKind.OpenBrace:
                     return ParseInlineTable();
 
-                case TokenKind.OffsetDateTime:
+                case TokenKind.OffsetDateTimeByZ:
+                case TokenKind.OffsetDateTimeByNumber:
                 case TokenKind.LocalDateTime:
                 case TokenKind.LocalDate:
                 case TokenKind.LocalTime:
@@ -244,7 +245,8 @@ namespace Tomlyn.Parsing
                 case TokenKind.StringLiteralMulti:
                 case TokenKind.OpenBracket:
                 case TokenKind.OpenBrace:
-                case TokenKind.OffsetDateTime:
+                case TokenKind.OffsetDateTimeByZ:
+                case TokenKind.OffsetDateTimeByNumber:
                 case TokenKind.LocalDateTime:
                 case TokenKind.LocalDate:
                 case TokenKind.LocalTime:
@@ -269,8 +271,11 @@ namespace Tomlyn.Parsing
 
             switch (_token.Kind)
             {
-                case TokenKind.OffsetDateTime:
-                    datetime = Open(new DateTimeValueSyntax(SyntaxKind.OffsetDateTime));
+                case TokenKind.OffsetDateTimeByZ:
+                    datetime = Open(new DateTimeValueSyntax(SyntaxKind.OffsetDateTimeByZ));
+                    break;
+                case TokenKind.OffsetDateTimeByNumber:
+                    datetime = Open(new DateTimeValueSyntax(SyntaxKind.OffsetDateTimeByNumber));
                     break;
                 case TokenKind.LocalDateTime:
                     datetime = Open(new DateTimeValueSyntax(SyntaxKind.LocalDateTime));
@@ -285,7 +290,7 @@ namespace Tomlyn.Parsing
                     throw new InvalidOperationException("The datetime kind `{_token.Kind}` is not supported");
             }
 
-            datetime.Value = (DateTimeValue)(_token.Value ?? (DateTimeValue)default);
+            datetime.Value = (TomlDateTime)(_token.Value ?? (TomlDateTime)default);
             datetime.Token = EatToken();
             return Close(datetime);
         }
@@ -632,17 +637,12 @@ namespace Tomlyn.Parsing
             bool result;
 
             // Skip trivias
-            while ((result = _lexer.MoveNext()) && IsHidden(_lexer.Token.Kind))
+            while ((result = _lexer.MoveNext()) && _lexer.Token.Kind.IsHidden(_hideNewLine))
             {
                 _currentTrivias.Add(new SyntaxTrivia { Span = new SourceSpan(_lexer.Source.SourcePath, _lexer.Token.Start, _lexer.Token.End), Kind = _lexer.Token.Kind, Text = _lexer.Token.GetText(_lexer.Source) });
             }
 
             _token = result ? _lexer.Token : new SyntaxTokenValue(TokenKind.Eof, new TextPosition(), new TextPosition());
-        }
-
-        private bool IsHidden(TokenKind tokenKind)
-        {
-            return tokenKind == TokenKind.Whitespaces || tokenKind == TokenKind.Comment || (tokenKind == TokenKind.NewLine && _hideNewLine);
         }
 
         private void LogError(string text)

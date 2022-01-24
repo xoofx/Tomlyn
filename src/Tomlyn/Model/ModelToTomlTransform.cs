@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using Tomlyn.Helpers;
 using Tomlyn.Model.Accessors;
 using Tomlyn.Syntax;
 using Tomlyn.Text;
@@ -40,7 +41,7 @@ internal class ModelToTomlTransform
         }
         else
         {
-            _context.Diagnostics.Error(new SourceSpan(), $"The root object must a class with properties or a dictionary. Cannot be of type {itemAccessor}.");
+            _context.Diagnostics.Error(new SourceSpan(), $"The root object must a class with properties or a dictionary. Cannot be of kind {itemAccessor}.");
         }
     }
 
@@ -261,7 +262,16 @@ internal class ModelToTomlTransform
             }
             else
             {
-                WriteHeaderTableArray();
+                var previousMetadata = _metadataProvider;
+                try
+                {
+                    _metadataProvider = value as ITomlMetadataProvider;
+                    WriteHeaderTableArray();
+                }
+                finally
+                {
+                    _metadataProvider = previousMetadata;
+                }
                 VisitObject((ObjectDynamicAccessor)itemAccessor, value, false);
             }
         }
@@ -314,8 +324,17 @@ internal class ModelToTomlTransform
                     var hasElements = VisitObject(objectAccessor, value, false);
                     if (!hasElements)
                     {
-                        // Force to have a scope to create the object
-                        EnsureScope();
+                        var previousMetadataProvider = _metadataProvider;
+                        _metadataProvider = value as ITomlMetadataProvider;
+                        try
+                        {
+                            // Force to have a scope to create the object
+                            EnsureScope();
+                        }
+                        finally
+                        {
+                            _metadataProvider = previousMetadataProvider;
+                        }
                     }
                     PopName();
                 }
@@ -462,251 +481,74 @@ internal class ModelToTomlTransform
         }
     }
 
+
     private void WritePrimitive(object primitive, TomlPropertyDisplayKind displayKind)
     {
         if (primitive is bool b)
         {
-            _writer.Write(b ? "true" : "false");
+            _writer.Write(TomlFormatHelper.ToString(b));
         }
         else if (primitive is string s)
         {
-            _writer.Write($"\"{s.EscapeForToml()}\"");
+            _writer.Write(TomlFormatHelper.ToString(s, displayKind));
         }
         else if (primitive is int i32)
         {
-            switch (displayKind)
-            {
-                case TomlPropertyDisplayKind.IntegerHexadecimal:
-                    _writer.Write($"0x{i32:x8}");
-                    break;
-                case TomlPropertyDisplayKind.IntegerOctal:
-                    _writer.Write($"0o{Convert.ToString(i32, 8)}");
-                    break;
-                case TomlPropertyDisplayKind.IntegerBinary:
-                    _writer.Write($"0b{Convert.ToString(i32, 2)}");
-                    break;
-                default:
-                    _writer.Write(i32.ToString(CultureInfo.InvariantCulture));
-                    break;
-            }
+            _writer.Write(TomlFormatHelper.ToString(i32, displayKind));
         }
         else if (primitive is long i64)
         {
-            switch (displayKind)
-            {
-                case TomlPropertyDisplayKind.IntegerHexadecimal:
-                    _writer.Write($"0x{i64:x16}");
-                    break;
-                case TomlPropertyDisplayKind.IntegerOctal:
-                    _writer.Write($"0o{Convert.ToString(i64, 8)}");
-                    break;
-                case TomlPropertyDisplayKind.IntegerBinary:
-                    _writer.Write($"0b{Convert.ToString(i64, 2)}");
-                    break;
-                default:
-                    _writer.Write(i64.ToString(CultureInfo.InvariantCulture));
-                    break;
-            }
+            _writer.Write(TomlFormatHelper.ToString(i64, displayKind));
         }
         else if (primitive is uint u32)
         {
-            switch (displayKind)
-            {
-                case TomlPropertyDisplayKind.IntegerHexadecimal:
-                    _writer.Write($"0x{u32:x8}");
-                    break;
-                case TomlPropertyDisplayKind.IntegerOctal:
-                    _writer.Write($"0o{Convert.ToString(u32, 8)}");
-                    break;
-                case TomlPropertyDisplayKind.IntegerBinary:
-                    _writer.Write($"0b{Convert.ToString(u32, 2)}");
-                    break;
-                default:
-                    _writer.Write(u32.ToString(CultureInfo.InvariantCulture));
-                    break;
-            }
-            _writer.Write(u32.ToString(CultureInfo.InvariantCulture));
+            _writer.Write(TomlFormatHelper.ToString(u32, displayKind));
         }
         else if (primitive is ulong u64)
         {
-            switch (displayKind)
-            {
-                case TomlPropertyDisplayKind.IntegerHexadecimal:
-                    _writer.Write($"0x{u64:x16}");
-                    break;
-                case TomlPropertyDisplayKind.IntegerOctal:
-                    _writer.Write($"0o{Convert.ToString((long)u64, 8)}");
-                    break;
-                case TomlPropertyDisplayKind.IntegerBinary:
-                    _writer.Write($"0b{Convert.ToString((long)u64, 2)}");
-                    break;
-                default:
-                    _writer.Write(u64.ToString(CultureInfo.InvariantCulture));
-                    break;
-            }
-            _writer.Write(u64.ToString(CultureInfo.InvariantCulture));
+            _writer.Write(TomlFormatHelper.ToString(u64, displayKind));
         }
         else if (primitive is sbyte i8)
         {
-            switch (displayKind)
-            {
-                case TomlPropertyDisplayKind.IntegerHexadecimal:
-                    _writer.Write($"0x{i8:x2}");
-                    break;
-                case TomlPropertyDisplayKind.IntegerOctal:
-                    _writer.Write($"0o{Convert.ToString(i8, 8)}");
-                    break;
-                case TomlPropertyDisplayKind.IntegerBinary:
-                    _writer.Write($"0b{Convert.ToString(i8, 2)}");
-                    break;
-                default:
-                    _writer.Write(i8.ToString(CultureInfo.InvariantCulture));
-                    break;
-            }
-            _writer.Write(i8.ToString(CultureInfo.InvariantCulture));
+            _writer.Write(TomlFormatHelper.ToString(i8, displayKind));
         }
         else if (primitive is byte u8)
         {
-            switch (displayKind)
-            {
-                case TomlPropertyDisplayKind.IntegerHexadecimal:
-                    _writer.Write($"0x{u8:x2}");
-                    break;
-                case TomlPropertyDisplayKind.IntegerOctal:
-                    _writer.Write($"0o{Convert.ToString(u8, 8)}");
-                    break;
-                case TomlPropertyDisplayKind.IntegerBinary:
-                    _writer.Write($"0b{Convert.ToString(u8, 2)}");
-                    break;
-                default:
-                    _writer.Write(u8.ToString(CultureInfo.InvariantCulture));
-                    break;
-            }
-            _writer.Write(u8.ToString(CultureInfo.InvariantCulture));
+            _writer.Write(TomlFormatHelper.ToString(u8, displayKind));
         }
         else if (primitive is short i16)
         {
-            switch (displayKind)
-            {
-                case TomlPropertyDisplayKind.IntegerHexadecimal:
-                    _writer.Write($"0x{i16:x2}");
-                    break;
-                case TomlPropertyDisplayKind.IntegerOctal:
-                    _writer.Write($"0o{Convert.ToString(i16, 8)}");
-                    break;
-                case TomlPropertyDisplayKind.IntegerBinary:
-                    _writer.Write($"0b{Convert.ToString(i16, 2)}");
-                    break;
-                default:
-                    _writer.Write(i16.ToString(CultureInfo.InvariantCulture));
-                    break;
-            }
-            _writer.Write(i16.ToString(CultureInfo.InvariantCulture));
+            _writer.Write(TomlFormatHelper.ToString(i16, displayKind));
         }
         else if (primitive is ushort u16)
         {
-            switch (displayKind)
-            {
-                case TomlPropertyDisplayKind.IntegerHexadecimal:
-                    _writer.Write($"0x{u16:x2}");
-                    break;
-                case TomlPropertyDisplayKind.IntegerOctal:
-                    _writer.Write($"0o{Convert.ToString(u16, 8)}");
-                    break;
-                case TomlPropertyDisplayKind.IntegerBinary:
-                    _writer.Write($"0b{Convert.ToString(u16, 2)}");
-                    break;
-                default:
-                    _writer.Write(u16.ToString(CultureInfo.InvariantCulture));
-                    break;
-            }
-            _writer.Write(u16.ToString(CultureInfo.InvariantCulture));
+            _writer.Write(TomlFormatHelper.ToString(u16, displayKind));
         }
         else if (primitive is float f32)
         {
-            _writer.Write(FloatToString(f32));
+            _writer.Write(TomlFormatHelper.ToString(f32));
         }
         else if (primitive is double f64)
         {
-            _writer.Write(DoubleToString(f64));
+            _writer.Write(TomlFormatHelper.ToString(f64));
         }
         else if (primitive is TomlDateTime tomlDateTime)
         {
-            _writer.Write(tomlDateTime);
+            _writer.Write(TomlFormatHelper.ToString(tomlDateTime));
         }
         else if (primitive is DateTime dateTime)
         {
-            WriteDateTime(new DateTimeValue(dateTime, 0, DateTimeValueOffsetKind.None), displayKind);
+            _writer.Write(TomlFormatHelper.ToString(dateTime, displayKind));
         }
         else if (primitive is DateTimeOffset dateTimeOffset)
         {
-            WriteDateTime(new DateTimeValue(dateTimeOffset, 0, DateTimeValueOffsetKind.Zero), displayKind);
-        }
-        else if (primitive is DateTimeValue dateTimeValue)
-        {
-            WriteDateTime(dateTimeValue, displayKind);
+            _writer.Write(TomlFormatHelper.ToString(dateTimeOffset, displayKind));
         }
         else
         {
             // Unexpected
             throw new InvalidOperationException($"Invalid primitive {primitive.GetType().FullName}");
         }
-    }
-
-    private void WriteDateTime(DateTimeValue dateTimeValue, TomlPropertyDisplayKind displayKind)
-    {
-        _writer.Write(dateTimeValue.ToString(displayKind));
-    }
-
-    private static string FloatToString(float value)
-    {
-        if (float.IsNaN(value))
-        {
-            return "nan";
-        }
-        if (float.IsPositiveInfinity(value))
-        {
-            return "+inf";
-        }
-        if (float.IsNegativeInfinity(value))
-        {
-            return "-inf";
-        }
-        return AppendDecimalPoint(value.ToString("g8", CultureInfo.InvariantCulture));
-    }
-
-    private static string DoubleToString(double value)
-    {
-        if (double.IsNaN(value))
-        {
-            return "nan";
-        }
-        if (double.IsPositiveInfinity(value))
-        {
-            return "+inf";
-        }
-        if (double.IsNegativeInfinity(value))
-        {
-            return "-inf";
-        }
-        return AppendDecimalPoint(value.ToString("g16", CultureInfo.InvariantCulture));
-    }
-
-    private static string AppendDecimalPoint(string text)
-    {
-        if (text == "0") return "0.0";
-        for (var i = 0; i < text.Length; i++)
-        {
-            var c = text[i];
-            // Do not append a decimal point if floating point type value
-            // - is in exponential form, or
-            // - already has a decimal point
-            if (c == 'e' || c == 'E' || c == '.')
-            {
-                return text;
-            }
-        }
-        return text + ".0";
     }
 
     private record struct ObjectPath(string Name, bool IsTableArray);

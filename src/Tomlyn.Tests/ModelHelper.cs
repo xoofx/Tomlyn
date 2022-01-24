@@ -5,13 +5,14 @@ using System;
 using System.Globalization;
 using System.Linq;
 using Newtonsoft.Json.Linq;
+using Tomlyn.Helpers;
 using Tomlyn.Model;
 
 namespace Tomlyn.Tests
 {
     public static class ModelHelper
     {
-        public static JToken ToJson(TomlObject obj)
+        public static JToken ToJson(object obj)
         {
             switch (obj)
             {
@@ -19,33 +20,34 @@ namespace Tomlyn.Tests
                 {
                     var value = new JArray();
                     var isLikeTableArray = (tomlArray.Count > 0 && tomlArray[0] is TomlTable);
-                    foreach (var element in tomlArray.GetTomlEnumerator())
+                    foreach (var element in tomlArray)
                     {
                         value.Add(ToJson(element));
                     }
 
                     return value;
                 }
-                case TomlBoolean tomlBoolean:
+                case bool tomlBoolean:
                     return new JObject
                     {
                         {"type", "bool"},
-                        { "value", tomlBoolean.Value.ToString(CultureInfo.InvariantCulture).ToLowerInvariant()}
+                        { "value", tomlBoolean.ToString(CultureInfo.InvariantCulture).ToLowerInvariant()}
                     };
                 case TomlDateTime tomlDateTime:
                     string kindStr = "";
                     switch (tomlDateTime.Kind)
                     {
-                        case ObjectKind.OffsetDateTime:
+                        case TomlDateTimeKind.OffsetDateTimeByZ:
+                        case TomlDateTimeKind.OffsetDateTimeByNumber:
                             kindStr = "datetime";
                             break;
-                        case ObjectKind.LocalDateTime:
+                        case TomlDateTimeKind.LocalDateTime:
                             kindStr = "datetime-local";
                             break;
-                        case ObjectKind.LocalDate:
+                        case TomlDateTimeKind.LocalDate:
                             kindStr = "date-local";
                             break;
-                        case ObjectKind.LocalTime:
+                        case TomlDateTimeKind.LocalTime:
                             kindStr = "time-local";
                             break;
                     }
@@ -54,29 +56,29 @@ namespace Tomlyn.Tests
                         {"type", kindStr},
                         { "value", tomlDateTime.ToString()}
                     };
-                case TomlFloat tomlFloat:
+                case double tomlFloat:
                     return new JObject
                     {
                         {"type", "float"},
-                        { "value", tomlFloat.ToString()}
+                        { "value",  tomlFloat == 0.0 ? "0" : TomlFormatHelper.ToString(tomlFloat)}
                     };
-                case TomlInteger tomlInteger:
+                case long tomlInteger:
                     return new JObject
                     {
                         {"type", "integer"},
-                        { "value", tomlInteger.Value.ToString(CultureInfo.InvariantCulture).ToLowerInvariant()}
+                        { "value", tomlInteger.ToString(CultureInfo.InvariantCulture).ToLowerInvariant()}
                     };
-                case TomlString tomlString:
+                case string tomlString:
                     return new JObject
                     {
                         {"type", "string"},
-                        { "value", tomlString.Value}
+                        { "value", tomlString}
                     };
                 case TomlTable tomlTable:
                 {
                     var json = new JObject();
                     // For the test we order by string key
-                    foreach (var keyPair in tomlTable.GetTomlEnumerator().OrderBy(x => x.Key))
+                    foreach (var keyPair in tomlTable.OrderBy(x => x.Key))
                     {
                         json.Add(keyPair.Key, ToJson(keyPair.Value));
                     }

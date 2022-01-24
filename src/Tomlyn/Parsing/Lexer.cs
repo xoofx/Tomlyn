@@ -595,10 +595,13 @@ namespace Tomlyn.Parsing
                     dateTimeAsString = dateTimeAsString.Substring(1);
                 }
 
-                DateTimeValue datetime;
+                TomlDateTime datetime;
                 if (DateTimeRFC3339.TryParseOffsetDateTime(dateTimeAsString, out datetime))
                 {
-                    _token = new SyntaxTokenValue(TokenKind.OffsetDateTime, start, end, datetime);
+                    var tokenKind = datetime.Kind == TomlDateTimeKind.OffsetDateTimeByZ
+                        ? TokenKind.OffsetDateTimeByZ
+                        : TokenKind.OffsetDateTimeByNumber;
+                    _token = new SyntaxTokenValue(tokenKind, start, end, datetime);
                 }
                 else if (DateTimeRFC3339.TryParseLocalDateTime(dateTimeAsString, out datetime))
                 {
@@ -617,7 +620,7 @@ namespace Tomlyn.Parsing
                     // Try to recover the date using the standard C# (not necessarily RFC3339)
                     if (DateTime.TryParse(dateTimeAsString, CultureInfo.InvariantCulture, DateTimeStyles.AllowInnerWhite, out var rawTime))
                     {
-                        datetime = new DateTimeValue(rawTime, 0, DateTimeValueOffsetKind.None);
+                        datetime = new TomlDateTime(rawTime, 0, TomlDateTimeKind.LocalDateTime);
                         _token = new SyntaxTokenValue(TokenKind.LocalDateTime, start, end, datetime);
 
                         // But we produce an error anyway
@@ -625,7 +628,7 @@ namespace Tomlyn.Parsing
                     }
                     else
                     {
-                        datetime = new DateTimeValue(DateTimeOffset.MinValue, 0, DateTimeValueOffsetKind.None);
+                        datetime = new TomlDateTime(DateTimeOffset.MinValue, 0, TomlDateTimeKind.LocalDateTime);
                         _token = new SyntaxTokenValue(TokenKind.LocalDateTime, start, end, datetime);
                         // But we produce an error anyway
                         AddError($"Unable to parse the date time/offset `{dateTimeAsString}`", start, end);
@@ -705,7 +708,14 @@ namespace Tomlyn.Parsing
             {
                 if (!long.TryParse(numberAsText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var longValue))
                 {
-                    AddError($"Unable to parse integer `{numberAsText}`", start, end);
+                    if (!ulong.TryParse(numberAsText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ulongValue))
+                    {
+                        AddError($"Unable to parse integer `{numberAsText}`", start, end);
+                    }
+                    else
+                    {
+                        longValue = unchecked((long)ulongValue);
+                    }
                 }
 
                 if (hasLeadingZero && longValue != 0)

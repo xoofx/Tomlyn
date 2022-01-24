@@ -11,7 +11,7 @@ using Tomlyn.Model;
 
 namespace Tomlyn.Tests
 {
-    public class ModelTests
+    public class TomlTableModelTests
     {
         [Test]
         public static void TestPrimitives()
@@ -38,7 +38,7 @@ e = 1980-01-20
             Assert.AreEqual(true, model["b"]);
             Assert.AreEqual(1.0, model["c"]);
             Assert.AreEqual("yo", model["d"]);
-            Assert.AreEqual(new DateTimeValue(1980, 01, 20), model["e"]);
+            Assert.AreEqual(new TomlDateTime(1980, 01, 20), model["e"]);
         }
 
         [Test]
@@ -264,109 +264,6 @@ better = 43
             AssertJson(input, json);
         }
 
-        [Test]
-        public void TestReflectionModel()
-        {
-            var input = @"name = ""this is a name""
-values = [""a"", ""b"", ""c"", 1]
-
-int_values = 1
-int_value = 2
-double_value = 2.5
-
-[[sub]]
-id = ""id1""
-publish = true
-
-[[sub]]
-id = ""id2""
-publish = false
-
-[[sub]]
-id = ""id3""";
-            var syntax = Toml.Parse(input);
-            Assert.False(syntax.HasErrors, "The document should not have any errors");
-
-            StandardTests.Dump(input, syntax, syntax.ToString());
-
-            var model = syntax.ToModel<TestModel>();
-
-            Assert.AreEqual("this is a name", model.Name);
-            Assert.AreEqual(new List<string>() {"a", "b", "c", "1"}, model.Values);
-            Assert.AreEqual(new List<int>() { 1 }, model.IntValues);
-            Assert.AreEqual(2, model.IntValue);
-            Assert.AreEqual(2.5, model.DoubleValue);
-            Assert.AreEqual(3, model.SubModels.Count);
-            var sub = model.SubModels[0];
-            Assert.AreEqual("id1", sub.Id);
-            Assert.True(sub.Publish);
-            sub = model.SubModels[1];
-            Assert.AreEqual("id2", sub.Id);
-            Assert.False(sub.Publish);
-            sub = model.SubModels[2];
-            Assert.AreEqual("id3", sub.Id);
-            Assert.False(sub.Publish);
-
-
-            var result = Toml.ToString(model);
-
-
-        }
-
-        [Test]
-        public void TestReflectionModelWithErrors()
-        {
-            var input = @"name = ""this is a name""
-values = [""a"", ""b"", ""c"", 1]
-
-int_values1 = 1  # error
-int_value = 2
-double_value = 2.5
-
-[[sub]]
-id2 = ""id1"" # error
-publish = true
-
-[[sub]]
-id = ""id2""
-publish = false
-
-[[sub]]
-id3 = ""id3"" # error
-"; 
-            var syntax = Toml.Parse(input);
-            Assert.False(syntax.HasErrors, "The document should not have any errors");
-
-            StandardTests.Dump(input, syntax, syntax.ToString());
-
-            var result = syntax.TryToModel<TestModel>(out var model, out var diagnostics);
-
-            Assert.False(result);
-            Assert.NotNull(diagnostics);
-            Assert.NotNull(model);
-
-            foreach (var diagnostic in diagnostics)
-            {
-                Console.WriteLine(diagnostic);
-            }
-
-            // Expecting 3 errors
-            Assert.AreEqual(3, diagnostics.Count);
-
-            // The model is still partially valid
-            Assert.AreEqual("this is a name", model.Name);
-
-            var diag = diagnostics[0];
-            Assert.AreEqual(3, diag.Span.Start.Line);
-            StringAssert.Contains("int_values1", diag.Message);
-            diag = diagnostics[1];
-            Assert.AreEqual(8, diag.Span.Start.Line);
-            StringAssert.Contains("id2", diag.Message);
-            diag = diagnostics[2];
-            Assert.AreEqual(16, diag.Span.Start.Line);
-            StringAssert.Contains("id3", diag.Message);
-        }
-
         private static void AssertJson(string input, string expectedJson)
         {
             var syntax = Toml.Parse(input);
@@ -384,11 +281,11 @@ id3 = ""id3"" # error
             AssertHelper.AreEqualNormalizeNewLine(expectedJson, jsonResult);
 
             StandardTests.DisplayHeader("toml");
-            var toml = Toml.ToString(model);
+            var toml = Toml.FromModel(model);
             Console.WriteLine(toml);
 
             StandardTests.DisplayHeader("json2");
-            var model2 = Toml.ParseToModel<TomlTable>(toml);
+            var model2 = Toml.ToModel<TomlTable>(toml);
             var json2 = ToJson(model2);
             Console.WriteLine(json2);
             AssertHelper.AreEqualNormalizeNewLine(expectedJson, json2);
@@ -400,35 +297,6 @@ id3 = ""id3"" # error
             var writer = new StringWriter();
             serializer.Serialize(writer, model);
             return writer.ToString();
-        }
-
-        public class TestModel
-        {
-            public TestModel()
-            {
-                Values = new List<string>();
-                SubModels = new List<TestSubModel>();
-            }
-
-            public string Name { get; set; }
-            
-            public List<string> Values { get; }
-
-            public List<int> IntValues { get; set; }
-
-            public int IntValue { get; set; }
-
-            public double DoubleValue { get; set; }
-
-            [JsonPropertyName("sub")]
-            public List<TestSubModel> SubModels { get; }
-        }
-
-        public class TestSubModel
-        {
-            public string Id { get; set; }
-
-            public bool Publish { get; set; }
         }
     }
 }

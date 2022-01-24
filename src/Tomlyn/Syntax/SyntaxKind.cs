@@ -16,7 +16,9 @@ namespace Tomlyn.Syntax
 
         Boolean,
 
-        OffsetDateTime,
+        OffsetDateTimeByZ,
+
+        OffsetDateTimeByNumber,
 
         LocalDateTime,
 

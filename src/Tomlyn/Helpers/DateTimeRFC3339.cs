@@ -29,9 +29,8 @@ namespace Tomlyn.Helpers
         //full-time       = partial-time time-offset
 
         //date-time       = full-date "T" full-time
-
-        private static readonly string[] OffsetDateTimeFormats = new[]
-        {            
+        private static readonly string[] OffsetDateTimeFormatsByZ = new[]
+        {
             "yyyy-MM-ddTHH:mm:ssZ",            // With Z postfix
             "yyyy-MM-ddTHH:mm:ss.fZ",
             "yyyy-MM-ddTHH:mm:ss.ffZ",
@@ -40,14 +39,6 @@ namespace Tomlyn.Helpers
             "yyyy-MM-ddTHH:mm:ss.fffffZ",
             "yyyy-MM-ddTHH:mm:ss.ffffffZ",
             "yyyy-MM-ddTHH:mm:ss.fffffffZ",
-            "yyyy-MM-ddTHH:mm:sszzz",          // With time-numoffset
-            "yyyy-MM-ddTHH:mm:ss.fzzz",
-            "yyyy-MM-ddTHH:mm:ss.ffzzz",
-            "yyyy-MM-ddTHH:mm:ss.fffzzz",
-            "yyyy-MM-ddTHH:mm:ss.ffffzzz",
-            "yyyy-MM-ddTHH:mm:ss.fffffzzz",
-            "yyyy-MM-ddTHH:mm:ss.ffffffzzz",
-            "yyyy-MM-ddTHH:mm:ss.fffffffzzz",
 
             // Specs says that T might be omitted
             "yyyy-MM-dd HH:mm:ssZ",            // With Z postfix
@@ -58,6 +49,19 @@ namespace Tomlyn.Helpers
             "yyyy-MM-dd HH:mm:ss.fffffZ",
             "yyyy-MM-dd HH:mm:ss.ffffffZ",
             "yyyy-MM-dd HH:mm:ss.fffffffZ",
+        };
+
+        private static readonly string[] OffsetDateTimeFormatsByNumber = new[]
+        {            
+            "yyyy-MM-ddTHH:mm:sszzz",          // With time-numoffset
+            "yyyy-MM-ddTHH:mm:ss.fzzz",
+            "yyyy-MM-ddTHH:mm:ss.ffzzz",
+            "yyyy-MM-ddTHH:mm:ss.fffzzz",
+            "yyyy-MM-ddTHH:mm:ss.ffffzzz",
+            "yyyy-MM-ddTHH:mm:ss.fffffzzz",
+            "yyyy-MM-ddTHH:mm:ss.ffffffzzz",
+            "yyyy-MM-ddTHH:mm:ss.fffffffzzz",
+
             "yyyy-MM-dd HH:mm:sszzz",          // With time-numoffset
             "yyyy-MM-dd HH:mm:ss.fzzz",
             "yyyy-MM-dd HH:mm:ss.ffzzz",
@@ -67,6 +71,7 @@ namespace Tomlyn.Helpers
             "yyyy-MM-dd HH:mm:ss.ffffffzzz",
             "yyyy-MM-dd HH:mm:ss.fffffffzzz",
         };
+
 
         private static readonly string[] LocalDateTimeFormats = new[]
         {
@@ -103,21 +108,28 @@ namespace Tomlyn.Helpers
             "HH:mm:ss.fffffff",
         };
 
-        public static bool TryParseOffsetDateTime(string str, out DateTimeValue time)
+        public static bool TryParseOffsetDateTime(string str, out TomlDateTime time)
         {
-            return TryParseExactWithPrecision(str.ToUpperInvariant(), OffsetDateTimeFormats, TryParseDateTimeOffset, DateTimeStyles.None, out time);
+            if (!TryParseExactWithPrecision(str.ToUpperInvariant(), OffsetDateTimeFormatsByZ,
+                    TryParseDateTimeOffset, DateTimeStyles.None, TomlDateTimeKind.OffsetDateTimeByZ, out time))
+            {
+                return TryParseExactWithPrecision(str.ToUpperInvariant(), OffsetDateTimeFormatsByNumber,
+                    TryParseDateTimeOffset, DateTimeStyles.None, TomlDateTimeKind.OffsetDateTimeByNumber, out time);
+            }
+
+            return true;
         }
 
-        public static bool TryParseLocalDateTime(string str, out DateTimeValue time)
+        public static bool TryParseLocalDateTime(string str, out TomlDateTime time)
         {
-            return TryParseExactWithPrecision(str.ToUpperInvariant(), LocalDateTimeFormats, TryParseDateTime, DateTimeStyles.AssumeLocal, out time);
+            return TryParseExactWithPrecision(str.ToUpperInvariant(), LocalDateTimeFormats, TryParseDateTime, DateTimeStyles.AssumeLocal, TomlDateTimeKind.LocalDateTime,  out time);
         }
 
-        public static bool TryParseLocalDate(string str, out DateTimeValue time)
+        public static bool TryParseLocalDate(string str, out TomlDateTime time)
         {
             if (DateTime.TryParseExact(str.ToUpperInvariant(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var rawtime))
             {
-                time = new DateTimeValue(rawtime, 0, DateTimeValueOffsetKind.None);
+                time = new TomlDateTime(rawtime, 0, TomlDateTimeKind.LocalDate);
                 return true;
             }
 
@@ -125,9 +137,9 @@ namespace Tomlyn.Helpers
             return false;
         }
 
-        public static bool TryParseLocalTime(string str, out DateTimeValue time)
+        public static bool TryParseLocalTime(string str, out TomlDateTime time)
         {
-            return TryParseExactWithPrecision(str.ToUpperInvariant(), LocalTimeFormats, TryParseDateTime, DateTimeStyles.None, out time);
+            return TryParseExactWithPrecision(str.ToUpperInvariant(), LocalTimeFormats, TryParseDateTime, DateTimeStyles.None, TomlDateTimeKind.LocalTime, out time);
         }
 
         private static readonly ParseDelegate TryParseDateTime = (string text, string format, CultureInfo culture, DateTimeStyles style, out DateTimeOffset time) =>
@@ -145,7 +157,7 @@ namespace Tomlyn.Helpers
         
         private delegate bool ParseDelegate(string text, string format, CultureInfo culture, DateTimeStyles style, out DateTimeOffset time);
 
-        private static bool TryParseExactWithPrecision(string str, string[] formats, ParseDelegate parser, DateTimeStyles style, out DateTimeValue time)
+        private static bool TryParseExactWithPrecision(string str, string[] formats, ParseDelegate parser, DateTimeStyles style, TomlDateTimeKind kind, out TomlDateTime time)
         {
             time = default;
             for (int i = 0; i < formats.Length; i++)
@@ -161,17 +173,7 @@ namespace Tomlyn.Helpers
                         precision -= LocalTimeFormats.Length;
                     }
 
-                    var offsetKind = DateTimeValueOffsetKind.None;
-                    if (format.EndsWith("Z"))
-                    {
-                        offsetKind = DateTimeValueOffsetKind.Zero;
-                    }
-                    else if (format.EndsWith("zzz"))
-                    {
-                        offsetKind = DateTimeValueOffsetKind.Number;
-                    }
-
-                    time = new DateTimeValue(rawTime, precision, offsetKind);
+                    time = new TomlDateTime(rawTime, precision, kind);
                     return true;
                 }
             }

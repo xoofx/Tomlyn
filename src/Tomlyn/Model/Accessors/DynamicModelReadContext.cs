@@ -82,6 +82,72 @@ internal class DynamicModelReadContext
 
             if (value is IConvertible)
             {
+                // Try to bit-cast between primitive of same size, otherwise we will overflow
+                // As TOML only support long (instead of ulong), we need to make sure we can
+                // serialize/deserialize back primitive values
+                if (value.GetType().IsPrimitive && changeType.IsPrimitive)
+                {
+                    switch (value)
+                    {
+                        case sbyte i8:
+                            if (changeType == typeof(byte))
+                            {
+                                outputValue = unchecked((byte)i8);
+                                return true;
+                            }
+                            break;
+                        case short i16:
+                            if (changeType == typeof(ushort))
+                            {
+                                outputValue = unchecked((ushort)i16);
+                                return true;
+                            }
+                            break;
+                        case int i32:
+                            if (changeType == typeof(uint))
+                            {
+                                outputValue = unchecked((uint) i32);
+                                return true;
+                            }
+                            break;
+                        case long i64:
+                            if (changeType == typeof(ulong))
+                            {
+                                outputValue = unchecked((ulong)i64);
+                                return true;
+                            }
+                            break;
+                        case byte u8:
+                            if (changeType == typeof(sbyte))
+                            {
+                                outputValue = unchecked((sbyte)u8);
+                                return true;
+                            }
+                            break;
+                        case ushort u16:
+                            if (changeType == typeof(short))
+                            {
+                                outputValue = unchecked((short)u16);
+                                return true;
+                            }
+                            break;
+                        case uint u32:
+                            if (changeType == typeof(int))
+                            {
+                                outputValue = unchecked((int)u32);
+                                return true;
+                            }
+                            break;
+                        case ulong u64:
+                            if (changeType == typeof(long))
+                            {
+                                outputValue = unchecked((long)u64);
+                                return true;
+                            }
+                            break;
+                    }
+                }
+
                 outputValue = Convert.ChangeType(value, changeType);
                 return true;
             }

@@ -110,17 +110,21 @@ internal class StandardObjectDynamicAccessor : ObjectDynamicAccessor
                         }
                     }
                 }
-                else
+                else if (Context.TryConvertValue(span, value, prop.PropertyType, out var newValue))
                 {
                     // Coerce the value
-                    if (Context.TryConvertValue(span, value, prop.PropertyType, out value))
-                    {
-                        prop.SetValue(obj, value);
-                        return true;
-                    }
+                    prop.SetValue(obj, newValue);
+                    return true;
+                }
+                else
+                {
+                    errorMessage = $"The property value of type {value?.GetType().FullName} couldn't be converted to {prop.PropertyType} for the property {TargetType.FullName}/{name}";
                 }
             }
-            errorMessage = $"The property {name} was not found on object type {TargetType.FullName}";
+            else
+            {
+                errorMessage = $"The property {name} was not found on object type {TargetType.FullName}";
+            }
         }
         catch (Exception ex)
         {

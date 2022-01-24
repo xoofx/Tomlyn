@@ -66,13 +66,36 @@ namespace Tomlyn.Text
         /// <summary>
         /// Escape a C# string to a TOML string
         /// </summary>
-        public static string EscapeForToml(this string text)
+        public static string EscapeForToml(this string text, bool allowNewLinesAndSpace = false)
         {
             StringBuilder? builder = null;
             for (int i = 0; i < text.Length; i++)
             {
                 var c = text[i];
-                var str = EscapeChar(text[i]);
+
+                string? str = null;
+
+                // Handle special characters for when multiline/spaces are allowed
+                if (allowNewLinesAndSpace)
+                {
+                    if (c == '\r' && i + 1 < text.Length && text[i + 1] == '\n')
+                    {
+                        str = "\r\n";
+                        i++;
+                        c = '\n';
+                    }
+                    else if (c == '\n')
+                    {
+                        str = "\n";
+                    }
+                    else if (c == '\t')
+                    {
+                        str = "\t";
+                    }
+                }
+
+                str ??= EscapeChar(text[i]);
+
                 if (str is not null)
                 {
                     if (builder == null)

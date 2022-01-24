@@ -12,11 +12,15 @@ using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
+using Tomlyn.Helpers;
 using Tomlyn.Model;
 using Tomlyn.Syntax;
 
 namespace Tomlyn.Tests
 {
+    /// <summary>
+    /// Tests against the official TOML specs of TOML https://github.com/BurntSushi/toml-test
+    /// </summary>
     public class StandardTests
     {
         private const string InvalidSpec = "invalid";
@@ -70,10 +74,10 @@ namespace Tomlyn.Tests
                     Assert.AreEqual(expectedJsonAsString, computedJsonAsString);
 
                     DisplayHeader("toml from model");
-                    var tomlFromModel = Toml.ToString(model);
+                    var tomlFromModel = Toml.FromModel(model);
                     Console.WriteLine(tomlFromModel);
 
-                    var model2 = Toml.ParseToModel<TomlTable>(tomlFromModel);
+                    var model2 = Toml.ToModel<TomlTable>(tomlFromModel);
                     var computedJson2 = ModelHelper.ToJson(model2);
                     var computedJson2AsString = computedJson2.ToString(Formatting.Indented);
 
@@ -89,7 +93,7 @@ namespace Tomlyn.Tests
 
             {
                 var docUtf8 = Toml.Parse(Encoding.UTF8.GetBytes(toml), inputName);
-                var roundtripUtf8 = doc.ToString();
+                var roundtripUtf8 = docUtf8.ToString();
                 Assert.AreEqual(roundtrip, roundtripUtf8, "The UTF8 version doesn't match with the UTF16 version");
             }
         }
@@ -130,7 +134,7 @@ namespace Tomlyn.Tests
                 {
                     if (double.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out var doubleValue))
                     {
-                        return new JValue(new TomlFloat(doubleValue).ToString());
+                        return new JValue(TomlFormatHelper.ToString(doubleValue));
                     }
                 }
             }

@@ -2,12 +2,10 @@
 // Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
 using System;
-using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Reflection;
-using System.Runtime.Serialization;
-using System.Text;
 using Tomlyn.Model;
 using Tomlyn.Parsing;
 using Tomlyn.Syntax;
@@ -20,6 +18,67 @@ namespace Tomlyn
     /// </summary>
     public static class Toml
     {
+        /// <summary>
+        /// Shows version
+        /// </summary>
+        public static readonly string Version = ((AssemblyFileVersionAttribute)typeof(Toml).Assembly.GetCustomAttributes(typeof(AssemblyFileVersionAttribute), false)[0]).Version;
+
+        /// <summary>
+        /// Gets all the token from the specified toml text.
+        /// </summary>
+        /// <param name="text">A toml text.</param>
+        /// <param name="sourcePath">The source path associated with the text.</param>
+        /// <param name="includeHidden"><c>true</c></param>
+        /// <param name="diagnostics">An optional diagnostics that will contain diagnostics messages generated while lexing.</param>
+        /// <returns>A list of tokens.</returns>
+        public static IEnumerable<SyntaxTokenValue> Tokenize(string text, string? sourcePath = null,
+            bool includeHidden = true, DiagnosticsBag? diagnostics = null)
+        {
+            var textView = new StringSourceView(text, sourcePath ?? string.Empty);
+            var lexer = new Lexer<StringSourceView, StringCharacterIterator>(textView);
+            while (lexer.MoveNext())
+            {
+                var token = lexer.Token;
+                if (includeHidden || !token.Kind.IsHidden())
+                {
+                    yield return lexer.Token;
+                }
+            }
+
+            if (diagnostics is not null)
+            {
+                diagnostics.AddRange(lexer.Errors);
+            }
+        }
+
+        /// <summary>
+        /// Gets all the token from the specified toml text.
+        /// </summary>
+        /// <param name="utf8Bytes">A toml text.</param>
+        /// <param name="sourcePath">The source path associated with the text.</param>
+        /// <param name="includeHidden"><c>true</c></param>
+        /// <param name="diagnostics">An optional diagnostics that will contain diagnostics messages generated while lexing.</param>
+        /// <returns>A list of tokens.</returns>
+        public static IEnumerable<SyntaxTokenValue> Tokenize(byte[] utf8Bytes, string? sourcePath = null,
+            bool includeHidden = true, DiagnosticsBag? diagnostics = null)
+        {
+            var textView = new StringUtf8SourceView(utf8Bytes, sourcePath ?? string.Empty);
+            var lexer = new Lexer<StringUtf8SourceView, StringCharacterUtf8Iterator>(textView);
+            while (lexer.MoveNext())
+            {
+                var token = lexer.Token;
+                if (includeHidden || !token.Kind.IsHidden())
+                {
+                    yield return lexer.Token;
+                }
+            }
+
+            if (diagnostics is not null)
+            {
+                diagnostics.AddRange(lexer.Errors);
+            }
+        }
+
         /// <summary>
         /// Parses a text to a TOML document.
         /// </summary>
@@ -39,46 +98,7 @@ namespace Tomlyn
             }
             return doc;
         }
-
-        /// <summary>
-        /// Parses a text to directly to a model.
-        /// </summary>
-        /// <param name="text">A string representing a TOML document</param>
-        /// <param name="sourcePath">An optional path/file name to identify errors</param>
-        /// <param name="options">The options for the mapping.</param>
-        /// <returns>A parsed TOML document</returns>
-        public static T ParseToModel<T>(string text, string? sourcePath = null, TomlModelOptions? options = null) where T: class, new()
-        {
-            var syntax = Parse(text, sourcePath);
-            if (syntax.HasErrors)
-            {
-                throw new TomlException(syntax.Diagnostics);
-            }
-            return ToModel<T>(syntax, options);
-        }
-
-        /// <summary>
-        /// Parses a text to directly to a model.
-        /// </summary>
-        /// <param name="text">A string representing a TOML document</param>
-        /// <param name="model">The output model.</param>
-        /// <param name="diagnostics">The diagnostics if this method returns false.</param>
-        /// <param name="sourcePath">An optional path/file name to identify errors</param>
-        /// <param name="options">The options for the mapping.</param>
-        /// <returns>A parsed TOML document</returns>
-        public static bool TryParseToModel<T>(string text, [NotNullWhen(true)] out T? model, [NotNullWhen(false)] out DiagnosticsBag? diagnostics, string? sourcePath = null, TomlModelOptions? options = null) where T : class, new()
-        {
-            var syntax = Parse(text, sourcePath);
-            if (syntax.HasErrors)
-            {
-                diagnostics = syntax.Diagnostics;
-                model = null;
-                return false;
-            }
-
-            return TryToModel<T>(syntax, out model, out diagnostics, options);
-        }
-
+        
         /// <summary>
         /// Parses a UTF8 byte array to a TOML document.
         /// </summary>
@@ -97,6 +117,128 @@ namespace Tomlyn
                 Validate(doc);
             }
             return doc;
+        }
+
+        /// <summary>
+        /// Validates the specified TOML document.
+        /// </summary>
+        /// <param name="doc">The TOML document to validate</param>
+        /// <returns>The same instance as the parameter. Check <see cref="DocumentSyntax.HasErrors"/> and <see cref="DocumentSyntax.Diagnostics"/> for details.</returns>
+        public static DocumentSyntax Validate(DocumentSyntax doc)
+        {
+            if (doc == null) throw new ArgumentNullException(nameof(doc));
+            if (doc.HasErrors) return doc;
+            var validator = new SyntaxValidator(doc.Diagnostics);
+            validator.Visit(doc);
+            return doc;
+        }
+
+        /// <summary>
+        /// Gets the TOML string representation from the specified model.
+        /// </summary>
+        /// <param name="model">The type of the mode</param>
+        /// <param name="options">Optional parameters for the serialization.</param>
+        /// <returns>The TOML string representation from the specified model.</returns>
+        /// <exception cref="TomlException">If there are errors while trying to serialize to a TOML string.</exception>
+        public static string FromModel(object model, TomlModelOptions? options = null)
+        {
+            if (TryFromModel(model, out var modelAsToml, out var diagnostics, options))
+            {
+                return modelAsToml;
+            }
+            throw new TomlException(diagnostics);
+        }
+
+        /// <summary>
+        /// Tries to get the TOML string representation from the specified model.
+        /// </summary>
+        /// <param name="model">The model instance to serialize to TOML.</param>
+        /// <param name="modelAsToml">The TOML string representation from the specified model if this method returns true.</param>
+        /// <param name="diagnostics">The diagnostics error messages if this method returns false.</param>
+        /// <param name="options">Optional parameters for the serialization.</param>
+        /// <returns>The TOML string representation from the specified model.</returns>
+        /// <returns><c>true</c> if the conversion was successful; <c>false</c> otherwise.</returns>
+        public static bool TryFromModel(object model, [NotNullWhen(true)] out string? modelAsToml, [NotNullWhen(false)] out DiagnosticsBag? diagnostics, TomlModelOptions? options = null)
+        {
+            modelAsToml = null;
+            var writer = new StringWriter();
+            if (!TryFromModel(model, writer, out diagnostics, options)) return false;
+            modelAsToml = writer.ToString();
+            return true;
+        }
+
+        /// <summary>
+        /// Tries to get the TOML string representation from the specified model.
+        /// </summary>
+        /// <param name="model">The model instance to serialize to TOML.</param>
+        /// <param name="writer">The TOML string representation written to a <see cref="TextWriter"/> if this method returns true.</param>
+        /// <param name="diagnostics">The diagnostics error messages if this method returns false.</param>
+        /// <param name="options">Optional parameters for the serialization.</param>
+        /// <returns>The TOML string representation from the specified model.</returns>
+        /// <returns><c>true</c> if the conversion was successful; <c>false</c> otherwise.</returns>
+        public static bool TryFromModel(object model, TextWriter writer, [NotNullWhen(false)] out DiagnosticsBag? diagnostics, TomlModelOptions? options = null)
+        {
+            diagnostics = null;
+            var context = new DynamicModelWriteContext(options ?? new TomlModelOptions(), writer);
+            var serializer = new ModelToTomlTransform(model, context);
+            serializer.Run();
+            if (context.Diagnostics.HasErrors)
+            {
+                diagnostics = context.Diagnostics;
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Parses a TOML text to directly to a model.
+        /// </summary>
+        /// <param name="text">A string representing a TOML document</param>
+        /// <param name="sourcePath">An optional path/file name to identify errors</param>
+        /// <param name="options">The options for the mapping.</param>
+        /// <returns>A parsed TOML document returned as <see cref="TomlTable"/>.</returns>
+        public static TomlTable ToModel(string text, string? sourcePath = null, TomlModelOptions? options = null)
+        {
+            return ToModel<TomlTable>(text, sourcePath, options);
+        }
+
+        /// <summary>
+        /// Parses a TOML text to directly to a model.
+        /// </summary>
+        /// <param name="text">A string representing a TOML document</param>
+        /// <param name="sourcePath">An optional path/file name to identify errors</param>
+        /// <param name="options">The options for the mapping.</param>
+        /// <returns>A parsed TOML document</returns>
+        public static T ToModel<T>(string text, string? sourcePath = null, TomlModelOptions? options = null) where T : class, new()
+        {
+            var syntax = Parse(text, sourcePath);
+            if (syntax.HasErrors)
+            {
+                throw new TomlException(syntax.Diagnostics);
+            }
+            return ToModel<T>(syntax, options);
+        }
+
+        /// <summary>
+        /// Tries to parses a TOML text directly to a model.
+        /// </summary>
+        /// <param name="text">A string representing a TOML document</param>
+        /// <param name="model">The output model.</param>
+        /// <param name="diagnostics">The diagnostics if this method returns false.</param>
+        /// <param name="sourcePath">An optional path/file name to identify errors</param>
+        /// <param name="options">The options for the mapping.</param>
+        /// <returns>A parsed TOML document</returns>
+        public static bool TryToModel<T>(string text, [NotNullWhen(true)] out T? model, [NotNullWhen(false)] out DiagnosticsBag? diagnostics, string? sourcePath = null, TomlModelOptions? options = null) where T : class, new()
+        {
+            var syntax = Parse(text, sourcePath);
+            if (syntax.HasErrors)
+            {
+                diagnostics = syntax.Diagnostics;
+                model = null;
+                return false;
+            }
+
+            return TryToModel<T>(syntax, out model, out diagnostics, options);
         }
 
         /// <summary>
@@ -151,29 +293,6 @@ namespace Tomlyn
 
             diagnostics = null;
             return true;
-        }
-
-        /// <summary>
-        /// Validates the specified TOML document.
-        /// </summary>
-        /// <param name="doc">The TOML document to validate</param>
-        /// <returns>The same instance as the parameter. Check <see cref="DocumentSyntax.HasErrors"/> and <see cref="DocumentSyntax.Diagnostics"/> for details.</returns>
-        public static DocumentSyntax Validate(DocumentSyntax doc)
-        {
-            if (doc == null) throw new ArgumentNullException(nameof(doc));
-            if (doc.HasErrors) return doc;
-            var validator = new SyntaxValidator(doc.Diagnostics);
-            validator.Visit(doc);
-            return doc;
-        }
-
-        public static string ToString<T>(T model, TomlModelOptions? options = null) where T : class
-        {
-            var writer = new StringWriter();
-            var context = new DynamicModelWriteContext(options ?? new TomlModelOptions(), writer);
-            var serializer = new ModelToTomlTransform(model, context);
-            serializer.Run();
-            return writer.ToString();
         }
     }
 }
