@@ -1,13 +1,18 @@
 # Changelog
 
-## 0.4.1 (23 Jan 2021)
+## 0.9.0 (25 Jan 2022)
+- Add support for serializing back to a TOML string.
+- Simply `TomlObject` default runtime model.
+- Add user documentation.
+
+## 0.4.1 (23 Jan 2022)
 - Fix readme on NuGet
 
-## 0.4.0 (23 Jan 2021)
+## 0.4.0 (23 Jan 2022)
 - Add support for `Toml.ToModel<T>` and `Toml.TryToModel<T>`
 
-## 0.3.1 (14 Jan 2021)
-## 0.3.0 (14 Jan 2021)
+## 0.3.1 (14 Jan 2022)
+## 0.3.0 (14 Jan 2022)
 - Add support for TOML 1.0.0
 
 ## 0.2.0 (13 Apr 2020)
