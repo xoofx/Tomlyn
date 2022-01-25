@@ -3,6 +3,7 @@
 // See license.txt file in the project root for full license information.
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using Tomlyn.Helpers;
 
@@ -34,30 +35,30 @@ namespace Tomlyn.Syntax
         public List<SyntaxTrivia>? TrailingTrivia { get; set; }
 
         /// <summary>
-        /// Gets the number of children
+        /// Gets the number of children.
         /// </summary>
         public abstract int ChildrenCount { get; }
 
         /// <summary>
-        /// Gets a children at the specified index.
+        /// Gets a child at the specified index.
         /// </summary>
-        /// <param name="index">Index of the children</param>
-        /// <returns>A children at the specified index</returns>
-        public SyntaxNode? GetChildren(int index)
+        /// <param name="index">Index of the child</param>
+        /// <returns>A child at the specified index</returns>
+        public SyntaxNode? GetChild(int index)
         {
             if (index < 0) throw ThrowHelper.GetIndexNegativeArgumentOutOfRangeException();
             if (index > ChildrenCount) throw ThrowHelper.GetIndexArgumentOutOfRangeException(ChildrenCount);
-            return GetChildrenImpl(index);
+            return GetChildImpl(index);
         }
 
         /// <summary>
-        /// Gets a children at the specified index.
+        /// Gets a child at the specified index.
         /// </summary>
-        /// <param name="index">Index of the children</param>
-        /// <returns>A children at the specified index</returns>
+        /// <param name="index">Index of the child</param>
+        /// <returns>A child at the specified index</returns>
         /// <remarks>The index is safe to use</remarks>
-        protected abstract SyntaxNode? GetChildrenImpl(int index);
-
+        protected abstract SyntaxNode? GetChildImpl(int index);
+        
         public override string ToString()
         {
             var writer = new StringWriter();
@@ -87,7 +88,7 @@ namespace Tomlyn.Syntax
                 int count = ChildrenCount;
                 for (int i = 0; i < count; i++)
                 {
-                    var child = GetChildren(i);
+                    var child = GetChild(i);
                     if (child == null) continue;
                     child.WriteToInternal(writer);
                 }

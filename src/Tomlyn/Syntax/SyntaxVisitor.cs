@@ -94,7 +94,7 @@ namespace Tomlyn.Syntax
 
             for (int i = 0; i < node.ChildrenCount; i++)
             {
-                var child = node.GetChildren(i);
+                var child = node.GetChild(i);
                 if (child != null)
                 {
                     child.Accept(this);

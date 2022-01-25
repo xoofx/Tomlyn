@@ -1,6 +1,10 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
 // Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
+
+using Tomlyn.Helpers;
+using Tomlyn.Model;
+
 namespace Tomlyn.Syntax
 {
     /// <summary>
@@ -65,7 +69,7 @@ namespace Tomlyn.Syntax
 
         internal abstract TokenKind CloseTokenKind { get; }
 
-        protected override SyntaxNode? GetChildrenImpl(int index)
+        protected override SyntaxNode? GetChildImpl(int index)
         {
             switch (index)
             {

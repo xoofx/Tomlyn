@@ -63,7 +63,7 @@ namespace Tomlyn.Syntax
 
         public override int ChildrenCount => 2;
 
-        protected override SyntaxNode? GetChildrenImpl(int index)
+        protected override SyntaxNode? GetChildImpl(int index)
         {
             if (index == 0) return Key;
             return DotKeys;

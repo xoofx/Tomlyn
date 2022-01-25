@@ -40,10 +40,10 @@ namespace Tomlyn.Tests
             table.AddLeadingComment("This is a comment");
             table.AddLeadingTriviaNewLine();
 
-            var firstElement = table.Items.GetChildren(0);
+            var firstElement = table.Items.GetChild(0);
             firstElement.AddTrailingComment("This is an item comment");
 
-            var secondElement = table.Items.GetChildren(2);
+            var secondElement = table.Items.GetChild(2);
             secondElement.AddLeadingTriviaNewLine();
             secondElement.AddLeadingComment("This is a comment in a middle of a table");
             secondElement.AddLeadingTriviaNewLine();

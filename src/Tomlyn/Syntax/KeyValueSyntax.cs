@@ -97,7 +97,7 @@ namespace Tomlyn.Syntax
             visitor.Visit(this);
         }
 
-        protected override SyntaxNode? GetChildrenImpl(int index)
+        protected override SyntaxNode? GetChildImpl(int index)
         {
             switch (index)
             {

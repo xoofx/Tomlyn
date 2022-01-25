@@ -154,7 +154,7 @@ internal class SyntaxToModelTransform : SyntaxVisitor
             {
                 return false;
             }
-            var nextItem = items.GetChildren(i);
+            var nextItem = items.GetChild(i);
             item = nextItem!;
             name = GetStringFromBasic(nextItem!.Key!) ?? string.Empty;
         }
@@ -290,7 +290,7 @@ internal class SyntaxToModelTransform : SyntaxVisitor
             var items = array.Items;
             for (int i = 0; i < items.ChildrenCount; i++)
             {
-                var item = items.GetChildren(i)!;
+                var item = items.GetChild(i)!;
                 item.Accept(this);
 
                 // Make sure that we can convert the item to the destination value
@@ -438,8 +438,8 @@ internal class SyntaxToModelTransform : SyntaxVisitor
                 metadata.LeadingTrivia = trivias;
             }
 
-            var lastChildren = keyValue.Value?.GetChildren(keyValue.Value.ChildrenCount - 1);
-            trivias = ConvertTrivias(lastChildren?.TrailingTrivia);
+            var lastChild = keyValue.Value?.GetChild(keyValue.Value.ChildrenCount - 1);
+            trivias = ConvertTrivias(lastChild?.TrailingTrivia);
             if (trivias != null && trivias.Count > 0)
             {
                 metadata ??= new TomlPropertyMetadata();
@@ -463,8 +463,8 @@ internal class SyntaxToModelTransform : SyntaxVisitor
                 metadata.LeadingTrivia = trivias;
             }
 
-            var lastChildren = tableSyntax.CloseBracket;
-            trivias = ConvertTrivias(lastChildren?.TrailingTrivia);
+            var lastChild = tableSyntax.CloseBracket;
+            trivias = ConvertTrivias(lastChild?.TrailingTrivia);
             if (trivias != null && trivias.Count > 0)
             {
                 metadata ??= new TomlPropertyMetadata();

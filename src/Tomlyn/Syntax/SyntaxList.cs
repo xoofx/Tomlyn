@@ -22,7 +22,7 @@ namespace Tomlyn.Syntax
 
         public sealed override int ChildrenCount => Children.Count;
 
-        protected override SyntaxNode GetChildrenImpl(int index)
+        protected override SyntaxNode GetChildImpl(int index)
         {
             return Children[index];
         }
@@ -58,12 +58,12 @@ namespace Tomlyn.Syntax
             node.Parent = this;
         }
 
-        public new TSyntaxNode? GetChildren(int index)
+        public new TSyntaxNode? GetChild(int index)
         {
-            return (TSyntaxNode?)base.GetChildren(index);
+            return (TSyntaxNode?)base.GetChild(index);
         }
 
-        protected override SyntaxNode GetChildrenImpl(int index)
+        protected override SyntaxNode GetChildImpl(int index)
         {
             return Children[index];
         }
@@ -72,7 +72,7 @@ namespace Tomlyn.Syntax
         /// Removes a node at the specified index.
         /// </summary>
         /// <param name="index">Index of the node to remove</param>
-        public void RemoveChildrenAt(int index)
+        public void RemoveChildAt(int index)
         {
             var node = Children[index];
             Children.RemoveAt(index);
@@ -83,7 +83,7 @@ namespace Tomlyn.Syntax
         /// Removes the specified node instance.
         /// </summary>
         /// <param name="node">Node instance to remove</param>
-        public void RemoveChildren(TSyntaxNode node)
+        public void RemoveChild(TSyntaxNode node)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
             if (node.Parent != this) throw new InvalidOperationException("The node is not part of this list");

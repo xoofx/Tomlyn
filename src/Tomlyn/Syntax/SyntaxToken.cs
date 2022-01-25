@@ -43,7 +43,7 @@ namespace Tomlyn.Syntax
         
         public override int ChildrenCount => 0;
 
-        protected override SyntaxNode? GetChildrenImpl(int index)
+        protected override SyntaxNode? GetChildImpl(int index)
         {
             return null;
         }

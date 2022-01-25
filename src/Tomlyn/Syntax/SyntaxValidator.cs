@@ -229,7 +229,7 @@ namespace Tomlyn.Syntax
             for (int i = 0; i < items.ChildrenCount; i++)
             {
                 AddObjectPath(key, kind, true, fromDottedKeys);
-                var dotItem = GetStringFromBasic(items.GetChildren(i)!.Key!)!;
+                var dotItem = GetStringFromBasic(items.GetChild(i)!.Key!)!;
                 if (string.IsNullOrWhiteSpace(dotItem)) return false;
                 _currentPath.Add(dotItem);
             }
@@ -313,7 +313,7 @@ namespace Tomlyn.Syntax
             SyntaxKind firstKind = default;
             for(int i = 0; i < items.ChildrenCount; i++)
             {
-                var item = items.GetChildren(i)!;
+                var item = items.GetChild(i)!;
                 var value = item.Value!;
                 if (i == 0)
                 {
