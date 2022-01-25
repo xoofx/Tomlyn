@@ -195,7 +195,7 @@ internal class SyntaxToModelTransform : SyntaxVisitor
             return false;
         }
 
-        if (!accessor.TryGetPropertyValue(span, _currentObject!, key, out var currentObject))
+        if (!accessor.TryGetPropertyValue(span, _currentObject!, key, out var currentObject) || currentObject is null)
         {
             if (!accessor.TryCreateAndSetDefaultPropertyValue(span, _currentObject!, key, kind, out currentObject))
             {
