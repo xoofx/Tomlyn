@@ -3,12 +3,109 @@
 // See license.txt file in the project root for full license information.
 
 using System;
+using System.Collections.Generic;
+using System.Runtime.Serialization;
 using NUnit.Framework;
+using Tomlyn.Model;
 
 namespace Tomlyn.Tests
 {
     public class BasicTests
     {
+        [Test]
+        public void TestHelloWorld()
+        {
+            var toml = @"global = ""this is a string""
+# This is a comment of a table
+[my_table]
+key = 1 # Comment a key
+value = true
+list = [4, 5, 6]
+";
+
+            var model = Toml.ToModel(toml);
+            // Prints "this is a string"
+            var global = model["global"];
+            Console.WriteLine($"found global = \"{global}\"");
+            Assert.AreEqual("this is a string", global);
+            // Prints 1
+            var key = ((TomlTable)model["my_table"]!)["key"];
+            Console.WriteLine($"found key = {key}");
+            Assert.AreEqual(1L, key);
+            // Check list
+            var list = (TomlArray)((TomlTable)model["my_table"]!)["list"]!;
+            Console.WriteLine($"found list = {string.Join(", ", list)}");
+            Assert.AreEqual(new TomlArray() { 4, 5, 6 }, list);
+        }
+
+        [Test]
+        public void TestHelloWorldWithCustomModel()
+        {
+            var toml = @"global = ""this is a string""
+# This is a comment of a table
+[my_table]
+key = 1 # Comment a key
+value = true
+list = [4, 5, 6]
+";
+
+            var model = Toml.ToModel<MyModel>(toml);
+            // Prints "this is a string"
+            Console.WriteLine($"found global = \"{model.Global}\"");
+            Assert.AreEqual("this is a string", model.Global);
+            // Prints 1
+            var key = model.MyTable!.Key;
+            Console.WriteLine($"found key = {key}");
+            Assert.AreEqual(1L, key);
+            // Check list
+            var list = model.MyTable!.ListOfIntegers;
+            Console.WriteLine($"found list = {string.Join(", ", list)}");
+            Assert.AreEqual(new List<int>() { 4, 5, 6 }, list);
+
+            model.MyTable.ThisPropertyIsIgnored = "This should not be printed";
+
+            var toml2 = Toml.FromModel(model);
+            StandardTests.DisplayHeader("toml from model");
+            Console.WriteLine(toml2);
+
+            AssertHelper.AreEqualNormalizeNewLine(toml, toml2);
+        }
+
+        class MyModel : ITomlMetadataProvider
+        {
+            public string? Global { get; set; }
+
+            public MyTable? MyTable { get; set; }
+
+            /// <summary>
+            /// Allows to store comments and whitespaces
+            /// </summary>
+            TomlPropertiesMetadata? ITomlMetadataProvider.PropertiesMetadata { get; set; }
+        }
+
+        class MyTable : ITomlMetadataProvider
+        {
+            public MyTable()
+            {
+                ListOfIntegers = new List<int>();
+            }
+
+            public int Key { get; set; }
+
+            public bool Value { get; set; }
+
+            [DataMember(Name = "list")]
+            public List<int> ListOfIntegers { get; }
+
+            [IgnoreDataMember]
+            public string? ThisPropertyIsIgnored { get; set; }
+
+            /// <summary>
+            /// Allows to store comments and whitespaces
+            /// </summary>
+            TomlPropertiesMetadata? ITomlMetadataProvider.PropertiesMetadata { get; set; }
+        }
+
         [Test]
         public void TestEmptyComment()
         {

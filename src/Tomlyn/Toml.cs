@@ -102,7 +102,7 @@ namespace Tomlyn
         /// <param name="options">Optional parameters for the serialization.</param>
         /// <returns>The TOML string representation from the specified model.</returns>
         /// <returns><c>true</c> if the conversion was successful; <c>false</c> otherwise.</returns>
-        public static bool TryFromModel(object model, [NotNullWhen(true)] out string? modelAsToml, [NotNullWhen(false)] out DiagnosticsBag? diagnostics, TomlModelOptions? options = null)
+        public static bool TryFromModel(object model, [NotNullWhen(true)] out string? modelAsToml, out DiagnosticsBag diagnostics, TomlModelOptions? options = null)
         {
             modelAsToml = null;
             var writer = new StringWriter();
@@ -120,18 +120,13 @@ namespace Tomlyn
         /// <param name="options">Optional parameters for the serialization.</param>
         /// <returns>The TOML string representation from the specified model.</returns>
         /// <returns><c>true</c> if the conversion was successful; <c>false</c> otherwise.</returns>
-        public static bool TryFromModel(object model, TextWriter writer, [NotNullWhen(false)] out DiagnosticsBag? diagnostics, TomlModelOptions? options = null)
+        public static bool TryFromModel(object model, TextWriter writer, out DiagnosticsBag diagnostics, TomlModelOptions? options = null)
         {
-            diagnostics = null;
             var context = new DynamicModelWriteContext(options ?? new TomlModelOptions(), writer);
             var serializer = new ModelToTomlTransform(model, context);
             serializer.Run();
-            if (context.Diagnostics.HasErrors)
-            {
-                diagnostics = context.Diagnostics;
-                return false;
-            }
-            return true;
+            diagnostics = context.Diagnostics;
+            return !context.Diagnostics.HasErrors;
         }
 
         /// <summary>
@@ -223,20 +218,14 @@ namespace Tomlyn
         /// <param name="diagnostics">The diagnostics if this method returns false.</param>
         /// <param name="options">The options for the mapping.</param>
         /// <returns><c>true</c> if the mapping was successful; <c>false</c> otherwise. In that case the output <paramref name="diagnostics"/> will contain error messages.</returns>
-        public static bool TryToModel<T>(this DocumentSyntax syntax, [NotNullWhen(true)] out T? model, [NotNullWhen(false)] out DiagnosticsBag? diagnostics, TomlModelOptions? options = null) where T : class, new()
+        public static bool TryToModel<T>(this DocumentSyntax syntax, [NotNullWhen(true)] out T? model, out DiagnosticsBag diagnostics, TomlModelOptions? options = null) where T : class, new()
         {
             model = new T();
             var context = new DynamicModelReadContext(options ?? new TomlModelOptions());
             SyntaxToModelTransform visitor = new SyntaxToModelTransform(context, model);
             visitor.Visit(syntax);
-            if (context.Diagnostics.HasErrors)
-            {
-                diagnostics = context.Diagnostics;
-                return false;
-            }
-
-            diagnostics = null;
-            return true;
+            diagnostics = context.Diagnostics;
+            return !context.Diagnostics.HasErrors;
         }
     }
 }
