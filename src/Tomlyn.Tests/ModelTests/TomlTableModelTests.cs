@@ -3,6 +3,7 @@
 // See license.txt file in the project root for full license information.
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json.Serialization;
 using Newtonsoft.Json;
@@ -60,7 +61,8 @@ c.d = 'yo'
             Assert.AreEqual((long)1, model["a"]);
             Assert.AreEqual(true, model["b"]);
             Assert.IsInstanceOf<TomlTable>(model["c"]);
-            var subTable = ((TomlTable) model["c"]);
+            var subTable = ((TomlTable?) model["c"]);
+            Debug.Assert(subTable is not null);
             Assert.True(subTable.ContainsKey("d"));
             Assert.AreEqual(1, subTable.Count);
             Assert.AreEqual("yo", subTable["d"]);
@@ -109,7 +111,7 @@ d = true
             Assert.AreEqual(2, model.Count);
             Assert.AreEqual((long)1, model["a"]);
             Assert.IsInstanceOf<TomlTable>(model["b"]);
-            var subTable = ((TomlTable)model["b"]);
+            var subTable = ((TomlTable)model["b"]!);
             Assert.True(subTable.ContainsKey("c"));
             Assert.True(subTable.ContainsKey("d"));
             Assert.AreEqual(2, subTable.Count);
@@ -139,7 +141,7 @@ d = true
             Assert.AreEqual(2, model.Count);
             Assert.AreEqual((long)1, model["a"]);
             Assert.IsInstanceOf<TomlTableArray>(model["b"]);
-            var tableArray = ((TomlTableArray)model["b"]);
+            var tableArray = ((TomlTableArray)model["b"]!);
             Assert.AreEqual(2, tableArray.Count);
 
             // first [[b]]

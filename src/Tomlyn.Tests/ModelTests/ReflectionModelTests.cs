@@ -3,6 +3,7 @@
 // See license.txt file in the project root for full license information.
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text.Json.Serialization;
 using NUnit.Framework;
 using Tomlyn.Model;
@@ -146,18 +147,18 @@ id3 = ""id3"" # error
 
             var result = syntax.TryToModel<SimpleModel>(out var model, out var diagnostics);
 
-            Assert.False(result);
-            Assert.NotNull(diagnostics);
-            Assert.NotNull(model);
-
-            foreach (var diagnostic in diagnostics)
+            foreach (var message in diagnostics)
             {
-                Console.WriteLine(diagnostic);
+                Console.WriteLine(message);
             }
+
+            Assert.False(result);
+            Assert.NotNull(model);
 
             // Expecting 3 errors
             Assert.AreEqual(3, diagnostics.Count);
 
+            Debug.Assert(model is not null);
             // The model is still partially valid
             Assert.AreEqual("this is a name", model.Name);
 
@@ -206,11 +207,11 @@ key2 = 3
                 SubModels = new List<SimpleSubModel>();
             }
 
-            public string Name { get; set; }
+            public string? Name { get; set; }
             
             public List<string> Values { get; }
 
-            public List<int> IntValues { get; set; }
+            public List<int>? IntValues { get; set; }
 
             public int IntValue { get; set; }
 
@@ -222,7 +223,7 @@ key2 = 3
 
         public class SimpleSubModel
         {
-            public string Id { get; set; }
+            public string? Id { get; set; }
 
             public bool Publish { get; set; }
 
@@ -245,14 +246,14 @@ key2 = 3
             public DateTimeOffset DateTimeOffset { get; set; }
             public TomlDateTime TomlDateTime { get; set; }
 
-            public bool Equals(PrimitiveModel other)
+            public bool Equals(PrimitiveModel? other)
             {
                 if (ReferenceEquals(null, other)) return false;
                 if (ReferenceEquals(this, other)) return true;
                 return Int8Value == other.Int8Value && Int16Value == other.Int16Value && Int32Value == other.Int32Value && Int64Value == other.Int64Value && UInt8Value == other.UInt8Value && UInt16Value == other.UInt16Value && UInt32Value == other.UInt32Value && UInt64Value == other.UInt64Value && Float32Value.Equals(other.Float32Value) && Float64Value.Equals(other.Float64Value) && DateTime.Equals(other.DateTime) && DateTimeOffset.Equals(other.DateTimeOffset) && TomlDateTime.Equals(other.TomlDateTime);
             }
 
-            public override bool Equals(object obj)
+            public override bool Equals(object? obj)
             {
                 if (ReferenceEquals(null, obj)) return false;
                 if (ReferenceEquals(this, obj)) return true;

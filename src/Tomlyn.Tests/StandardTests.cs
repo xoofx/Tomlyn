@@ -55,7 +55,7 @@ namespace Tomlyn.Tests
                     Assert.AreEqual(toml, roundtrip, "The roundtrip doesn't match");
 
                     // Read the original json
-                    var expectedJson = (JObject)NormalizeJson(JObject.Parse(json));
+                    var expectedJson = (JObject)NormalizeJson(JObject.Parse(json))!;
                     // Convert the syntax tree into a model
                     var model = doc.ToModel();
                     // Convert the model into the expected json
@@ -98,14 +98,14 @@ namespace Tomlyn.Tests
             }
         }
 
-        private static JToken NormalizeJson(JToken token)
+        private static JToken? NormalizeJson(JToken? token)
         {
             if (token is JArray array)
             {
                 var newArray = new JArray();
                 foreach (var item in array)
                 {
-                    newArray.Add(NormalizeJson(item));
+                    newArray.Add(NormalizeJson(item)!);
                 }
 
                 return newArray;
@@ -114,7 +114,7 @@ namespace Tomlyn.Tests
             {
                 var newObject = new JObject();
 
-                var items = new List<KeyValuePair<string, JToken>>();
+                var items = new List<KeyValuePair<string, JToken?>>();
                 foreach (var item in obj)
                 {
                     items.Add(item);
@@ -185,7 +185,7 @@ namespace Tomlyn.Tests
 
                 var input = Encoding.UTF8.GetString(File.ReadAllBytes(file));
 
-                string json = null;
+                string? json = null;
                 if (type == "valid")
                 {
                     var jsonFile = Path.ChangeExtension(file, "json");
@@ -202,7 +202,7 @@ namespace Tomlyn.Tests
             get
             {
                 var assembly = Assembly.GetExecutingAssembly();
-                return Path.GetDirectoryName(assembly.Location);
+                return Path.GetDirectoryName(assembly.Location) ?? Environment.CurrentDirectory;
             }
         }
     }

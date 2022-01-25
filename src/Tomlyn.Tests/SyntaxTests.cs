@@ -40,10 +40,10 @@ namespace Tomlyn.Tests
             table.AddLeadingComment("This is a comment");
             table.AddLeadingTriviaNewLine();
 
-            var firstElement = table.Items.GetChild(0);
+            var firstElement = table.Items.GetChild(0)!;
             firstElement.AddTrailingComment("This is an item comment");
 
-            var secondElement = table.Items.GetChild(2);
+            var secondElement = table.Items.GetChild(2)!;
             secondElement.AddLeadingTriviaNewLine();
             secondElement.AddLeadingComment("This is a comment in a middle of a table");
             secondElement.AddLeadingTriviaNewLine();
@@ -92,8 +92,8 @@ val = true
 
             // Gets a runtime representation of the syntax tree
             var table = doc.ToModel();
-            var key = (long) ((TomlTable) table["mytable"])["key"];
-            var value = (bool) ((TomlTable) table["mytable"])["val"];
+            var key = (long) ((TomlTable) table["mytable"]!)["key"]!;
+            var value = (bool) ((TomlTable) table["mytable"]!)["val"]!;
             Console.WriteLine($"key = {key}, val = {value}");
         }
     }

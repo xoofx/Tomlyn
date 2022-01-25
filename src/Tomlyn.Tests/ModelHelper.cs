@@ -12,7 +12,7 @@ namespace Tomlyn.Tests
 {
     public static class ModelHelper
     {
-        public static JToken ToJson(object obj)
+        public static JToken ToJson(object? obj)
         {
             switch (obj)
             {
@@ -94,7 +94,7 @@ namespace Tomlyn.Tests
                     return json;
                 }
             }
-            throw new NotSupportedException($"The type element `{obj.GetType()}` is not supported");
+            throw new NotSupportedException($"The type element `{obj?.GetType()}` is not supported");
         }
     }
 }

@@ -9,7 +9,7 @@ namespace Tomlyn.Tests
 {
     public static class AssertHelper
     {
-        public static void AreEqualNormalizeNewLine(string expected, string actual, bool alwaysDisplay = false, string message = null)
+        public static void AreEqualNormalizeNewLine(string expected, string actual, bool alwaysDisplay = false, string? message = null)
         {
             expected = NormalizeEndOfLine(expected);
             actual = NormalizeEndOfLine(actual);
