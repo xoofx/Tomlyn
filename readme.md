@@ -8,71 +8,49 @@ Tomlyn is a TOML parser, validator and authoring library for .NET Framework and 
 
 - Very fast parser, GC friendly.
 - Compatible with the latest [TOML 1.0.0 specs](https://github.com/toml-lang/toml).
-- Support perfect load/save roundtrip while preserving all spaces, new line, comments.
+- Allow to map a TOML string to a default runtime model via `Toml.ToModel(string)`
+- Allow to map a TOML string to a custom runtime model via `Toml.ToModel<T>(string)`
+  - Very convenient for loading custom configurations for example.
+- Allow to generate a TOML string from a runtime model via `string Toml.FromModel(object)`
+  - Preserve comments, by default with the default runtime model, or by implementing the `ITomlMetadataProvider`.
+- Allow to parse to a `DocumentSyntax` via `Toml.Parse(string)`.
+  - Preserve all spaces, new line, comments but also invalid characters/tokens.
+  - Can roundtrip to text with exact representation.
 - Provides a validator with the `Toml.Validate` method.
-- Provides accurate parsing and validation error messages with precise source location.
-- Allow to work on the syntax tree directly (preserving styles) through the `Toml.Parse`.
-- Allow to work with a runtime representation `Toml.ToModel` and `Toml.ToModel<T>` (but cannot be saved back to TOML).
-- Supports for .NET Standard 2.0+.
+- Supports for .NET Standard 2.0+ and provides an API with nullable annotations.
+
+## Documentation
+
+See the [documentation](https://github.com/xoofx/Tomlyn/blob/main/doc/readme.md) for more details.
 
 ## Usage
 
-```C#
-var input = @"[mytable]
-key = 15
-val = true
+```c#
+var toml = @"global = ""this is a string""
+# This is a comment of a table
+[my_table]
+key = 1 # Comment a key
+value = true
+list = [4, 5, 6]
 ";
 
-// Gets a syntax tree of the TOML text
-var doc = Toml.Parse(input); // returns a DocumentSyntax
-// Check for parsing errors with doc.HasErrors and doc.Diagnostics
-// doc.HasErrors => throws an exception
-
-// Prints the exact representation of the input
-var docStr = doc.ToString();
-Console.WriteLine(docStr);
-
-// Gets a runtime representation of the syntax tree
-var table = doc.ToModel();
-var key = (long) ((TomlTable) table["mytable"])["key"];
-var value = (bool) ((TomlTable) table["mytable"])["val"];
-Console.WriteLine($"key = {key}, val = {value}");
+// Parse the TOML string to the default runtime model `TomlTable`
+var model = Toml.ToModel(toml);
+// Generates a TOML string from the model
+var tomlOut = Toml.FromModel(model);
+// Output the generated TOML
+Console.WriteLine(tomlOut);
 ```
 
-Creates a TOML document programmatically:
+This will print the original TOML by preserving most the comments:
 
-```C#
-var doc = new DocumentSyntax()
-{
-    Tables =
-    {
-        new TableSyntax("test")
-        {
-            Items =
-            {
-                {"a", 1},
-                {"b", true },
-                {"c", "Check"},
-                {"d", "ToEscape\nWithAnotherChar\t" },
-                {"e", 12.5 },
-                {"f", new int[] {1,2,3,4} },
-                {"g", new string[] {"0", "1", "2"} },
-                {"key with space", 2}
-            }
-        }
-    }
-};
-Console.WriteLine(doc);
-// Prints:
-// [test]
-// a = 1
-// b = true
-// c = "Check"
-// d = "ToEscape\nWithAnotherChar\t"
-// e = 12.5
-// f = [1, 2, 3, 4]
-// g = ["0", "1", "2"]
-// "key with space" = 2
+```toml
+global = "this is a string"
+# This is a comment of a table
+[my_table]
+key = 1 # Comment a key
+value = true
+list = [4, 5, 6]
 ```
 
 ## License
