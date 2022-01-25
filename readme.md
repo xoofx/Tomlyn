@@ -2,12 +2,20 @@
 
 <img align="right" width="160px" height="160px" src="img/logo.png">
 
-Tomlyn is a TOML parser, validator and authoring library for .NET Framework and .NET Core
+Tomlyn is a [TOML](https://toml.io/en/) parser, validator and authoring library for .NET Framework and .NET Core.
+
+## What is TOML?
+
+> **_A config file format for humans._**
+> _TOML aims to be a minimal configuration file format that's easy to read due to obvious semantics. TOML is designed to map unambiguously to a hash table. TOML should be easy to parse into data structures in a wide variety of languages._
+
+- See the official website https://toml.io/en/ for more details.
+- Example and specifications are available at [TOML v1.0.0](https://toml.io/en/v1.0.0) 
 
 ## Features
 
 - Very fast parser, GC friendly.
-- Compatible with the latest [TOML 1.0.0 specs](https://github.com/toml-lang/toml).
+- Compatible with the latest [TOML v1.0.0 specs](https://toml.io/en/v1.0.0).
 - Allow to map a TOML string to a default runtime model via `Toml.ToModel(string)`
 - Allow to map a TOML string to a custom runtime model via `Toml.ToModel<T>(string)`
   - Very convenient for loading custom configurations for example.
