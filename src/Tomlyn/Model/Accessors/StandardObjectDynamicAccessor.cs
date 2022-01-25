@@ -87,6 +87,10 @@ internal class StandardObjectDynamicAccessor : ObjectDynamicAccessor
                                 prop.SetValue(obj, value);
                                 return true;
                             }
+                            else
+                            {
+                                errorMessage = $"The property value of type {value?.GetType().FullName} couldn't be converted to {prop.PropertyType} for the list property {TargetType.FullName}/{name}";
+                            }
                         }
                         else
                         {
@@ -110,6 +114,10 @@ internal class StandardObjectDynamicAccessor : ObjectDynamicAccessor
                         {
                             listAccessor.AddElement(listValue, value);
                             return true;
+                        }
+                        else
+                        {
+                            errorMessage = $"The property value of type {value?.GetType().FullName} couldn't be converted to {listAccessor.ElementType} for the list property {TargetType.FullName}/{name}";
                         }
                     }
                 }
