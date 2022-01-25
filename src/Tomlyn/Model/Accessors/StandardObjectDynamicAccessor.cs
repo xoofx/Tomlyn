@@ -27,6 +27,9 @@ internal class StandardObjectDynamicAccessor : ObjectDynamicAccessor
         foreach (var prop in TargetType.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.FlattenHierarchy))
         {
             var name = Context.GetPropertyName(prop);
+            // If the property name is null, the property can be ignored
+            if (name is null) continue;
+
             // Skip any properties that we can't read
             if (!prop.CanRead) continue;
 

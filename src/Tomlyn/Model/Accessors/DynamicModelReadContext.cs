@@ -20,7 +20,7 @@ internal class DynamicModelReadContext
         _accessors = new Dictionary<Type, DynamicAccessor>();
     }
 
-    public Func<PropertyInfo, string> GetPropertyName { get; set; }
+    public Func<PropertyInfo, string?> GetPropertyName { get; set; }
     
     public Func<Type, ObjectKind, object> CreateInstance { get; set; }
 

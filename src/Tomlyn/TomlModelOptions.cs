@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.Serialization;
@@ -10,55 +11,91 @@ namespace Tomlyn;
 public class TomlModelOptions
 {
     /// <summary>
-    /// Default member renamer.
+    /// Default member to create an instance.
     /// </summary>
-    public static readonly Func<PropertyInfo, string> DefaultGetPropertyName = DefaultGetPropertyNameImpl;
-
     public static readonly Func<Type, ObjectKind, object> DefaultCreateInstance = DefaultCreateInstanceImpl;
 
     public TomlModelOptions()
     {
-        GetPropertyName = DefaultGetPropertyName;
+        GetPropertyName = DefaultGetPropertyNameImpl;
         CreateInstance = DefaultCreateInstance;
+
+        AttributeListForIgnore = new List<string>()
+        {
+            "System.Runtime.Serialization.IgnoreDataMemberAttribute",
+            "System.Text.Json.Serialization.JsonIgnoreAttribute"
+        };
+
+        AttributeListForGetName = new List<string>()
+        {
+            "System.Runtime.Serialization.DataMemberAttribute",
+            "System.Text.Json.Serialization.JsonPropertyNameAttribute"
+        };
     }
-    
-    public Func<PropertyInfo, string> GetPropertyName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the delegate to retrieve a name. If this function returns null, the property is ignored.
+    /// </summary>
+    public Func<PropertyInfo, string?> GetPropertyName { get; set; }
 
     public Func<Type, ObjectKind, object> CreateInstance { get; set; }
 
     public Func<object, Type, object>? ConvertTo { get; set; }
 
     /// <summary>
+    /// Gets the list of the attributes used to ignore a property.
+    /// </summary>
+    /// <remarks>
+    /// By default, the list contains:
+    /// - System.Runtime.Serialization.IgnoreDataMemberAttribute
+    /// - System.Text.Json.Serialization.JsonPropertyNameAttribute
+    /// </remarks>
+    public List<string> AttributeListForIgnore { get; }
+
+    /// <summary>
+    /// Gets the list of the attributes used to fetch the property `Name`.
+    /// </summary>
+    /// <remarks>
+    /// By default, the list contains:
+    /// - System.Runtime.Serialization.DataMemberAttribute
+    /// - System.Text.Json.Serialization.JsonPropertyNameAttribute
+    /// </remarks>
+    public List<string> AttributeListForGetName { get; }
+
+    /// <summary>
     /// Default implementation for getting the property name
     /// </summary>
-    private static string DefaultGetPropertyNameImpl(PropertyInfo prop)
+    private string? DefaultGetPropertyNameImpl(PropertyInfo prop)
     {
         string? name = null;
         foreach (var attribute in prop.GetCustomAttributes())
         {
-            // Allow to dynamically bind to JsonPropertyNameAttribute even if we are not targeting netstandard2.0
-            if (attribute.GetType().FullName == "System.Text.Json.Serialization.JsonPropertyNameAttribute")
+            var fullName = attribute.GetType().FullName;
+            // Check if attribute is ignored
+            foreach (var fullNameOfIgnoreAttribute in AttributeListForIgnore)
             {
-                var nameProperty = attribute.GetType().GetProperty("Name");
-                if (nameProperty != null)
+                if (fullName == fullNameOfIgnoreAttribute)
                 {
-                    name = nameProperty.GetValue(attribute) as string;
+                    return null;
                 }
-
-                break;
             }
 
-            if (attribute is DataMemberAttribute attr && !string.IsNullOrEmpty(attr.Name))
+            // Allow to dynamically bind to JsonPropertyNameAttribute even if we are not targeting netstandard2.0
+            foreach (var fullNameOfAttributeWithName in AttributeListForGetName)
             {
-                name = attr.Name;
-                break;
+                if (fullName == fullNameOfAttributeWithName)
+                {
+                    var nameProperty = attribute.GetType().GetProperty("Name");
+                    if (nameProperty != null && nameProperty.PropertyType == typeof(string))
+                    {
+                        name = nameProperty.GetValue(attribute) as string;
+                        if (name is not null) break;
+                    }
+                }
             }
         }
 
-        if (name is null)
-        {
-            name ??= prop.Name;
-        }
+        name ??= prop.Name;
 
         var builder = new StringBuilder();
         var pc = (char)0;
