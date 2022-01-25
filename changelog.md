@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.1 (25 Jan 2022)
+- Fix Tomlyn.Signed assembly on NuGet
+
 ## 0.9.0 (25 Jan 2022)
 - Add support for serializing back to a TOML string.
 - Simply `TomlObject` default runtime model.
