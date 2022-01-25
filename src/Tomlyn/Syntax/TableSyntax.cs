@@ -2,6 +2,8 @@
 // Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
 using System;
+using Tomlyn.Helpers;
+using Tomlyn.Model;
 
 namespace Tomlyn.Syntax
 {
@@ -36,5 +38,10 @@ namespace Tomlyn.Syntax
         internal override TokenKind OpenTokenKind => TokenKind.OpenBracket;
 
         internal override TokenKind CloseTokenKind => TokenKind.CloseBracket;
+
+        protected override string ToDebuggerDisplay()
+        {
+            return $"{base.ToDebuggerDisplay()} [{(Name is not null ? Name.ToString() : string.Empty)}]";
+        }
     }
 }

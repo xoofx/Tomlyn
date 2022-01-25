@@ -2,6 +2,8 @@
 // Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
 using System;
+using Tomlyn.Helpers;
+using Tomlyn.Model;
 using Tomlyn.Text;
 
 namespace Tomlyn.Syntax
@@ -63,6 +65,11 @@ namespace Tomlyn.Syntax
                 }
             }
             return true;
+        }
+
+        protected override string ToDebuggerDisplay()
+        {
+            return $"{base.ToDebuggerDisplay()}: {(Key is not null ? TomlFormatHelper.ToString(Key.ToString(), TomlPropertyDisplayKind.Default) : string.Empty)}";
         }
     }
 }

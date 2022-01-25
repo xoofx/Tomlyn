@@ -1,11 +1,15 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
 // Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
+
+using System.Diagnostics;
+
 namespace Tomlyn.Syntax
 {
     /// <summary>
     /// Base class for <see cref="SyntaxNode"/> and <see cref="SyntaxTrivia"/>
     /// </summary>
+    [DebuggerDisplay("{ToDebuggerDisplay(),nq}")]
     public abstract class SyntaxNodeBase
     {
         /// <summary>
@@ -23,5 +27,7 @@ namespace Tomlyn.Syntax
         /// Gets the parent of this node.
         /// </summary>
         public SyntaxNode? Parent { get; internal set; }
+        
+        protected virtual string ToDebuggerDisplay() => $"{GetType().Name}";
     }
 }

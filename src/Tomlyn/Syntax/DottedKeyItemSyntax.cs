@@ -60,5 +60,10 @@ namespace Tomlyn.Syntax
         {
             return index == 0 ? (SyntaxNode?)Dot : Key;
         }
+
+        protected override string ToDebuggerDisplay()
+        {
+            return $"{base.ToDebuggerDisplay()}: {ToString()}";
+        }
     }
 }

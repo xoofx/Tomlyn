@@ -36,5 +36,10 @@ namespace Tomlyn.Syntax
         internal override TokenKind OpenTokenKind => TokenKind.OpenBracketDouble;
 
         internal override TokenKind CloseTokenKind => TokenKind.CloseBracketDouble;
+
+        protected override string ToDebuggerDisplay()
+        {
+            return $"{base.ToDebuggerDisplay()} [[{(Name is not null ? Name.ToString() : string.Empty)}]]";
+        }
     }
 }

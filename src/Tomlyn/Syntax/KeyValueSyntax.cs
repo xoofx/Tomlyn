@@ -111,5 +111,10 @@ namespace Tomlyn.Syntax
                     return EndOfLineToken;
             }
         }
+
+        protected override string ToDebuggerDisplay()
+        {
+            return $"{base.ToDebuggerDisplay()}: {Key} = {Value}";
+        }
     }
 }

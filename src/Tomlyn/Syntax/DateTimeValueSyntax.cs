@@ -3,6 +3,7 @@
 // See license.txt file in the project root for full license information.
 using System;
 using System.Globalization;
+using Tomlyn.Helpers;
 
 namespace Tomlyn.Syntax
 {
@@ -60,6 +61,11 @@ namespace Tomlyn.Syntax
                 default:
                     throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
             }
+        }
+
+        protected override string ToDebuggerDisplay()
+        {
+            return $"{base.ToDebuggerDisplay()}: {TomlFormatHelper.ToString(Value)}";
         }
     }
 }

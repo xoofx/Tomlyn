@@ -83,5 +83,10 @@ namespace Tomlyn.Syntax
                     return CloseBrace;
             }
         }
+
+        protected override string ToDebuggerDisplay()
+        {
+            return $"{base.ToDebuggerDisplay()} Count = {Items.ChildrenCount}";
+        }
     }
 }
