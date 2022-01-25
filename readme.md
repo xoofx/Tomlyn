@@ -44,6 +44,10 @@ list = [4, 5, 6]
 
 // Parse the TOML string to the default runtime model `TomlTable`
 var model = Toml.ToModel(toml);
+// Fetch the string
+var global = (string)model["global"]!;
+// Prints: found global = "this is a string"
+Console.WriteLine($"found global = \"{global}\"");
 // Generates a TOML string from the model
 var tomlOut = Toml.FromModel(model);
 // Output the generated TOML
