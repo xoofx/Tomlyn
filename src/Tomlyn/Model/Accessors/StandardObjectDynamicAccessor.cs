@@ -47,11 +47,11 @@ internal class StandardObjectDynamicAccessor : ObjectDynamicAccessor
         }
     }
 
-    public override IEnumerable<KeyValuePair<string, object>> GetProperties(object obj)
+    public override IEnumerable<KeyValuePair<string, object?>> GetProperties(object obj)
     {
         foreach (var prop in _orderedProps)
         {
-            yield return new KeyValuePair<string, object>(prop.Key, prop.Value.GetValue(obj));
+            yield return new KeyValuePair<string, object?>(prop.Key, prop.Value.GetValue(obj));
         }
     }
 
