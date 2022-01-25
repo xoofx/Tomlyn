@@ -1,4 +1,4 @@
-# Tomlyn [![Build Status](https://github.com/xoofx/Tomlyn/workflows/ci/badge.svg?branch=master)](https://github.com/xoofx/Tomlyn/actions) [![NuGet](https://img.shields.io/nuget/v/Tomlyn.svg)](https://www.nuget.org/packages/Tomlyn/)
+# Tomlyn [![Build Status](https://github.com/xoofx/Tomlyn/workflows/ci/badge.svg?branch=main)](https://github.com/xoofx/Tomlyn/actions)  [![Coverage Status](https://coveralls.io/repos/github/xoofx/Tomlyn/badge.svg?branch=main)](https://coveralls.io/github/xoofx/Tomlyn?branch=main)  [![NuGet](https://img.shields.io/nuget/v/Tomlyn.svg)](https://www.nuget.org/packages/Tomlyn/)
 
 <img align="right" width="160px" height="160px" src="img/logo.png">
 
