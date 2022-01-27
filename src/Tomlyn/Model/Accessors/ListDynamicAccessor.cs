@@ -103,7 +103,7 @@ internal class ListDynamicAccessor : DynamicAccessor
             case TomlTableArray array:
                 return array.Count;
             default:
-                return (int)_propCount!.GetValue(list);
+                return (int)_propCount!.GetValue(list)!;
         }
     }
     

@@ -130,6 +130,6 @@ public class TomlModelOptions
             }
         }
 
-        return Activator.CreateInstance(type);
+        return Activator.CreateInstance(type) ?? throw new InvalidOperationException($"Failed to create an instance of type '{type.FullName}'");
     }
 }

@@ -232,7 +232,7 @@ internal class DictionaryDynamicAccessor : ObjectDynamicAccessor
         public override bool TryGetValue(object dictionary, object key, out object? value)
         {
             var parameters = new object?[2] { key, null };
-            var result = (bool)_methodTryGetValue.Invoke(dictionary, parameters);
+            var result = (bool)_methodTryGetValue.Invoke(dictionary, parameters)!;
             value = parameters[1];
             return result;
         }

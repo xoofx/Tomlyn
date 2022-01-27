@@ -66,78 +66,78 @@ public record struct TomlDateTime(DateTimeOffset DateTime, int SecondPrecision, 
     }
 
     [ExcludeFromCodeCoverage]
-    bool IConvertible.ToBoolean(IFormatProvider provider)
+    bool IConvertible.ToBoolean(IFormatProvider? provider)
     {
         throw new NotSupportedException();
     }
 
     [ExcludeFromCodeCoverage]
-    byte IConvertible.ToByte(IFormatProvider provider)
+    byte IConvertible.ToByte(IFormatProvider? provider)
     {
         throw new NotSupportedException();
     }
 
     [ExcludeFromCodeCoverage]
-    char IConvertible.ToChar(IFormatProvider provider)
+    char IConvertible.ToChar(IFormatProvider? provider)
     {
         throw new NotSupportedException();
     }
 
     [ExcludeFromCodeCoverage]
-    DateTime IConvertible.ToDateTime(IFormatProvider provider)
+    DateTime IConvertible.ToDateTime(IFormatProvider? provider)
     {
         return DateTime.DateTime;
     }
 
     [ExcludeFromCodeCoverage]
-    decimal IConvertible.ToDecimal(IFormatProvider provider)
+    decimal IConvertible.ToDecimal(IFormatProvider? provider)
     {
         throw new NotSupportedException();
     }
 
     [ExcludeFromCodeCoverage]
-    double IConvertible.ToDouble(IFormatProvider provider)
+    double IConvertible.ToDouble(IFormatProvider? provider)
     {
         throw new NotSupportedException();
     }
 
     [ExcludeFromCodeCoverage]
-    short IConvertible.ToInt16(IFormatProvider provider)
+    short IConvertible.ToInt16(IFormatProvider? provider)
     {
         throw new NotSupportedException();
     }
 
     [ExcludeFromCodeCoverage]
-    int IConvertible.ToInt32(IFormatProvider provider)
+    int IConvertible.ToInt32(IFormatProvider? provider)
     {
         throw new NotSupportedException();
     }
 
     [ExcludeFromCodeCoverage]
-    long IConvertible.ToInt64(IFormatProvider provider)
+    long IConvertible.ToInt64(IFormatProvider? provider)
     {
         throw new NotSupportedException();
     }
 
     [ExcludeFromCodeCoverage]
-    sbyte IConvertible.ToSByte(IFormatProvider provider)
+    sbyte IConvertible.ToSByte(IFormatProvider? provider)
     {
         throw new NotSupportedException();
     }
 
     [ExcludeFromCodeCoverage]
-    float IConvertible.ToSingle(IFormatProvider provider)
+    float IConvertible.ToSingle(IFormatProvider? provider)
     {
         throw new NotSupportedException();
     }
 
     [ExcludeFromCodeCoverage]
-    string IConvertible.ToString(IFormatProvider provider)
+    string IConvertible.ToString(IFormatProvider? provider)
     {
         throw new NotSupportedException();
     }
 
-    object IConvertible.ToType(Type conversionType, IFormatProvider provider)
+    object IConvertible.ToType(Type conversionType, IFormatProvider? provider)
     {
         if (conversionType == typeof(DateTime))
         {
@@ -165,19 +165,19 @@ public record struct TomlDateTime(DateTimeOffset DateTime, int SecondPrecision, 
     }
 
     [ExcludeFromCodeCoverage]
-    ushort IConvertible.ToUInt16(IFormatProvider provider)
+    ushort IConvertible.ToUInt16(IFormatProvider? provider)
     {
         throw new NotSupportedException();
     }
 
     [ExcludeFromCodeCoverage]
-    uint IConvertible.ToUInt32(IFormatProvider provider)
+    uint IConvertible.ToUInt32(IFormatProvider? provider)
     {
         throw new NotSupportedException();
     }
 
     [ExcludeFromCodeCoverage]
-    ulong IConvertible.ToUInt64(IFormatProvider provider)
+    ulong IConvertible.ToUInt64(IFormatProvider? provider)
     {
         throw new NotSupportedException();
     }
