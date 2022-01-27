@@ -177,6 +177,24 @@ public class TomlFormatHelper
                 : displayKind)).ToString();
     }
 
+#if NET6_0_OR_GREATER
+    public static string ToString(DateOnly dateOnly, TomlPropertyDisplayKind displayKind)
+    {
+        return new TomlDateTime(dateOnly.ToDateTime(TimeOnly.MinValue), 0,
+            GetDateTimeDisplayKind(displayKind == TomlPropertyDisplayKind.Default
+                ? TomlPropertyDisplayKind.LocalDate
+                : displayKind)).ToString();
+    }
+
+    public static string ToString(TimeOnly timeOnly, TomlPropertyDisplayKind displayKind)
+    {
+        return new TomlDateTime(DateOnly.MinValue.ToDateTime(timeOnly), 0,
+            GetDateTimeDisplayKind(displayKind == TomlPropertyDisplayKind.Default
+                ? TomlPropertyDisplayKind.LocalTime
+                : displayKind)).ToString();
+    }
+#endif
+
     private static string AppendDecimalPoint(string text)
     {
         if (text == "0") return "0.0";
