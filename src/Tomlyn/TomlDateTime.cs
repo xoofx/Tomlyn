@@ -149,6 +149,18 @@ public record struct TomlDateTime(DateTimeOffset DateTime, int SecondPrecision, 
             return DateTime;
         }
 
+#if NET6_0_OR_GREATER
+        if (conversionType == typeof(DateOnly))
+        {
+            return DateOnly.FromDateTime(DateTime.DateTime);
+        }
+
+        if (conversionType == typeof(TimeOnly))
+        {
+            return TimeOnly.FromDateTime(DateTime.DateTime);
+        }
+#endif
+
         throw new InvalidCastException($"Unable to convert {nameof(TomlDateTime)} to destination type {conversionType.FullName}");
     }
 

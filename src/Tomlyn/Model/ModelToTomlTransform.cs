@@ -547,6 +547,16 @@ internal class ModelToTomlTransform
         {
             _writer.Write(TomlFormatHelper.ToString(dateTimeOffset, displayKind));
         }
+#if NET6_0_OR_GREATER
+        else if (primitive is DateOnly dateOnly)
+        {
+            _writer.Write(TomlFormatHelper.ToString(dateOnly, displayKind));
+        }
+        else if (primitive is TimeOnly timeOnly)
+        {
+            _writer.Write(TomlFormatHelper.ToString(timeOnly, displayKind));
+        }
+#endif
         else
         {
             // Unexpected

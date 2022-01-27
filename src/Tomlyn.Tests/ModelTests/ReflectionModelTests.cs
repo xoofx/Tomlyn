@@ -32,6 +32,8 @@ namespace Tomlyn.Tests
                 Float64Value = 2.5,
                 DateTime = new DateTime(1970, 1, 1),
                 DateTimeOffset = new DateTimeOffset(1980, 1, 1, 0, 23, 1, TimeSpan.FromHours(-2)),
+                DateOnly = new DateOnly(1970, 5, 27),
+                TimeOnly = new TimeOnly(7, 32, 0, 999),
                 TomlDateTime = new TomlDateTime(new DateTimeOffset(new DateTime(1990, 11, 15)), 0, TomlDateTimeKind.LocalDateTime)
             };
 
@@ -244,13 +246,15 @@ key2 = 3
             public double Float64Value { get; set; }
             public DateTime DateTime { get; set; }
             public DateTimeOffset DateTimeOffset { get; set; }
+            public DateOnly DateOnly { get; set; }
+            public TimeOnly TimeOnly { get; set; }
             public TomlDateTime TomlDateTime { get; set; }
 
             public bool Equals(PrimitiveModel? other)
             {
                 if (ReferenceEquals(null, other)) return false;
                 if (ReferenceEquals(this, other)) return true;
-                return Int8Value == other.Int8Value && Int16Value == other.Int16Value && Int32Value == other.Int32Value && Int64Value == other.Int64Value && UInt8Value == other.UInt8Value && UInt16Value == other.UInt16Value && UInt32Value == other.UInt32Value && UInt64Value == other.UInt64Value && Float32Value.Equals(other.Float32Value) && Float64Value.Equals(other.Float64Value) && DateTime.Equals(other.DateTime) && DateTimeOffset.Equals(other.DateTimeOffset) && TomlDateTime.Equals(other.TomlDateTime);
+                return Int8Value == other.Int8Value && Int16Value == other.Int16Value && Int32Value == other.Int32Value && Int64Value == other.Int64Value && UInt8Value == other.UInt8Value && UInt16Value == other.UInt16Value && UInt32Value == other.UInt32Value && UInt64Value == other.UInt64Value && Float32Value.Equals(other.Float32Value) && Float64Value.Equals(other.Float64Value) && DateTime.Equals(other.DateTime) && DateTimeOffset.Equals(other.DateTimeOffset) && DateOnly.Equals(other.DateOnly) && TimeOnly.Equals(other.TimeOnly) && TomlDateTime.Equals(other.TomlDateTime);
             }
 
             public override bool Equals(object? obj)
@@ -276,13 +280,15 @@ key2 = 3
                 hashCode.Add(Float64Value);
                 hashCode.Add(DateTime);
                 hashCode.Add(DateTimeOffset);
+                hashCode.Add(DateOnly);
+                hashCode.Add(TimeOnly);
                 hashCode.Add(TomlDateTime);
                 return hashCode.ToHashCode();
             }
 
             public override string ToString()
             {
-                return $"{nameof(Int8Value)}: {Int8Value}, {nameof(Int16Value)}: {Int16Value}, {nameof(Int32Value)}: {Int32Value}, {nameof(Int64Value)}: {Int64Value}, {nameof(UInt8Value)}: {UInt8Value}, {nameof(UInt16Value)}: {UInt16Value}, {nameof(UInt32Value)}: {UInt32Value}, {nameof(UInt64Value)}: {UInt64Value}, {nameof(Float32Value)}: {Float32Value}, {nameof(Float64Value)}: {Float64Value}, {nameof(DateTime)}: {DateTime.ToUniversalTime()}, {nameof(DateTimeOffset)}: {DateTimeOffset.ToUniversalTime()}, {nameof(TomlDateTime)}: {TomlDateTime.DateTime.ToUniversalTime()}";
+                return $"{nameof(Int8Value)}: {Int8Value}, {nameof(Int16Value)}: {Int16Value}, {nameof(Int32Value)}: {Int32Value}, {nameof(Int64Value)}: {Int64Value}, {nameof(UInt8Value)}: {UInt8Value}, {nameof(UInt16Value)}: {UInt16Value}, {nameof(UInt32Value)}: {UInt32Value}, {nameof(UInt64Value)}: {UInt64Value}, {nameof(Float32Value)}: {Float32Value}, {nameof(Float64Value)}: {Float64Value}, {nameof(DateTime)}: {DateTime.ToUniversalTime()}, {nameof(DateTimeOffset)}: {DateTimeOffset.ToUniversalTime()}, {nameof(DateOnly)}: {DateOnly}, {nameof(TimeOnly)}: {TimeOnly}, {nameof(TomlDateTime)}: {TomlDateTime}";
             }
         }
     }
