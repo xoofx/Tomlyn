@@ -378,10 +378,10 @@ namespace Tomlyn.Syntax
                 return (ObjectPath) MemberwiseClone();
             }
 
-            public override bool Equals(object obj)
+            public override bool Equals(object? obj)
             {
-                var other = (ObjectPath) obj;
-                if (other.Count != Count) return false;
+                var other = obj as ObjectPath;
+                if (other?.Count != Count) return false;
                 if (other._hashCode != _hashCode) return false;
                 for (int i = 0; i < Count; i++)
                 {

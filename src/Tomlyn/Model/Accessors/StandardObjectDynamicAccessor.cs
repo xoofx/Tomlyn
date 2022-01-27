@@ -68,7 +68,7 @@ internal class StandardObjectDynamicAccessor : ObjectDynamicAccessor
 
     public override bool TrySetPropertyValue(SourceSpan span, object obj, string name, object? value)
     {
-        string? errorMessage = null;
+        string errorMessage = "Unknown error";
         try
         {
             if (_props.TryGetValue(name, out var prop))
@@ -92,7 +92,7 @@ internal class StandardObjectDynamicAccessor : ObjectDynamicAccessor
                                 errorMessage = $"The property value of type {value?.GetType().FullName} couldn't be converted to {prop.PropertyType} for the list property {TargetType.FullName}/{name}";
                             }
                         }
-                        else
+                        else if (listValue is not null)
                         {
                             foreach (var item in (IEnumerable)value)
                             {

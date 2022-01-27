@@ -50,7 +50,7 @@ namespace Tomlyn.Syntax
             return Offset == other.Offset && Column == other.Column && Line == other.Line;
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             if (ReferenceEquals(null, obj)) return false;
             return obj is TextPosition && Equals((TextPosition) obj);
