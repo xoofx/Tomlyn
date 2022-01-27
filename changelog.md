@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.0 (27 Jan 2022)
+- Add support for net6.0 (PR [#19](https://github.com/xoofx/Tomlyn/pull/19))
+- Fix nullable warnings with net6.0 (PR [#20](https://github.com/xoofx/Tomlyn/pull/20))
+
 ## 0.9.1 (25 Jan 2022)
 - Fix Tomlyn.Signed assembly on NuGet
 
