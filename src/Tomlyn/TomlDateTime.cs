@@ -28,36 +28,7 @@ public record struct TomlDateTime(DateTimeOffset DateTime, int SecondPrecision, 
     {
     }
 
-    public override string ToString()
-    {
-        switch (Kind)
-        {
-            case TomlDateTimeKind.LocalDateTime:
-                if (this.DateTime.Millisecond == 0) return this.DateTime.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
-                return this.DateTime.ToString($"yyyy-MM-dd'T'HH:mm:ss.{GetFormatPrecision(this.SecondPrecision)}", CultureInfo.InvariantCulture);
-            case TomlDateTimeKind.LocalDate:
-                return this.DateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-            case TomlDateTimeKind.LocalTime:
-                return this.DateTime.Millisecond == 0 ? this.DateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture) : this.DateTime.ToString($"HH:mm:ss.{GetFormatPrecision(this.SecondPrecision)}", CultureInfo.InvariantCulture);
-            case TomlDateTimeKind.OffsetDateTimeByNumber:
-            {
-                var time = this.DateTime.ToLocalTime();
-                if (time.Millisecond == 0)
-                    return time.ToString($"yyyy-MM-dd'T'HH:mm:sszzz", CultureInfo.InvariantCulture);
-                return time.ToString($"yyyy-MM-dd'T'HH:mm:ss.{GetFormatPrecision(this.SecondPrecision)}zzz",
-                    CultureInfo.InvariantCulture);
-            }
-            case TomlDateTimeKind.OffsetDateTimeByZ:
-            default:
-            {
-                var time = this.DateTime.ToUniversalTime();
-                if (time.Millisecond == 0)
-                    return time.ToString($"yyyy-MM-dd'T'HH:mm:ssZ", CultureInfo.InvariantCulture);
-                return time.ToString($"yyyy-MM-dd'T'HH:mm:ss.{GetFormatPrecision(this.SecondPrecision)}Z",
-                    CultureInfo.InvariantCulture);
-            }
-        }
-    }
+    public override string ToString() => ((IConvertible)this).ToString(CultureInfo.InvariantCulture);
 
     [ExcludeFromCodeCoverage]
     TypeCode IConvertible.GetTypeCode()
@@ -131,10 +102,36 @@ public record struct TomlDateTime(DateTimeOffset DateTime, int SecondPrecision, 
         throw new NotSupportedException();
     }
 
-    [ExcludeFromCodeCoverage]
     string IConvertible.ToString(IFormatProvider? provider)
     {
-        throw new NotSupportedException();
+        switch (Kind)
+        {
+            case TomlDateTimeKind.LocalDateTime:
+                if (DateTime.Millisecond == 0)
+                    return DateTime.ToString("yyyy-MM-dd'T'HH:mm:ss", provider);
+                return DateTime.ToString($"yyyy-MM-dd'T'HH:mm:ss.{GetFormatPrecision(SecondPrecision)}", provider);
+            case TomlDateTimeKind.LocalDate:
+                return DateTime.ToString("yyyy-MM-dd", provider);
+            case TomlDateTimeKind.LocalTime:
+                if (DateTime.Millisecond == 0)
+                    return DateTime.ToString("HH:mm:ss", provider);
+                return DateTime.ToString($"HH:mm:ss.{GetFormatPrecision(SecondPrecision)}", provider);
+            case TomlDateTimeKind.OffsetDateTimeByNumber:
+            {
+                var time = DateTime.ToLocalTime();
+                if (time.Millisecond == 0)
+                    return time.ToString("yyyy-MM-dd'T'HH:mm:sszzz", provider);
+                return time.ToString($"yyyy-MM-dd'T'HH:mm:ss.{GetFormatPrecision(SecondPrecision)}zzz", provider);
+            }
+            case TomlDateTimeKind.OffsetDateTimeByZ:
+            default:
+            {
+                var time = DateTime.ToUniversalTime();
+                if (time.Millisecond == 0)
+                    return time.ToString("yyyy-MM-dd'T'HH:mm:ssZ", provider);
+                return time.ToString($"yyyy-MM-dd'T'HH:mm:ss.{GetFormatPrecision(SecondPrecision)}Z", provider);
+            }
+        }
     }
 
     object IConvertible.ToType(Type conversionType, IFormatProvider? provider)
