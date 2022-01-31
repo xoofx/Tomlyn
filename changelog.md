@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.10.1 (31 Jan 2022)
+- Implement IConvertible.ToString on TomlDateTime (PR [#21](https://github.com/xoofx/Tomlyn/pull/21))
+
 ## 0.10.0 (27 Jan 2022)
 - Add support for net6.0 (PR [#19](https://github.com/xoofx/Tomlyn/pull/19))
 - Fix nullable warnings with net6.0 (PR [#20](https://github.com/xoofx/Tomlyn/pull/20))
