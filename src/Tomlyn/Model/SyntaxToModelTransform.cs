@@ -191,7 +191,7 @@ internal class SyntaxToModelTransform : SyntaxVisitor
         var accessor = _currentObjectAccessor as ObjectDynamicAccessor;
         if (accessor is null)
         {
-            _context.Diagnostics.Error(span, $"Unable to set a key on an object accessor {_currentObjectAccessor!.TargetType.FullName}");
+            _context.Diagnostics.Error(span, $"Unable to set a key {key} on an object accessor {_currentObjectAccessor!.TargetType.FullName}");
             return false;
         }
 

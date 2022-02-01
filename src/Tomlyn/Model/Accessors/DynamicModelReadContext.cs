@@ -24,7 +24,7 @@ internal class DynamicModelReadContext
     
     public Func<Type, ObjectKind, object> CreateInstance { get; set; }
 
-    public Func<object, Type, object>? ConvertTo { get; set; }
+    public Func<object, Type, object?>? ConvertTo { get; set; }
 
     public DiagnosticsBag Diagnostics { get; }
     
@@ -154,8 +154,12 @@ internal class DynamicModelReadContext
 
             if (ConvertTo is not null)
             {
-                outputValue = ConvertTo(value, changeType);
-                return true;
+                var convertedValue = ConvertTo(value, changeType);
+                outputValue = convertedValue;
+                if (convertedValue is not null)
+                {
+                    return true;
+                }
             }
 
             errorMessage = $"Unsupported type to convert {value.GetType().FullName} to type {changeType.FullName}.";

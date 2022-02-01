@@ -205,10 +205,11 @@ internal class DictionaryDynamicAccessor : ObjectDynamicAccessor
             _propSetter = propSetter!;
 
             MethodInfo? methodTryGetValue = null;
+            var valueByRefType = valueType.MakeByRefType();
             foreach (var method in dictionaryType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.FlattenHierarchy))
             {
                 var parameters = method.GetParameters();
-                if (method.Name == "TryGetValue" && method.ReturnType == typeof(bool) && parameters.Length == 2 && parameters[0].ParameterType == KeyType && parameters[1].IsOut && parameters[1].ParameterType == valueType)
+                if (method.Name == "TryGetValue" && method.ReturnType == typeof(bool) && parameters.Length == 2 && parameters[0].ParameterType == KeyType && parameters[1].IsOut && parameters[1].ParameterType == valueByRefType)
                 {
                     methodTryGetValue = method;
                     break;
@@ -225,7 +226,14 @@ internal class DictionaryDynamicAccessor : ObjectDynamicAccessor
             var enumerator = (IDictionaryEnumerator)it.GetEnumerator();
             while (enumerator.MoveNext())
             {
-                yield return new KeyValuePair<string, object?>((string)_context.ConvertTo!(enumerator.Key, typeof(string)), enumerator.Value);
+
+                if (!_context.TryConvertValue(new SourceSpan(), enumerator.Key, typeof(string), out var newKey) || newKey is not string text)
+                {
+                    _context.Diagnostics.Error(new SourceSpan(), $"Unable to convert key {enumerator.Key} to a string");
+                    yield break;
+                }
+
+                yield return new KeyValuePair<string, object?>(text, enumerator.Value);
             }
         }
 

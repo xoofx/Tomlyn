@@ -201,6 +201,34 @@ key2 = 3
             Assert.AreEqual(input, toml2);
         }
 
+        [Test]
+        public void TestModelWithSpecialDictionary()
+        {
+            var input = @"[values.test]
+a = 1
+b = true
+".ReplaceLineEndings().Trim();
+            StandardTests.DisplayHeader("input");
+            Console.WriteLine(input);
+            var model = Toml.ToModel<ModelWithSpecialDictionary>(input);
+
+            Assert.True(model.Values.ContainsKey("test"));
+
+            var test = model.Values["test"];
+
+            Assert.True(test.ContainsKey("a"));
+            Assert.True(test.ContainsKey("b"));
+
+            Assert.AreEqual(1L, test["a"]);
+            Assert.AreEqual(true, test["b"]);
+
+            var output = Toml.FromModel(model).ReplaceLineEndings().Trim();
+            StandardTests.DisplayHeader("output");
+            Console.WriteLine(output);
+
+            Assert.AreEqual(output, input);
+        }
+
         public class SimpleModel
         {
             public SimpleModel()
@@ -230,6 +258,17 @@ key2 = 3
             public bool Publish { get; set; }
 
             public int? Value { get; set; }
+        }
+
+
+        public class ModelWithSpecialDictionary
+        {
+            public ModelWithSpecialDictionary()
+            {
+                Values = new Dictionary<string, Dictionary<string, object>>();
+            }
+
+            public Dictionary<string, Dictionary<string, object>> Values { get; }
         }
 
         public class PrimitiveModel : IEquatable<PrimitiveModel>
