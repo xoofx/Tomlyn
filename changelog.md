@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.10.2 (1 Feb 2022)
+- Fix issue when serializing/deserializing from/to a non-standard dictionary
+
 ## 0.10.1 (31 Jan 2022)
 - Implement IConvertible.ToString on TomlDateTime (PR [#21](https://github.com/xoofx/Tomlyn/pull/21))
 
