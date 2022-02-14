@@ -95,8 +95,11 @@ public class TomlModelOptions
             }
         }
 
-        name ??= prop.Name;
+        return PascalToSnakeCase(name ?? prop.Name);
+    }
 
+    internal static string PascalToSnakeCase(string name)
+    {
         var builder = new StringBuilder();
         var pc = (char)0;
         foreach (var c in name)
