@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.0 (14 Feb 2022)
+- Improve error message when PropertyName is not found (PR #22) by @TylerReid
+- Add helper function `TomlNamingHelper.PascalToSnakeCase`.
+- Add support for overriding the default naming convention via `TomlModelOptions.ConvertPropertyName`.
+
 ## 0.10.2 (1 Feb 2022)
 - Fix issue when serializing/deserializing from/to a non-standard dictionary
 
