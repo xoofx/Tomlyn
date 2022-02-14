@@ -14,6 +14,7 @@ internal class DynamicModelReadContext
     public DynamicModelReadContext(TomlModelOptions options)
     {
         GetPropertyName = options.GetPropertyName;
+        ConvertPropertyName = options.ConvertPropertyName;
         CreateInstance = options.CreateInstance;
         ConvertTo = options.ConvertTo;
         Diagnostics = new DiagnosticsBag();
@@ -21,7 +22,9 @@ internal class DynamicModelReadContext
     }
 
     public Func<PropertyInfo, string?> GetPropertyName { get; set; }
-    
+
+    public Func<string, string> ConvertPropertyName { get; set; }
+
     public Func<Type, ObjectKind, object> CreateInstance { get; set; }
 
     public Func<object, Type, object?>? ConvertTo { get; set; }

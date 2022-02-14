@@ -62,8 +62,9 @@ The mapping comes with a few requirements and is highly customizable:
   - Can ignore properties via attributes (`JsonIgnore`, `DataMemberIgnore`). These attributes can be configured in `TomlModelOptions.AttributeListForIgnore`
   - By default property names are lowered and split by `_` by PascalCase letters
     - For example: `ThisIsAnExample` becomes `this_is_an_example`
-    - This behavior can be changed by passing a `TomlModelOptions` and specifying the `TomlModelOptions.GetPropertyName` delegate.
+    - This behavior can be changed by passing a `TomlModelOptions` and specifying the `TomlModelOptions.ConvertPropertyName` delegate.
     - If the property contains a special attribute (e.g `JsonPropertyName`, `DataMember`), it will use this name instead. You can control the list of attributes in `TomlModelOptions.AttributeListForGetName`.
+  - It is possible to override the lowering of a property at a lower level via `TomlModelOptions.GetPropertyName` delegate. Note that this delegate is handling the renaming by attributes and calling the configured `TomlModelOptions.ConvertPropertyName`.
 - Requires class types to have a parameter-less constructor.
 - Supports all C# primitive types, `string`, `DateTime`, `DateTimeOffset` and `TomlDateTime`.
 - Prefer concrete types instead of interfaces or abstract types.

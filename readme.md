@@ -65,6 +65,9 @@ value = true
 list = [4, 5, 6]
 ```
 
+> NOTICE: By default, when mapping to a custom model, Tomlyn is using the PascalToSnakeCase naming convention (e.g `ThisIsFine` to `this_is_fine`).
+> This behavior can be changed by overriding the `TomlModelOptions.ConvertPropertyName` delegate.
+
 ## License
 
 This software is released under the [BSD-Clause 2 license](https://opensource.org/licenses/BSD-2-Clause). 

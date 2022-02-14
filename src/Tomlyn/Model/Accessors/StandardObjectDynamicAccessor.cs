@@ -154,13 +154,19 @@ internal class StandardObjectDynamicAccessor : ObjectDynamicAccessor
             propertyType = prop.PropertyType;
             return true;
         }
-        var snakeCasedName = TomlModelOptions.PascalToSnakeCase(name);
-        if (_props.ContainsKey(snakeCasedName))
+
+        // Let's try to recover by using the configured ConvertPropertyName
+        // but we emit a warning in that case.
+        var otherName = Context.ConvertPropertyName(name);
+        if (otherName != name && _props.TryGetValue(otherName, out prop))
         {
-            Context.Diagnostics.Error(span, $"The property {name} was not found, but {snakeCasedName} was. By default property names are lowered and split by _ by PascalCase letters. This behavior can be changed by passing a TomlModelOptions and specifying the TomlModelOptions.GetPropertyName delegate.");
-            return false;
+            propertyType = prop.PropertyType;
+            Context.Diagnostics.Warning(span, $"The property `{name}` was not found, but `{otherName}` was. By default property names are lowered and split by _ by PascalCase letters. This behavior can be changed by passing a TomlModelOptions and specifying the TomlModelOptions.ConvertPropertyName delegate.");
+            return true;
         }
-        Context.Diagnostics.Error(span, $"The property {name} was not found on object type {TargetType.FullName}");
+
+        // Otherwise, it's an error.
+        Context.Diagnostics.Error(span, $"The property `{name}` was not found on object type {TargetType.FullName}");
         return false;
     }
 

@@ -2,8 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection;
-using System.Runtime.Serialization;
-using System.Text;
+using Tomlyn.Helpers;
 using Tomlyn.Model;
 
 namespace Tomlyn;
@@ -15,10 +14,16 @@ public class TomlModelOptions
     /// </summary>
     public static readonly Func<Type, ObjectKind, object> DefaultCreateInstance = DefaultCreateInstanceImpl;
 
+    /// <summary>
+    /// Default convert name using snake case via help <see cref="TomlNamingHelper.PascalToSnakeCase"/>.
+    /// </summary>
+    public static readonly Func<string, string> DefaultConvertPropertyName = TomlNamingHelper.PascalToSnakeCase;
+
     public TomlModelOptions()
     {
         GetPropertyName = DefaultGetPropertyNameImpl;
         CreateInstance = DefaultCreateInstance;
+        ConvertPropertyName = DefaultConvertPropertyName;
 
         AttributeListForIgnore = new List<string>()
         {
@@ -34,9 +39,17 @@ public class TomlModelOptions
     }
 
     /// <summary>
-    /// Gets or sets the delegate to retrieve a name. If this function returns null, the property is ignored.
+    /// Gets or sets the delegate to retrieve a name from a property. If this function returns null, the property is ignored.
     /// </summary>
     public Func<PropertyInfo, string?> GetPropertyName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the delegate used to convert the name of the property to the name used in TOML. By default, it is using snake case via <see cref="TomlNamingHelper.PascalToSnakeCase"/>.
+    /// </summary>
+    /// <remarks>
+    /// This delegate is used by the default <see cref="GetPropertyName"/> delegate.
+    /// </remarks>
+    public Func<string, string> ConvertPropertyName { get; set; }
 
     public Func<Type, ObjectKind, object> CreateInstance { get; set; }
 
@@ -95,25 +108,7 @@ public class TomlModelOptions
             }
         }
 
-        return PascalToSnakeCase(name ?? prop.Name);
-    }
-
-    internal static string PascalToSnakeCase(string name)
-    {
-        var builder = new StringBuilder();
-        var pc = (char)0;
-        foreach (var c in name)
-        {
-            if (char.IsUpper(c) && !char.IsUpper(pc) && pc != 0 && pc != '_')
-            {
-                builder.Append('_');
-            }
-
-            builder.Append(char.ToLowerInvariant(c));
-            pc = c;
-        }
-
-        return builder.ToString();
+        return ConvertPropertyName(name ?? prop.Name);
     }
 
     private static object DefaultCreateInstanceImpl(Type type, ObjectKind kind)
