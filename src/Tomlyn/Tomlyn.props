@@ -1,16 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
-    <VersionPrefix>0.10.2</VersionPrefix>
     <TargetFrameworks>netstandard2.0;net6.0</TargetFrameworks>
     <LangVersion>10.0</LangVersion>
     <Description>Tomlyn is a TOML parser, validator and authoring library for .NET.</Description>
     <Copyright>Alexandre Mutel</Copyright>
     <Authors>Alexandre Mutel</Authors>
     <NeutralLanguage>en-US</NeutralLanguage>
-    <!--<VersionSuffix>alpha</VersionSuffix>
-    <BuildNumber>001</BuildNumber>-->
-    <VersionSuffix Condition="'$(VersionSuffix)' != '' AND '$(BuildNumber)' != ''">$(VersionSuffix)-$(BuildNumber)</VersionSuffix>
     <PackageTags>toml;parser</PackageTags>
     <PackageReleaseNotes>https://github.com/xoofx/Tomlyn/blob/master/changelog.md</PackageReleaseNotes>
     <PackageReadmeFile>readme.md</PackageReadmeFile>
@@ -29,6 +25,13 @@
   <ItemGroup>
     <None Include="../../img/logo.png" Pack="true" PackagePath="" />
     <None Include="../../readme.md" Pack="true" PackagePath="/"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MinVer" Version="2.5.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 
   <ItemGroup Condition="'$(GITHUB_ACTIONS)' != ''">
