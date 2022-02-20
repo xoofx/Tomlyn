@@ -43,13 +43,16 @@ namespace Tomlyn.Tests
 
         private static void ValidateSpec(string type, string inputName, string toml, string json)
         {
-            Console.WriteLine($"Testing {inputName}");
             var doc = Toml.Parse(toml, inputName);
             var roundtrip = doc.ToString();
-            Dump(toml, doc, roundtrip);
             switch (type)
             {
                 case ValidSpec:
+                    if (doc.HasErrors || toml != roundtrip)
+                    {
+                        Console.WriteLine($"Testing {inputName}");
+                        Dump(toml, doc, roundtrip);
+                    }
                     Assert.False(doc.HasErrors, "Unexpected parsing errors");
                     // Only in the case of a valid spec we check for rountrip
                     Assert.AreEqual(toml, roundtrip, "The roundtrip doesn't match");
@@ -65,28 +68,49 @@ namespace Tomlyn.Tests
                     var expectedJsonAsString = expectedJson.ToString(Formatting.Indented);
                     var computedJsonAsString = computedJson.ToString(Formatting.Indented);
 
-                    DisplayHeader("json");
-                    Console.WriteLine(computedJsonAsString);
+                    if (expectedJsonAsString != computedJsonAsString)
+                    {
+                        Console.WriteLine($"Testing {inputName}");
+                        Dump(toml, doc, roundtrip);
+                        DisplayHeader("json");
+                        Console.WriteLine(computedJsonAsString);
 
-                    DisplayHeader("expected json");
-                    Console.WriteLine(expectedJsonAsString);
+                        DisplayHeader("expected json");
+                        Console.WriteLine(expectedJsonAsString);
+                    }
 
                     Assert.AreEqual(expectedJsonAsString, computedJsonAsString);
 
-                    DisplayHeader("toml from model");
                     var tomlFromModel = Toml.FromModel(model);
-                    Console.WriteLine(tomlFromModel);
+
 
                     var model2 = Toml.ToModel<TomlTable>(tomlFromModel);
                     var computedJson2 = ModelHelper.ToJson(model2);
                     var computedJson2AsString = computedJson2.ToString(Formatting.Indented);
 
-                    DisplayHeader("json2");
-                    Console.WriteLine(computedJson2AsString);
+                    if (expectedJsonAsString != computedJson2AsString)
+                    {
+                        Console.WriteLine($"Testing {inputName}");
+                        Dump(toml, doc, roundtrip);
+                        DisplayHeader("expected json");
+                        Console.WriteLine(expectedJsonAsString);
+
+                        DisplayHeader("toml from model");
+                        Console.WriteLine(tomlFromModel);
+
+                        DisplayHeader("json2");
+                        Console.WriteLine(computedJson2AsString);
+                    }
 
                     Assert.AreEqual(expectedJsonAsString, computedJson2AsString);
                     break;
                 case InvalidSpec:
+                    if (!doc.HasErrors)
+                    {
+                        Console.WriteLine($"Testing {inputName}");
+                        Dump(toml, doc, roundtrip);
+                    }
+
                     Assert.True(doc.HasErrors, "The TOML requires parsing/validation errors");
                     break;
             }
@@ -94,6 +118,11 @@ namespace Tomlyn.Tests
             {
                 var docUtf8 = Toml.Parse(Encoding.UTF8.GetBytes(toml), inputName);
                 var roundtripUtf8 = docUtf8.ToString();
+                if (roundtrip != roundtripUtf8)
+                {
+                    Console.WriteLine($"Testing {inputName}");
+                    Dump(toml, doc, roundtrip);
+                }
                 Assert.AreEqual(roundtrip, roundtripUtf8, "The UTF8 version doesn't match with the UTF16 version");
             }
         }
