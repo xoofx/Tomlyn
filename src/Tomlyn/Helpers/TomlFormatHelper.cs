@@ -227,7 +227,7 @@ public class TomlFormatHelper
         {
             var c = text[i];
             // new line are permitted
-            if ((c == '\r' && i + 1 < text.Length && text[i + 1] == 'n') || c == '\n')
+            if ((c == '\r' && i + 1 < text.Length && text[i + 1] == '\n') || c == '\n')
             {
                 continue;
             }
