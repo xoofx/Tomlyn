@@ -14,7 +14,7 @@ namespace Tomlyn.Model
     /// <remarks>
     /// This object keep the order of the inserted key=values
     /// </remarks>
-    public sealed class TomlTable : TomlObject, IDictionary<string, object?>, ITomlMetadataProvider
+    public sealed class TomlTable : TomlObject, IDictionary<string, object>, ITomlMetadataProvider
     {
         private readonly List<KeyValuePair<string, ValueHolder>> _order;
         private readonly Dictionary<string, ValueHolder> _map;
@@ -39,12 +39,12 @@ namespace Tomlyn.Model
         /// <inheritdoc/>
         public TomlPropertiesMetadata? PropertiesMetadata { get; set; }
 
-        public IEnumerator<KeyValuePair<string, object?>> GetEnumerator()
+        public IEnumerator<KeyValuePair<string, object>> GetEnumerator()
         {
             
             foreach (var keyPair in _order)
             {
-                yield return new KeyValuePair<string, object?>(keyPair.Key, keyPair.Value.Target);
+                yield return new KeyValuePair<string, object>(keyPair.Key, keyPair.Value.Target);
             }
         }
 
@@ -53,7 +53,7 @@ namespace Tomlyn.Model
             return GetEnumerator();
         }
 
-        void ICollection<KeyValuePair<string, object?>>.Add(KeyValuePair<string, object?> item)
+        void ICollection<KeyValuePair<string, object>>.Add(KeyValuePair<string, object> item)
         {
             Add(item.Key, item.Value);
         }
@@ -64,7 +64,7 @@ namespace Tomlyn.Model
             _order.Clear();
         }
 
-        bool ICollection<KeyValuePair<string, object?>>.Contains(KeyValuePair<string, object?> item)
+        bool ICollection<KeyValuePair<string, object>>.Contains(KeyValuePair<string, object> item)
         {
             foreach (var pair in _order)
             {
@@ -77,17 +77,17 @@ namespace Tomlyn.Model
             return false;
         }
 
-        void ICollection<KeyValuePair<string, object?>>.CopyTo(KeyValuePair<string, object?>[] array, int arrayIndex)
+        void ICollection<KeyValuePair<string, object>>.CopyTo(KeyValuePair<string, object>[] array, int arrayIndex)
         {
             if (arrayIndex + _order.Count > array.Length) throw new ArgumentOutOfRangeException(nameof(arrayIndex));
             for (var i = 0; i < _order.Count; i++)
             {
                 var item = _order[i];
-                array[i + arrayIndex] = new KeyValuePair<string, object?>(item.Key, item.Value.Target);
+                array[i + arrayIndex] = new KeyValuePair<string, object>(item.Key, item.Value.Target);
             }
         }
 
-        bool ICollection<KeyValuePair<string, object?>>.Remove(KeyValuePair<string, object?> item)
+        bool ICollection<KeyValuePair<string, object>>.Remove(KeyValuePair<string, object> item)
         {
             foreach (var keyPair in _order)
             {
@@ -108,7 +108,7 @@ namespace Tomlyn.Model
 
         public bool IsReadOnly => false;
 
-        public void Add(string key, object? value)
+        public void Add(string key, object value)
         {
             if (value == null) throw new ArgumentNullException(nameof(value));
             var valueHolder = new ValueHolder(value);
@@ -139,9 +139,9 @@ namespace Tomlyn.Model
             return false;
         }
 
-        public bool TryGetValue(string key, out object? value)
+        public bool TryGetValue(string key, out object value)
         {
-            value = null;
+            value = null!;
             if (_map.TryGetValue(key, out var valueHolder))
             {
                 value = valueHolder.Target;
@@ -151,7 +151,7 @@ namespace Tomlyn.Model
             return false;
         }
 
-        public object? this[string key]
+        public object this[string key]
         {
             get => _map[key].Target;
             set
@@ -181,11 +181,11 @@ namespace Tomlyn.Model
             }
         }
 
-        public ICollection<object?> Values
+        public ICollection<object> Values
         {
             get
             {
-                var list = new List<object?>();
+                var list = new List<object>();
                 foreach (var valuePair in _order)
                 {
                     list.Add(valuePair.Value.Target);
@@ -203,12 +203,12 @@ namespace Tomlyn.Model
 
         private class ValueHolder
         {
-            public ValueHolder(object? target)
+            public ValueHolder(object target)
             {
                 Target = target;
             }
 
-            public object? Target { get; set; }
+            public object Target { get; set; }
         }
     }
 }

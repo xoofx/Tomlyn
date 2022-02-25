@@ -140,7 +140,7 @@ internal class DictionaryDynamicAccessor : ObjectDynamicAccessor
 
         public override IEnumerable<KeyValuePair<string, object?>> GetElements(object dictionary)
         {
-            return ((TomlTable)dictionary);
+            return (IEnumerable<KeyValuePair<string, object?>>)dictionary;
         }
 
         public override bool TryGetValue(object dictionary, object key, out object? value)
