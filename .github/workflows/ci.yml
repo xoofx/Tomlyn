@@ -32,10 +32,3 @@ jobs:
       run: |
         dotnet tool install -g dotnet-releaser
         dotnet-releaser run --nuget-token ${{secrets.NUGET_TOKEN}} --github-token  ${{secrets.GITHUB_TOKEN}} src/dotnet-releaser.toml
-
-    #- name: Coveralls Upload
-    #  uses: coverallsapp/github-action@master
-    #  if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    #  with:
-    #    github-token: ${{ secrets.GITHUB_TOKEN }}
-    #    path-to-lcov: src/${{env.PROJECT_NAME}}.Tests/coverage.info
