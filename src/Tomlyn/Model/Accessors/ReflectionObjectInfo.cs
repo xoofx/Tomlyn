@@ -51,22 +51,31 @@ internal readonly struct ReflectionObjectInfo
         }
 
         var interfaces = type.GetInterfaces();
+        Type? collectionType = null;
         foreach (var i in interfaces)
         {
             if (i.IsGenericType)
             {
+                // Match in priority IDictionary<,>
                 var genericTypeDefinition = i.GetGenericTypeDefinition();
                 if (genericTypeDefinition == typeof(IDictionary<,>))
                 {
                     var genericArguments = i.GetGenericArguments();
                     return new ReflectionObjectInfo(ReflectionObjectKind.Dictionary, genericArguments[0], genericArguments[1]);
                 }
-                if (genericTypeDefinition == typeof(ICollection<>))
+
+                if (collectionType is null && genericTypeDefinition == typeof(ICollection<>))
                 {
-                    var genericArguments = i.GetGenericArguments();
-                    return new ReflectionObjectInfo(ReflectionObjectKind.Collection, genericArguments[0]);
+                    collectionType = i;
                 }
             }
+        }
+
+        // Otherwise if we have a collection, match it
+        if (collectionType is not null)
+        {
+            var genericArguments = collectionType.GetGenericArguments();
+            return new ReflectionObjectInfo(ReflectionObjectKind.Collection, genericArguments[0]);
         }
 
         return new ReflectionObjectInfo(ReflectionObjectKind.Object);
