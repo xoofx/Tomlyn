@@ -1,5 +1,5 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
-// Licensed under the BSD-Clause 2 license. 
+// Licensed under the BSD-Clause 2 license.
 // See license.txt file in the project root for full license information.
 using System;
 using System.Collections.Generic;
@@ -76,6 +76,79 @@ list = [4, 5, 6]
                 StandardTests.DisplayHeader("toml from model");
                 Console.WriteLine(toml);
                 var model2 = Toml.ToModel<PrimitiveModel>(toml);
+
+                Console.WriteLine($"From Model:  {model}");
+                Console.WriteLine($"From Model2: {model2}");
+
+                Assert.AreEqual(model.ToString(), model2.ToString());
+            }
+        }
+
+        /// <summary>
+        /// Serialize back and forth all numeric and struct primitives as nullable value types.
+        /// </summary>
+        [Test]
+        public void TestNullableValueTypes()
+        {
+            var model = new NullableValueTypesModel()
+            {
+                Int8Value = 1,
+                Int16Value = 2,
+                Int32Value = 3,
+                Int64Value = 4,
+                UInt8Value = 5,
+                UInt16Value = 6,
+                UInt32Value = 7,
+                UInt64Value = 8,
+                Float32Value = 2.5f,
+                Float64Value = 2.5,
+                DateTime = new DateTime(1970, 1, 1),
+                DateTimeOffset = new DateTimeOffset(1980, 1, 1, 0, 23, 1, TimeSpan.FromHours(-2)),
+                DateOnly = new DateOnly(1970, 5, 27),
+                TimeOnly = new TimeOnly(7, 32, 0, 999),
+                TomlDateTime = new TomlDateTime(new DateTimeOffset(new DateTime(1990, 11, 15)), 0, TomlDateTimeKind.LocalDateTime)
+            };
+
+            StandardTests.DisplayHeader("validation 1");
+            ValidateModel(model);
+
+            StandardTests.DisplayHeader("validation 2");
+            model.Int8Value = sbyte.MinValue;
+            model.Int16Value = short.MinValue;
+            model.Int32Value = int.MinValue;
+            model.Int64Value = long.MinValue;
+            model.UInt8Value = byte.MaxValue;
+            model.UInt16Value = ushort.MaxValue;
+            model.UInt32Value = uint.MaxValue;
+            model.UInt64Value = ulong.MaxValue;
+            model.Float32Value = float.PositiveInfinity;
+            model.Float64Value = double.PositiveInfinity;
+            ValidateModel(model);
+
+            StandardTests.DisplayHeader("validation 3");
+            model.Int8Value = null;
+            model.Int16Value = null;
+            model.Int32Value = null;
+            model.Int64Value = null;
+            model.UInt8Value = null;
+            model.UInt16Value = null;
+            model.UInt32Value = null;
+            model.UInt64Value = null;
+            model.Float32Value = null;
+            model.Float64Value = null;
+            model.DateTime = null;
+            model.DateTimeOffset = null;
+            model.DateOnly = null;
+            model.TimeOnly = null;
+            model.TomlDateTime = null;
+            ValidateModel(model);
+
+            static void ValidateModel(NullableValueTypesModel model)
+            {
+                var toml = Toml.FromModel(model);
+                StandardTests.DisplayHeader("toml from model");
+                Console.WriteLine(toml);
+                var model2 = Toml.ToModel<NullableValueTypesModel>(toml);
 
                 Console.WriteLine($"From Model:  {model}");
                 Console.WriteLine($"From Model2: {model2}");
@@ -216,7 +289,7 @@ publish = false
 
 [[sub]]
 id3 = ""id3"" # error
-"; 
+";
             var syntax = Toml.Parse(input);
             Assert.False(syntax.HasErrors, "The document should not have any errors");
 
@@ -272,7 +345,7 @@ key2 = 3
             var toml2 = Toml.FromModel(model);
             StandardTests.DisplayHeader("toml - write back");
             Console.WriteLine(toml2);
-            
+
             Assert.AreEqual(input, toml2);
         }
 
@@ -336,7 +409,7 @@ b = true
             }
 
             public string? Name { get; set; }
-            
+
             public List<string> Values { get; }
 
             public List<int>? IntValues { get; set; }
@@ -442,6 +515,80 @@ b = true
             public override string ToString()
             {
                 return $"{nameof(Int8Value)}: {Int8Value}, {nameof(Int16Value)}: {Int16Value}, {nameof(Int32Value)}: {Int32Value}, {nameof(Int64Value)}: {Int64Value}, {nameof(UInt8Value)}: {UInt8Value}, {nameof(UInt16Value)}: {UInt16Value}, {nameof(UInt32Value)}: {UInt32Value}, {nameof(UInt64Value)}: {UInt64Value}, {nameof(Float32Value)}: {Float32Value}, {nameof(Float64Value)}: {Float64Value}, {nameof(DateTime)}: {DateTime.ToUniversalTime()}, {nameof(DateTimeOffset)}: {DateTimeOffset.ToUniversalTime()}, {nameof(DateOnly)}: {DateOnly}, {nameof(TimeOnly)}: {TimeOnly}, {nameof(TomlDateTime)}: {TomlDateTime}";
+            }
+        }
+
+        public class NullableValueTypesModel : IEquatable<NullableValueTypesModel>
+        {
+            public sbyte? Int8Value { get; set; }
+            public short? Int16Value { get; set; }
+            public int? Int32Value { get; set; }
+            public long? Int64Value { get; set; }
+            public byte? UInt8Value { get; set; }
+            public ushort? UInt16Value { get; set; }
+            public uint? UInt32Value { get; set; }
+            public ulong? UInt64Value { get; set; }
+            public float? Float32Value { get; set; }
+            public double? Float64Value { get; set; }
+            public DateTime? DateTime { get; set; }
+            public DateTimeOffset? DateTimeOffset { get; set; }
+            public DateOnly? DateOnly { get; set; }
+            public TimeOnly? TimeOnly { get; set; }
+            public TomlDateTime? TomlDateTime { get; set; }
+
+            public bool Equals(NullableValueTypesModel? other)
+            {
+                if (ReferenceEquals(null, other)) return false;
+                if (ReferenceEquals(this, other)) return true;
+                return Int8Value == other.Int8Value
+                    && Int16Value == other.Int16Value
+                    && Int32Value == other.Int32Value
+                    && Int64Value == other.Int64Value
+                    && UInt8Value == other.UInt8Value
+                    && UInt16Value == other.UInt16Value
+                    && UInt32Value == other.UInt32Value
+                    && UInt64Value == other.UInt64Value
+                    && ((!Float32Value.HasValue && !other.Float32Value.HasValue) || Float32Value.Equals(other.Float32Value))
+                    && ((!Float64Value.HasValue && !other.Float64Value.HasValue) || Float64Value.Equals(other.Float64Value))
+                    && ((!DateTime.HasValue && !other.DateTime.HasValue) || DateTime.Equals(other.DateTime))
+                    && ((!DateTimeOffset.HasValue && !other.DateTimeOffset.HasValue) || DateTimeOffset.Equals(other.DateTimeOffset))
+                    && ((!DateOnly.HasValue && !other.DateOnly.HasValue) || DateOnly.Equals(other.DateOnly))
+                    && ((!TimeOnly.HasValue && !other.TimeOnly.HasValue) || TimeOnly.Equals(other.TimeOnly))
+                    && ((!TomlDateTime.HasValue && !other.TomlDateTime.HasValue) || TomlDateTime.Equals(other.TomlDateTime));
+            }
+
+            public override bool Equals(object? obj)
+            {
+                if (ReferenceEquals(null, obj)) return false;
+                if (ReferenceEquals(this, obj)) return true;
+                if (obj.GetType() != this.GetType()) return false;
+                return Equals((PrimitiveModel) obj);
+            }
+
+            public override int GetHashCode()
+            {
+                var hashCode = new HashCode();
+                hashCode.Add(Int8Value);
+                hashCode.Add(Int16Value);
+                hashCode.Add(Int32Value);
+                hashCode.Add(Int64Value);
+                hashCode.Add(UInt8Value);
+                hashCode.Add(UInt16Value);
+                hashCode.Add(UInt32Value);
+                hashCode.Add(UInt64Value);
+                hashCode.Add(Float32Value);
+                hashCode.Add(Float64Value);
+                hashCode.Add(DateTime);
+                hashCode.Add(DateTimeOffset);
+                hashCode.Add(DateOnly);
+                hashCode.Add(TimeOnly);
+                hashCode.Add(TomlDateTime);
+                return hashCode.ToHashCode();
+            }
+
+            public override string ToString()
+            {
+                return $"{nameof(Int8Value)}: {Int8Value}, {nameof(Int16Value)}: {Int16Value}, {nameof(Int32Value)}: {Int32Value}, {nameof(Int64Value)}: {Int64Value}, {nameof(UInt8Value)}: {UInt8Value}, {nameof(UInt16Value)}: {UInt16Value}, {nameof(UInt32Value)}: {UInt32Value}, {nameof(UInt64Value)}: {UInt64Value}, {nameof(Float32Value)}: {Float32Value}, {nameof(Float64Value)}: {Float64Value}, {nameof(DateTime)}: {(DateTime.HasValue ? DateTime.Value.ToUniversalTime() : "null")}, {nameof(DateTimeOffset)}: {(DateTimeOffset.HasValue ? DateTimeOffset.Value.ToUniversalTime() : "null")}, {nameof(DateOnly)}: {DateOnly}, {nameof(TimeOnly)}: {TimeOnly}, {nameof(TomlDateTime)}: {TomlDateTime}";
             }
         }
     }
