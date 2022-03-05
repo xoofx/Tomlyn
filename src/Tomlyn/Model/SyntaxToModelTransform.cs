@@ -270,12 +270,16 @@ internal class SyntaxToModelTransform : SyntaxVisitor
         _currentValue = integerValueSyntax.Value;
     }
 
-    public override void Visit(ArraySyntax array)
+    public override void Visit(ArraySyntax arraySyntax)
     {
         var stackCount = _objectStack.Count;
         try
         {
-            var list = _context.CreateInstance(_currentTargetType!, ObjectKind.Array);
+            var items = arraySyntax.Items;
+            var currentTargetType = _currentTargetType!;
+            var isArray = currentTargetType.IsArray;
+            var list = isArray ? Array.CreateInstance(currentTargetType.GetElementType()!, items.ChildrenCount) : _context.CreateInstance(currentTargetType, ObjectKind.Array);
+            var array = list as Array;
             var fastList = list as IList;
             var accessor = _context.GetAccessor(list.GetType());
             var listAccessor = accessor as ListDynamicAccessor;
@@ -283,11 +287,10 @@ internal class SyntaxToModelTransform : SyntaxVisitor
             // Fail if we don't have a list accessor
             if (listAccessor is null)
             {
-                _context.Diagnostics.Error(array.Span, $"Invalid list type {list.GetType().FullName}. Getting a {accessor} instead.");
+                _context.Diagnostics.Error(arraySyntax.Span, $"Invalid list type {list.GetType().FullName}. Getting a {accessor} instead.");
                 return;
             }
 
-            var items = array.Items;
             for (int i = 0; i < items.ChildrenCount; i++)
             {
                 var item = items.GetChild(i)!;
@@ -299,7 +302,11 @@ internal class SyntaxToModelTransform : SyntaxVisitor
                     continue;
                 }
 
-                if (fastList is not null)
+                if (array is not null)
+                {
+                    array.SetValue(itemValue, i);
+                }
+                else if (fastList is not null)
                 {
                     fastList.Add(itemValue);
                 }

@@ -283,6 +283,7 @@ key2 = 3
 a = 1
 b = true
 ".ReplaceLineEndings().Trim();
+
             StandardTests.DisplayHeader("input");
             Console.WriteLine(input);
             var model = Toml.ToModel<ModelWithSpecialDictionary>(input);
@@ -302,6 +303,28 @@ b = true
             Console.WriteLine(output);
 
             Assert.AreEqual(output, input);
+        }
+
+        [Test]
+        public void TestModelWithArray()
+        {
+            var input = @"values = ['1', '2', '3']";
+
+            StandardTests.DisplayHeader("input");
+            Console.WriteLine(input);
+            var model = Toml.ToModel<ModelWithArray>(input);
+            CollectionAssert.AreEqual(new string[] { "1", "2", "3"}, model.Values);
+        }
+
+        [Test]
+        public void TestModelWithFixedList()
+        {
+            var input = @"values = ['1', '2', '3']";
+
+            StandardTests.DisplayHeader("input");
+            Console.WriteLine(input);
+            var model = Toml.ToModel<ModelWithFixedList>(input);
+            CollectionAssert.AreEqual(new List<string> { "1", "2", "3" }, model.Values);
         }
 
         public class SimpleModel
@@ -325,6 +348,22 @@ b = true
             [JsonPropertyName("sub")]
             public List<SimpleSubModel> SubModels { get; }
         }
+
+        public class ModelWithArray
+        {
+            public string[]? Values { get; set; }
+        }
+
+        public class ModelWithFixedList
+        {
+            public ModelWithFixedList()
+            {
+                Values = new List<string>();
+            }
+
+            public List<string> Values { get; }
+        }
+
 
         public class SimpleSubModel
         {
