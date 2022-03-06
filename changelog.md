@@ -1,5 +1,7 @@
 # Changelog
 
+> This changelog is no longer used for newer version. Please visits https://github.com/xoofx/Tomlyn/releases
+
 ## 0.11.0 (14 Feb 2022)
 - Improve error message when PropertyName is not found (PR #22) by @TylerReid
 - Add helper function `TomlNamingHelper.PascalToSnakeCase`.
