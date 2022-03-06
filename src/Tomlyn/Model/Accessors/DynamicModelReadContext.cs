@@ -73,6 +73,12 @@ internal class DynamicModelReadContext
             return true;
         }
 
+        var unwrapped = Nullable.GetUnderlyingType(changeType);
+        if (unwrapped != null)
+        {
+            return TryConvertValue(span, value, unwrapped, out outputValue);
+        }
+
         string errorMessage;
         try
         {
