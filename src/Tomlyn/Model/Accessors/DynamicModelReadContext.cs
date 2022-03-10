@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Dynamic;
 using System.IO;
 using System.Reflection;
 using Tomlyn.Model.Accessors;
@@ -16,7 +17,7 @@ internal class DynamicModelReadContext
         GetPropertyName = options.GetPropertyName;
         ConvertPropertyName = options.ConvertPropertyName;
         CreateInstance = options.CreateInstance;
-        ConvertTo = options.ConvertTo;
+        ConvertToModel = options.ConvertToModel;
         Diagnostics = new DiagnosticsBag();
         _accessors = new Dictionary<Type, DynamicAccessor>();
     }
@@ -27,7 +28,7 @@ internal class DynamicModelReadContext
 
     public Func<Type, ObjectKind, object> CreateInstance { get; set; }
 
-    public Func<object, Type, object?>? ConvertTo { get; set; }
+    public Func<object, Type, object?>? ConvertToModel { get; set; }
 
     public DiagnosticsBag Diagnostics { get; }
     
@@ -157,13 +158,20 @@ internal class DynamicModelReadContext
                     }
                 }
 
-                outputValue = Convert.ChangeType(value, changeType);
-                return true;
+                try
+                {
+                    outputValue = Convert.ChangeType(value, changeType);
+                    return true;
+                }
+                catch (Exception) when(ConvertToModel is not null)
+                {
+                    // ignore
+                }
             }
 
-            if (ConvertTo is not null)
+            if (ConvertToModel is not null)
             {
-                var convertedValue = ConvertTo(value, changeType);
+                var convertedValue = ConvertToModel(value, changeType);
                 outputValue = convertedValue;
                 if (convertedValue is not null)
                 {

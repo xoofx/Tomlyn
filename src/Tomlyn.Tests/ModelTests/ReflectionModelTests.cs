@@ -28,6 +28,29 @@ list = [4, 5, 6]
             Assert.AreEqual("this is a string", model["global"]);
         }
 
+        [Test]
+        public void TestUri()
+        {
+            var expected = new Uri("https://example.com");
+            var text = @$"service_uri = ""{expected}""";
+            var options = new TomlModelOptions
+            {
+                ConvertToModel = (value, type) => type == typeof(Uri) ? new Uri((string)value) : null,
+                ConvertToToml = (value) => value is Uri uri ? uri.ToString() : null
+            };
+            var success = Toml.TryToModel<TestConfigWithUri>(text, out var result, out var diagnostics, null, options);
+            
+            Assert.True(success);
+            Assert.AreEqual(expected, result?.ServiceUri);
+
+            var tomlText = Toml.FromModel(result!, options);
+            Assert.AreEqual($"service_uri = \"{expected}\"", tomlText.Trim());
+        }
+
+        private class TestConfigWithUri
+        {
+            public Uri? ServiceUri { get; set; }
+        }
 
         /// <summary>
         /// Serialize back and forth all integer/float primitives.

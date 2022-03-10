@@ -21,6 +21,7 @@ internal class ModelToTomlTransform
     private readonly TextWriter _writer;
     private readonly List<ObjectPath> _paths;
     private readonly List<ObjectPath> _currentPaths;
+    private readonly Stack<List<KeyValuePair<string, object?>>> _tempPropertiesStack;
     private ITomlMetadataProvider? _metadataProvider;
 
     public ModelToTomlTransform(object rootObject, DynamicModelWriteContext context)
@@ -29,6 +30,7 @@ internal class ModelToTomlTransform
         _context = context;
         _writer = context.Writer;
         _paths = new List<ObjectPath>();
+        _tempPropertiesStack = new Stack<List<KeyValuePair<string, object?>>>();
         _currentPaths = new List<ObjectPath>();
     }
 
@@ -167,10 +169,34 @@ internal class ModelToTomlTransform
 
         var previousMetadata = _metadataProvider;
         _metadataProvider = currentObject as ITomlMetadataProvider;
+        var properties = _tempPropertiesStack.Count > 0 ? _tempPropertiesStack.Pop() : new List<KeyValuePair<string, object?>>();
         try
         {
 
-            var properties = accessor.GetProperties(currentObject);
+
+            // Pre-convert values to TOML values
+            var convertToToml = _context.ConvertToToml;
+            if (convertToToml != null)
+            {
+                foreach (var property in accessor.GetProperties(currentObject))
+                {
+                    // Allow to convert a value to a TOML simpler value before serializing.
+                    var value = property.Value;
+                    if (value is not null)
+                    {
+                        var result = convertToToml(value);
+                        if (result != null)
+                        {
+                            value = result;
+                        }
+                        properties.Add(new KeyValuePair<string, object?>(property.Key, value));
+                    }
+                }
+            }
+            else
+            {
+                properties.AddRange(accessor.GetProperties(currentObject));
+            }
 
             // Probe inline for each key
             // If we require a key to be inlined, inline the rest
@@ -181,8 +207,6 @@ internal class ModelToTomlTransform
             bool lastInline = false;
             if (!inline)
             {
-                properties = new List<KeyValuePair<string, object?>>(properties);
-
                 foreach (var prop in properties)
                 {
                     lastValue = prop.Value;
@@ -238,6 +262,8 @@ internal class ModelToTomlTransform
         finally
         {
             _metadataProvider = previousMetadata;
+            properties.Clear();
+            _tempPropertiesStack.Push(properties);
         }
 
         return hasElements;

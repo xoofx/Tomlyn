@@ -16,7 +16,10 @@ internal class DynamicModelWriteContext : DynamicModelReadContext
     public DynamicModelWriteContext(TomlModelOptions options, TextWriter writer) : base(options)
     {
         Writer = writer;
+        ConvertToToml = options.ConvertToToml;
     }
 
     public TextWriter Writer { get; }
+
+    public Func<object, object?>? ConvertToToml { get; set; }
 }

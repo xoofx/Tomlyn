@@ -51,9 +51,47 @@ public class TomlModelOptions
     /// </remarks>
     public Func<string, string> ConvertPropertyName { get; set; }
 
+    /// <summary>
+    /// Gets or sets the function used when deserializing from TOML to create instance of objects. Default is set to <see cref="DefaultCreateInstance"/>.
+    /// The arguments of the function are:
+    /// - The type to create an instance for.
+    /// - The expected <see cref="ObjectKind"/> from a TOML perspective.
+    /// Returns an instance according to the type and the expected <see cref="ObjectKind"/>.
+    /// </summary>
     public Func<Type, ObjectKind, object> CreateInstance { get; set; }
 
-    public Func<object, Type, object>? ConvertTo { get; set; }
+    /// <summary>
+    /// Gets or sets the convert function called when deserializing a value from TOML to a model (e.g string to Uri).
+    /// 
+    /// Must return null if cannot convert. The arguments of the function are:
+    /// - The input object value to convert.
+    /// - The target type to convert to.
+    /// 
+    /// Returns an instance of target type converted from the input value or null if conversion is not supported.
+    /// </summary>
+    [Obsolete($"Use {nameof(ConvertToModel)} instead")]
+    public Func<object, Type, object?>? ConvertTo
+    {
+        get => ConvertToModel;
+        set => ConvertToModel = value;
+    }
+
+    /// <summary>
+    /// Gets or sets the convert function called when deserializing a value from TOML to a model (e.g string to Uri).
+    /// 
+    /// Must return null if cannot convert. The arguments of the function are:
+    /// - The input object value to convert.
+    /// - The target type to convert to.
+    /// 
+    /// Returns an instance of target type converted from the input value or null if conversion is not supported.
+    /// </summary>
+    public Func<object, Type, object?>? ConvertToModel { get; set; }
+
+    /// <summary>
+    /// Gets or sets the convert function called when serializing a value from a model to a TOML representation.
+    /// This function allows to substitute a value to another type before converting (e.g Uri to string).
+    /// </summary>
+    public Func<object, object?>? ConvertToToml { get; set; }
 
     /// <summary>
     /// Gets the list of the attributes used to ignore a property.
