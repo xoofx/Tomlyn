@@ -36,4 +36,12 @@
     <!--Add support for sourcelink-->
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.*" PrivateAssets="All" />
   </ItemGroup>
+
+  <Target Name="PatchVersion" AfterTargets="MinVer">
+    <PropertyGroup>
+      <!--The minor version is like a major version because Major is 0, need to remove this when will be >= 1.0-->
+      <AssemblyVersion>$(MinVerMajor).$(MinVerMinor).0.0</AssemblyVersion>
+    </PropertyGroup>
+  </Target>
+
 </Project>
