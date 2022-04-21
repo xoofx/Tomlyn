@@ -7,7 +7,7 @@ namespace Tomlyn.Model.Accessors;
 
 internal abstract class ObjectDynamicAccessor : DynamicAccessor
 {
-    protected ObjectDynamicAccessor(DynamicModelReadContext context, Type targetType) : base(context, targetType)
+    protected ObjectDynamicAccessor(DynamicModelReadContext context, Type targetType, ReflectionObjectKind kind) : base(context, targetType, kind)
     {
     }
 

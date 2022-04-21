@@ -46,7 +46,7 @@ internal class DynamicModelReadContext
                     accessor = new PrimitiveDynamicAccessor(this, reflectionInfo.GenericArgument1!, true);
                     break;
                 case ReflectionObjectKind.NullableStruct:
-                    accessor = new StandardObjectDynamicAccessor(this, reflectionInfo.GenericArgument1!); ;
+                    accessor = new StandardObjectDynamicAccessor(this, reflectionInfo.GenericArgument1!, ReflectionObjectKind.Struct); ;
                     break;
                 case ReflectionObjectKind.Collection:
                     accessor = new ListDynamicAccessor(this, type, reflectionInfo.GenericArgument1!);
@@ -56,7 +56,7 @@ internal class DynamicModelReadContext
                     break;
                 case ReflectionObjectKind.Struct:
                 case ReflectionObjectKind.Object:
-                    accessor = new StandardObjectDynamicAccessor(this, type); ;
+                    accessor = new StandardObjectDynamicAccessor(this, type, reflectionInfo.Kind); ;
                     break;
                 default:
                     throw new ArgumentOutOfRangeException($"Unsupported {reflectionInfo.Kind}");

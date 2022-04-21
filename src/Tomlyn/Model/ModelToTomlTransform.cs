@@ -198,6 +198,29 @@ internal class ModelToTomlTransform
                 properties.AddRange(accessor.GetProperties(currentObject));
             }
 
+            // Sort primitive first
+            properties.Sort((left, right) =>
+            {
+                var leftValue = left.Value;
+                var rightValue = right.Value;
+                if (leftValue is null) return rightValue is null ? 0 : -1;
+                if (rightValue is null) return 1;
+
+                var leftAccessor = _context.GetAccessor(leftValue.GetType());
+                var rightAccessor = _context.GetAccessor(rightValue.GetType());
+                if (leftAccessor.Kind == ReflectionObjectKind.Primitive)
+                {
+                    return (rightAccessor.Kind == ReflectionObjectKind.Primitive) ? 0 : -1;
+                }
+                else if (rightAccessor.Kind == ReflectionObjectKind.Primitive)
+                {
+                    return 1;
+                }
+
+                // Otherwise don't change the order if we don't have primitives
+                return 0;
+            });
+
             // Probe inline for each key
             // If we require a key to be inlined, inline the rest
             // unless for the last key, if it doesn't need to be inline, we keep it as it is

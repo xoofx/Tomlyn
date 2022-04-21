@@ -15,7 +15,7 @@ internal class DictionaryDynamicAccessor : ObjectDynamicAccessor
 {
     private readonly DictionaryAccessor _dictionaryAccessor;
 
-    public DictionaryDynamicAccessor(DynamicModelReadContext context, Type type, Type keyType, Type valueType) : base(context, type)
+    public DictionaryDynamicAccessor(DynamicModelReadContext context, Type type, Type keyType, Type valueType) : base(context, type, ReflectionObjectKind.Dictionary)
     {
         if (TargetType == typeof(TomlTable))
         {

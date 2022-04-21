@@ -12,7 +12,7 @@ internal class ListDynamicAccessor : DynamicAccessor
     private readonly PropertyInfo? _propCount;
     private readonly MethodInfo? _addMethod;
 
-    public ListDynamicAccessor(DynamicModelReadContext context, Type type, Type elementType) : base(context, type)
+    public ListDynamicAccessor(DynamicModelReadContext context, Type type, Type elementType) : base(context, type, ReflectionObjectKind.Collection)
     {
         ElementType = elementType;
 

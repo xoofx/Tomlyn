@@ -247,23 +247,59 @@ d = true
         [Test]
         public void TestImplicitAndExplicitTable()
         {
-            var input = @"[a.b.c]
-answer = 42
-
-[a]
+            var input = @"[a]
 better = 43
+
+[a.b.c]
+answer = 42
 ";
             var json = @"{
   ""a"": {
+    ""better"": 43,
     ""b"": {
       ""c"": {
         ""answer"": 42
       }
-    },
-    ""better"": 43
+    }
   }
 }";
             AssertJson(input, json);
+        }
+
+        [Test]
+        public void TestPrimitiveOrder()
+        {
+            var root = new Tomlyn.Model.TomlTable()
+            {
+                {
+                    "root",
+                    new Tomlyn.Model.TomlTable()
+                    {
+                        {"a", "a" },
+                        {"b",
+                            new Tomlyn.Model.TomlTable()
+                            {
+                                { "d", "d"}
+                            }
+                        },
+                        {"c", "c" },
+
+                    }
+                }
+            };
+            var toml = Tomlyn.Toml.FromModel(root);
+
+            var root2 = Tomlyn.Toml.ToModel(toml);
+            var toml2 = Tomlyn.Toml.FromModel(root2);
+
+            if (toml != toml2)
+            {
+                Console.WriteLine("expected\n=====================\n");
+                Console.WriteLine(toml);
+                Console.WriteLine("result\n=====================\n");
+                Console.WriteLine(toml2);
+                Assert.AreEqual(toml, toml2);
+            }
         }
 
         private static void AssertJson(string input, string expectedJson)

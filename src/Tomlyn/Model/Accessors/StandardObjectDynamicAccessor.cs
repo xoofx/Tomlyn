@@ -15,7 +15,7 @@ internal class StandardObjectDynamicAccessor : ObjectDynamicAccessor
     private readonly Dictionary<string, PropertyInfo> _props;
     private readonly List<KeyValuePair<string, PropertyInfo>> _orderedProps;
 
-    public StandardObjectDynamicAccessor(DynamicModelReadContext context, Type type) : base(context, type)
+    public StandardObjectDynamicAccessor(DynamicModelReadContext context, Type type, ReflectionObjectKind kind) : base(context, type, kind)
     {
         _props = new Dictionary<string, PropertyInfo>();
         _orderedProps = new List<KeyValuePair<string, PropertyInfo>>();
