@@ -361,7 +361,8 @@ key = 1
 [[array]] # a comment after a table array
 key2 = 3
 # This is a comment after a key
-";
+".ReplaceLineEndings();
+
             StandardTests.DisplayHeader("input");
             Console.WriteLine(input);
             var model = Toml.ToModel(input);
