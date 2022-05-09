@@ -525,7 +525,7 @@ namespace Tomlyn.Parsing
                     previousCharIsDigit = _c == '0';
                     if (previousCharIsDigit)
                     {
-                        _textBuilder.Append(_c);
+                        _textBuilder.Append((char)_c);
                         zeroDigit++;
                     }
                     end = _position;
