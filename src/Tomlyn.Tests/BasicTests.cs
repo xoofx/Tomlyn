@@ -39,6 +39,21 @@ list = [4, 5, 6]
         }
 
         [Test]
+        [TestCase(7, 32, 0, 0)]
+        [TestCase(7, 32, 0, 999)]
+        [TestCase(0, 32, 0, 0)]
+        public void TestLocalTime(int hour, int minute, int second, int millisecond)
+        {
+            var toml = $@"time = {hour:D2}:{minute:D2}:{second:D2}.{millisecond:D3}";
+            var localTime = (TomlDateTime)Toml.ToModel(toml)["time"];
+
+            Assert.AreEqual(hour, localTime.DateTime.Hour);
+            Assert.AreEqual(minute, localTime.DateTime.Minute);
+            Assert.AreEqual(second, localTime.DateTime.Second);
+            Assert.AreEqual(millisecond, localTime.DateTime.Millisecond);
+        }
+
+        [Test]
         public void TestHelloWorldWithCustomModel()
         {
             var toml = @"global = ""this is a string""
