@@ -34,7 +34,8 @@ key = 1 # This is another comment
 test.sub.key = ""yes""
 [[array]]
 hello = true
-";
+".ReplaceLineEndings("\r\n");
+
         var tokens = Toml.Parse(input).Tokens().ToList();
         var builder = new StringBuilder();
         foreach (var node in tokens)
