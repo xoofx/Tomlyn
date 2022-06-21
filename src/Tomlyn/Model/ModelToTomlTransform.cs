@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Linq;
 using Tomlyn.Helpers;
 using Tomlyn.Model.Accessors;
 using Tomlyn.Syntax;
@@ -199,7 +200,8 @@ internal class ModelToTomlTransform
             }
 
             // Sort primitive first
-            properties.Sort((left, right) =>
+            properties = properties.OrderBy(_ => _,
+            Comparer<KeyValuePair<string,object>>.Create((left, right) =>
             {
                 var leftValue = left.Value;
                 var rightValue = right.Value;
@@ -219,7 +221,7 @@ internal class ModelToTomlTransform
 
                 // Otherwise don't change the order if we don't have primitives
                 return 0;
-            });
+            })).ToList();
 
             // Probe inline for each key
             // If we require a key to be inlined, inline the rest

@@ -302,6 +302,36 @@ answer = 42
             }
         }
 
+        [Test]
+        public void TestOrdering()
+        {
+            var t = new Tomlyn.Model.TomlTable();
+            for (var i = 0; i < 17; ++i)
+            {
+                t.Add($"Test{i}", "Test");
+            }
+
+            Assert.AreEqual(
+@"Test0 = ""Test""
+Test1 = ""Test""
+Test2 = ""Test""
+Test3 = ""Test""
+Test4 = ""Test""
+Test5 = ""Test""
+Test6 = ""Test""
+Test7 = ""Test""
+Test8 = ""Test""
+Test9 = ""Test""
+Test10 = ""Test""
+Test11 = ""Test""
+Test12 = ""Test""
+Test13 = ""Test""
+Test14 = ""Test""
+Test15 = ""Test""
+Test16 = ""Test""
+", Toml.FromModel(t));
+        }
+
         private static void AssertJson(string input, string expectedJson)
         {
             var syntax = Toml.Parse(input);
