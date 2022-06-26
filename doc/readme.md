@@ -109,7 +109,7 @@ class MyTable
 {
     public MyTable()
     {
-        List = new List<int>();
+        ListOfIntegers = new List<int>();
     }
 
     public int Key { get; set; }
