@@ -18,6 +18,7 @@ internal class DynamicModelReadContext
         ConvertPropertyName = options.ConvertPropertyName;
         CreateInstance = options.CreateInstance;
         ConvertToModel = options.ConvertToModel;
+        IgnoreMissingProperties = options.IgnoreMissingProperties;
         Diagnostics = new DiagnosticsBag();
         _accessors = new Dictionary<Type, DynamicAccessor>();
     }
@@ -31,6 +32,8 @@ internal class DynamicModelReadContext
     public Func<object, Type, object?>? ConvertToModel { get; set; }
 
     public DiagnosticsBag Diagnostics { get; }
+
+    public bool IgnoreMissingProperties { get; set; }
     
     public DynamicAccessor GetAccessor(Type type)
     {

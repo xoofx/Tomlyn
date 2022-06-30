@@ -165,6 +165,13 @@ internal class StandardObjectDynamicAccessor : ObjectDynamicAccessor
             return true;
         }
 
+        // If configured to ignore missing properties on the target type,
+        // return false to indicate it is missing but don't set an error
+        if (Context.IgnoreMissingProperties)
+        {
+            return false;
+        }
+
         // Otherwise, it's an error.
         Context.Diagnostics.Error(span, $"The property `{name}` was not found on object type {TargetType.FullName}");
         return false;
