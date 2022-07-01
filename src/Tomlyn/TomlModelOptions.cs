@@ -24,6 +24,7 @@ public class TomlModelOptions
         GetPropertyName = DefaultGetPropertyNameImpl;
         CreateInstance = DefaultCreateInstance;
         ConvertPropertyName = DefaultConvertPropertyName;
+        IgnoreMissingProperties = false;
 
         AttributeListForIgnore = new List<string>()
         {
@@ -112,6 +113,14 @@ public class TomlModelOptions
     /// - System.Text.Json.Serialization.JsonPropertyNameAttribute
     /// </remarks>
     public List<string> AttributeListForGetName { get; }
+
+    /// <summary>
+    /// Gets or sets the option to ignore properties in the TOML that are missing from a custom model
+    /// </summary>
+    /// <remarks>
+    /// By default this is false
+    /// </remarks>
+    public bool IgnoreMissingProperties { get; set; }
 
     /// <summary>
     /// Default implementation for getting the property name

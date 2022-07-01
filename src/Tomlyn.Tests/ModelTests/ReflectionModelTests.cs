@@ -424,6 +424,24 @@ b = true
             CollectionAssert.AreEqual(new List<string> { "1", "2", "3" }, model.Values);
         }
 
+        [Test]
+        public void TestModelWithMissingProperties()
+        {
+            var input = @"values = ['1', '2', '3']
+some_thing_that_doesnt_exist = true";
+
+            StandardTests.DisplayHeader("input");
+            Console.WriteLine(input);
+            var model = Toml.ToModel<SimpleModel>(input, options: new TomlModelOptions
+            {
+                IgnoreMissingProperties = true,
+            });
+            CollectionAssert.AreEqual(new List<string> { "1", "2", "3" }, model.Values);
+
+            Assert.Throws<TomlException>(() => Toml.ToModel<SimpleModel>(input));
+
+        }
+
         public class SimpleModel
         {
             public SimpleModel()
