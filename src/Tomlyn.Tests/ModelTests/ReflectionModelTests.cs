@@ -428,7 +428,9 @@ b = true
         public void TestModelWithMissingProperties()
         {
             var input = @"values = ['1', '2', '3']
-some_thing_that_doesnt_exist = true";
+some_thing_that_doesnt_exist = true
+[object_that_doesnt_exist]
+required = true";
 
             StandardTests.DisplayHeader("input");
             Console.WriteLine(input);
