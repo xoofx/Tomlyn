@@ -197,7 +197,12 @@ internal class StandardObjectDynamicAccessor : ObjectDynamicAccessor
             errorMessage = $"Unexpected error when creating object for property {name} on object type {TargetType.FullName}. Reason: {ex.Message}";
         }
 
-        Context.Diagnostics.Error(span, errorMessage);
+        // If configured to ignore missing properties on the target type,
+        // return false to indicate it is missing but don't set an error
+        if (!Context.IgnoreMissingProperties)
+        {
+            Context.Diagnostics.Error(span, errorMessage);
+        }
         return false;
     }
 }
