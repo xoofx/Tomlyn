@@ -15,17 +15,24 @@ internal class DynamicModelReadContext
     public DynamicModelReadContext(TomlModelOptions options)
     {
         GetPropertyName = options.GetPropertyName;
+        GetFieldName = options.GetFieldName;
         ConvertPropertyName = options.ConvertPropertyName;
+        ConvertFieldName = options.ConvertFieldName;
         CreateInstance = options.CreateInstance;
         ConvertToModel = options.ConvertToModel;
         IgnoreMissingProperties = options.IgnoreMissingProperties;
+        IncludeFields = options.IncludeFields;
         Diagnostics = new DiagnosticsBag();
         _accessors = new Dictionary<Type, DynamicAccessor>();
     }
 
     public Func<PropertyInfo, string?> GetPropertyName { get; set; }
 
+    public Func<FieldInfo, string?> GetFieldName { get; set; }
+
     public Func<string, string> ConvertPropertyName { get; set; }
+
+    public Func<string, string> ConvertFieldName { get; set; }
 
     public Func<Type, ObjectKind, object> CreateInstance { get; set; }
 
@@ -34,7 +41,9 @@ internal class DynamicModelReadContext
     public DiagnosticsBag Diagnostics { get; }
 
     public bool IgnoreMissingProperties { get; set; }
-    
+
+    public bool IncludeFields { get; set; }
+
     public DynamicAccessor GetAccessor(Type type)
     {
         if (!_accessors.TryGetValue(type, out var accessor))

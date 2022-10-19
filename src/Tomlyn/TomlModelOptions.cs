@@ -19,12 +19,21 @@ public class TomlModelOptions
     /// </summary>
     public static readonly Func<string, string> DefaultConvertPropertyName = TomlNamingHelper.PascalToSnakeCase;
 
+    /// <summary>
+    /// Default convert name using snake case via help <see cref="TomlNamingHelper.PascalToSnakeCase"/>.
+    /// </summary>
+    public static readonly Func<string, string> DefaultConvertFieldName = TomlNamingHelper.PascalToSnakeCase;
+
     public TomlModelOptions()
     {
         GetPropertyName = DefaultGetPropertyNameImpl;
+        GetFieldName = DefaultGetFieldNameImpl;
         CreateInstance = DefaultCreateInstance;
         ConvertPropertyName = DefaultConvertPropertyName;
+        ConvertFieldName = DefaultConvertFieldName;
+
         IgnoreMissingProperties = false;
+        IncludeFields = false;
 
         AttributeListForIgnore = new List<string>()
         {
@@ -45,12 +54,25 @@ public class TomlModelOptions
     public Func<PropertyInfo, string?> GetPropertyName { get; set; }
 
     /// <summary>
+    /// Gets or sets the delegate to retrieve a field from a property. If this function returns null, the field is ignored.
+    /// </summary>
+    public Func<FieldInfo, string?> GetFieldName { get; set; }
+
+    /// <summary>
     /// Gets or sets the delegate used to convert the name of the property to the name used in TOML. By default, it is using snake case via <see cref="TomlNamingHelper.PascalToSnakeCase"/>.
     /// </summary>
     /// <remarks>
     /// This delegate is used by the default <see cref="GetPropertyName"/> delegate.
     /// </remarks>
     public Func<string, string> ConvertPropertyName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the delegate used to convert the name of the field to the name used in TOML. By default, it is using snake case via <see cref="TomlNamingHelper.PascalToSnakeCase"/>.
+    /// </summary>
+    /// <remarks>
+    /// This delegate is used by the default <see cref="GetFieldName"/> delegate.
+    /// </remarks>
+    public Func<string, string> ConvertFieldName { get; set; }
 
     /// <summary>
     /// Gets or sets the function used when deserializing from TOML to create instance of objects. Default is set to <see cref="DefaultCreateInstance"/>.
@@ -123,6 +145,14 @@ public class TomlModelOptions
     public bool IgnoreMissingProperties { get; set; }
 
     /// <summary>
+    /// Gets or sets the option to include fields from a custom model in the TOML
+    /// </summary>
+    /// <remarks>
+    /// By default this is false
+    /// </remarks>
+    public bool IncludeFields { get; set; }
+
+    /// <summary>
     /// Default implementation for getting the property name
     /// </summary>
     private string? DefaultGetPropertyNameImpl(PropertyInfo prop)
@@ -156,6 +186,42 @@ public class TomlModelOptions
         }
 
         return ConvertPropertyName(name ?? prop.Name);
+    }
+
+    /// <summary>
+    /// Default implementation for getting the field name
+    /// </summary>
+    private string? DefaultGetFieldNameImpl(FieldInfo field)
+    {
+        string? name = null;
+        foreach (var attribute in field.GetCustomAttributes())
+        {
+            var fullName = attribute.GetType().FullName;
+            // Check if attribute is ignored
+            foreach (var fullNameOfIgnoreAttribute in AttributeListForIgnore)
+            {
+                if (fullName == fullNameOfIgnoreAttribute)
+                {
+                    return null;
+                }
+            }
+
+            // Allow to dynamically bind to JsonPropertyNameAttribute even if we are not targeting netstandard2.0
+            foreach (var fullNameOfAttributeWithName in AttributeListForGetName)
+            {
+                if (fullName == fullNameOfAttributeWithName)
+                {
+                    var nameProperty = attribute.GetType().GetProperty("Name");
+                    if (nameProperty != null && nameProperty.PropertyType == typeof(string))
+                    {
+                        name = nameProperty.GetValue(attribute) as string;
+                        if (name is not null) break;
+                    }
+                }
+            }
+        }
+
+        return ConvertFieldName(name ?? field.Name);
     }
 
     private static object DefaultCreateInstanceImpl(Type type, ObjectKind kind)
