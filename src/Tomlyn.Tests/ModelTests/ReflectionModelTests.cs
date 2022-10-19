@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text.Json.Serialization;
 using NUnit.Framework;
-using NUnit.Framework.Constraints;
 using Tomlyn.Model;
 
 namespace Tomlyn.Tests
