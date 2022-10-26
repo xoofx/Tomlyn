@@ -1,5 +1,5 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
-// Licensed under the BSD-Clause 2 license. 
+// Licensed under the BSD-Clause 2 license.
 // See license.txt file in the project root for full license information.
 using System;
 using System.Collections.Generic;
@@ -329,7 +329,7 @@ Test13 = ""Test""
 Test14 = ""Test""
 Test15 = ""Test""
 Test16 = ""Test""
-", Toml.FromModel(t));
+".ReplaceLineEndings(), Toml.FromModel(t));
         }
 
         private static void AssertJson(string input, string expectedJson)
