@@ -293,6 +293,7 @@ internal class SyntaxToModelTransform : SyntaxVisitor
 
             for (int i = 0; i < items.ChildrenCount; i++)
             {
+                _currentTargetType = listAccessor.ElementType;
                 var item = items.GetChild(i)!;
                 item.Accept(this);
 
@@ -316,6 +317,7 @@ internal class SyntaxToModelTransform : SyntaxVisitor
                 }
             }
             _currentValue = list;
+            _currentTargetType = currentTargetType;
         }
         finally
         {

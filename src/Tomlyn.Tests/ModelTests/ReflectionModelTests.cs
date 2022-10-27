@@ -538,6 +538,51 @@ Id = ""id3""";
             Assert.AreEqual(127, result);
         }
 
+        [Test]
+        public void TestReflectionModelWithInlineTable()
+        {
+            var input = @"name = ""this is a name""
+values = [""a"", ""b"", ""c"", 1]
+intvalues = 1
+intvalue = 2
+doublevalue = 2.5
+sub = [ { id = ""id1"", publish = true }, { id = ""id2"", publish = false }, { id = ""id3"" } ]
+";
+            var syntax = Toml.Parse(input);
+            Assert.False(syntax.HasErrors, "The document should not have any errors");
+
+            StandardTests.Dump(input, syntax, syntax.ToString());
+
+
+            var options = new TomlModelOptions() { ConvertPropertyName = name => name.ToLowerInvariant(), ConvertFieldName = name => name.ToLowerInvariant() };
+            var model = syntax.ToModel<SimpleModel>(options);
+
+            Assert.AreEqual("this is a name", model.Name);
+            Assert.AreEqual(new List<string>() { "a", "b", "c", "1" }, model.Values);
+            Assert.AreEqual(new List<int>() { 1 }, model.IntValues);
+            Assert.AreEqual(2, model.IntValue);
+            Assert.AreEqual(2.5, model.DoubleValue);
+            Assert.AreEqual(3, model.SubModels.Count);
+            var sub = model.SubModels[0];
+            Assert.AreEqual("id1", sub.Id);
+            Assert.True(sub.Publish);
+            sub = model.SubModels[1];
+            Assert.AreEqual("id2", sub.Id);
+            Assert.False(sub.Publish);
+            sub = model.SubModels[2];
+            Assert.AreEqual("id3", sub.Id);
+            Assert.False(sub.Publish);
+
+            model.SubModels[2].Value = 127;
+
+            var toml = Toml.FromModel(model);
+            StandardTests.DisplayHeader("toml from model");
+            Console.WriteLine(toml);
+
+            var model2 = Toml.ToModel(toml);
+            var result = (model2["sub"] as TomlTableArray)?[2]?["value"];
+            Assert.AreEqual(127, result);
+        }
 
         [Test]
         public void TestReflectionModelWithErrors()
