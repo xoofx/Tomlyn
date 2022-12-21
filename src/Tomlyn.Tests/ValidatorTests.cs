@@ -89,5 +89,20 @@ d = true
             Assert.True(doc.HasErrors, "The document should have errors");
         }
 
+        [Test]
+        public void TestValidControlCharacters()
+        {
+            var input = "";
+            input += "backspace='\b'\n";
+            input += "tab='\t'\n";
+            input += "form_feed='\f'\n";
+            input += "quote='\"'\n";
+            input += "backslash='\\'\n";
+            input += "heart='\u2665'\n";
+            input += "some_unicode='\U0002B695'\n";
+            var doc = Toml.Parse(input);
+            Assert.False(doc.HasErrors, "The document should not have errors on valid control characters");
+        }
+
     }
 }

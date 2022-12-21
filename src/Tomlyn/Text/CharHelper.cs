@@ -24,6 +24,11 @@ namespace Tomlyn.Text
             return c <= 0x1F || c == 0x7F;
         }
 
+        public static bool IsNonNewlineValidControlCharacter(char32 c)
+        {
+            return c == '\b' || c == '\t' || c == '\f';
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsKeyStart(char32 c)
         {
