@@ -93,10 +93,11 @@ d = true
         public void TestAllowTab()
         {
             var input = "";
-            input += "tab_normal=\"\t\"\n";
-            input += "tab_literal='\t'\n";
+            input += "tab_multiline_basic=\"\"\"\t\"\"\"\n";
+            input += "tab_singleline_literal='\t'\n";
+            input += "tab_multiline_literal='''\t'''\n";
             var doc = Toml.Parse(input);
-            Assert.False(doc.HasErrors, "The document should not have errors on tab character");
+            Assert.False(doc.HasErrors, "The document should not have errors");
         }
 
     }
