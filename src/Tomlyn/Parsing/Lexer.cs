@@ -1016,7 +1016,7 @@ namespace Tomlyn.Parsing
                 {
                     AddError("Invalid newline in a string", _position, _position);
                 }
-                else if (CharHelper.IsControlCharacter(_c) && (!isMultiLine || !CharHelper.IsNewLine(_c)))
+                else if (CharHelper.IsControlCharacter(_c) && _c != '\t' && (!isMultiLine || !CharHelper.IsNewLine(_c)))
                 {
                     AddError($"Invalid control character found {((char)_c).ToPrintableString()}", start, start);
                 }
