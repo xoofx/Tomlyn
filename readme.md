@@ -31,6 +31,10 @@ Tomlyn is a [TOML](https://toml.io/en/) parser, validator and authoring library 
 
 See the [documentation](https://github.com/xoofx/Tomlyn/blob/main/doc/readme.md) for more details.
 
+## Install
+
+Tomlyn is delivered as a [NuGet Package](https://www.nuget.org/packages/Tomlyn/).
+
 ## Usage
 
 ```c#
