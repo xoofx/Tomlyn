@@ -52,6 +52,28 @@ list = [4, 5, 6]
             public Uri? ServiceUri { get; set; }
         }
 
+        [Test]
+        public void TestEnum()
+        {
+            var text = @$"enum_value = ""EnumValue1""";
+            var result = Toml.ToModel<TestConfigWithEnum>(text);
+            Assert.AreEqual(EnumType.EnumValue1, result.EnumValue);
+
+            var tomlText = Toml.FromModel(result);
+            Assert.AreEqual(text, tomlText.TrimEnd());
+        }
+
+        private enum EnumType
+        {
+            EnumValue0,
+            EnumValue1,
+        }
+
+        private class TestConfigWithEnum
+        {
+            public EnumType EnumValue { get; set; }
+        }
+
         /// <summary>
         /// Serialize back and forth all integer/float primitives.
         /// </summary>

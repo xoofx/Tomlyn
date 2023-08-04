@@ -598,6 +598,10 @@ internal class ModelToTomlTransform
         {
             _writer.Write(TomlFormatHelper.ToString(dateTimeOffset, displayKind));
         }
+        else if (primitive is Enum enumValue)
+        {
+            _writer.Write(TomlFormatHelper.ToString(enumValue.ToString(), displayKind));
+        }
 #if NET6_0_OR_GREATER
         else if (primitive is DateOnly dateOnly)
         {
