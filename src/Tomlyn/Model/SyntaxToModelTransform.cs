@@ -488,7 +488,9 @@ internal class SyntaxToModelTransform : SyntaxVisitor
                 metadata.TrailingTriviaAfterEndOfLine = trivias;
             }
         }
-
+        metadata ??= new TomlPropertyMetadata();
+        metadata.Span = syntax.Span;
+    
         return metadata;
     }
 

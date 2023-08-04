@@ -56,6 +56,8 @@ public class TomlPropertyMetadata
     /// Gets the trailing trivia attached to this node. Might be null if no trailing trivias.
     /// </summary>
     public List<TomlSyntaxTriviaMetadata>? TrailingTriviaAfterEndOfLine { get; set; }
+
+    public SourceSpan Span {get; set;}
 }
 
 public record struct TomlSyntaxTriviaMetadata(TokenKind Kind, string? Text)
