@@ -1,10 +1,12 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
-// Licensed under the BSD-Clause 2 license. 
+// Licensed under the BSD-Clause 2 license.
 // See license.txt file in the project root for full license information.
 
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Runtime.Serialization;
+using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using Tomlyn.Model;
 
@@ -86,7 +88,20 @@ list = [4, 5, 6]
             AssertHelper.AreEqualNormalizeNewLine(toml, toml2);
         }
 
-        class MyModel : ITomlMetadataProvider
+        [Test]
+        public void TestTableArraysContainingPrimitiveArraysSerialize()
+        {
+            var test = @"[[table_array]]
+primitive_list = [4, 5, 6]
+";
+
+            var model = Toml.ToModel(test);
+            var tomlOut = Toml.FromModel(model);
+
+            Assert.AreEqual(test, tomlOut);
+        }
+
+        private class MyModel : ITomlMetadataProvider
         {
             public string? Global { get; set; }
 
@@ -98,7 +113,7 @@ list = [4, 5, 6]
             TomlPropertiesMetadata? ITomlMetadataProvider.PropertiesMetadata { get; set; }
         }
 
-        class MyTable : ITomlMetadataProvider
+        private class MyTable : ITomlMetadataProvider
         {
             public MyTable()
             {

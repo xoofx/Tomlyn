@@ -236,6 +236,7 @@ internal class ModelToTomlTransform
                 {
                     lastValue = prop.Value;
                     bool isRequiringInline = IsRequiringInline(prop.Value);
+                    if (lastValue is TomlTableArray) isRequiringInline = false;
                     lastInline = isRequiringInline;
                     if (isRequiringInline)
                     {
@@ -435,6 +436,7 @@ internal class ModelToTomlTransform
         foreach (var element in accessor.GetElements(value))
         {
             if (element is null) continue; // TODO: should this log an error?
+            if (element is TomlTable) return false;
             var elementAccessor = _context.GetAccessor(element.GetType());
 
             if (elementAccessor is PrimitiveDynamicAccessor) return true;
