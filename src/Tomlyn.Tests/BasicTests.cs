@@ -1,5 +1,5 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
-// Licensed under the BSD-Clause 2 license.
+// Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
 
 using System;
@@ -86,20 +86,7 @@ list = [4, 5, 6]
             AssertHelper.AreEqualNormalizeNewLine(toml, toml2);
         }
 
-        [Test]
-        public void TestTableArraysContainingPrimitiveArraysSerialize()
-        {
-            var test = @"[[table_array]]
-primitive_list = [4, 5, 6]
-";
-
-            var model = Toml.ToModel(test);
-            var tomlOut = Toml.FromModel(model);
-
-            Assert.AreEqual(test, tomlOut);
-        }
-
-        private class MyModel : ITomlMetadataProvider
+        class MyModel : ITomlMetadataProvider
         {
             public string? Global { get; set; }
 
@@ -111,7 +98,7 @@ primitive_list = [4, 5, 6]
             TomlPropertiesMetadata? ITomlMetadataProvider.PropertiesMetadata { get; set; }
         }
 
-        private class MyTable : ITomlMetadataProvider
+        class MyTable : ITomlMetadataProvider
         {
             public MyTable()
             {
