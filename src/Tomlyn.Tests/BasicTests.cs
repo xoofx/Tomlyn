@@ -86,6 +86,19 @@ list = [4, 5, 6]
             AssertHelper.AreEqualNormalizeNewLine(toml, toml2);
         }
 
+        [Test]
+        public void TestTableArraysContainingPrimitiveArraysSerialize()
+        {
+            var test = @"[[table_array]]
+primitive_list = [4, 5, 6]
+";
+
+            var model = Toml.ToModel(test);
+            var tomlOut = Toml.FromModel(model);
+
+            Assert.AreEqual(test, tomlOut);
+        }
+
         class MyModel : ITomlMetadataProvider
         {
             public string? Global { get; set; }
