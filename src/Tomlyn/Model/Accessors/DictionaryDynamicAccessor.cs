@@ -227,8 +227,7 @@ internal class DictionaryDynamicAccessor : ObjectDynamicAccessor
 
         public override IEnumerable<KeyValuePair<string, object?>> GetElements(object dictionary)
         {
-            var it = (IEnumerable)dictionary;
-            var enumerator = (IDictionaryEnumerator)it.GetEnumerator();
+            var enumerator = ((IDictionary)dictionary).GetEnumerator();
             while (enumerator.MoveNext())
             {
 
