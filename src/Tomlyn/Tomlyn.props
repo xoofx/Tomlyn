@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net6.0</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;net7.0</TargetFrameworks>
     <LangVersion>10.0</LangVersion>
     <Description>Tomlyn is a TOML parser, validator and authoring library for .NET.</Description>
     <Copyright>Alexandre Mutel</Copyright>
