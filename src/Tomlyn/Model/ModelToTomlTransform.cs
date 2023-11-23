@@ -432,6 +432,10 @@ internal class ModelToTomlTransform
 
     private bool IsRequiringInline(ListDynamicAccessor accessor, object value, int parentConsecutiveList)
     {
+        // Always disable inline for TomlTableArray
+        // This is only working for default TomlTableArray model
+        if (value is TomlTableArray) return false;
+
         foreach (var element in accessor.GetElements(value))
         {
             if (element is null) continue; // TODO: should this log an error?
