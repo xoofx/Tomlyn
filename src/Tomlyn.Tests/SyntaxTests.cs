@@ -1,5 +1,5 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
-// Licensed under the BSD-Clause 2 license. 
+// Licensed under the BSD-Clause 2 license.
 // See license.txt file in the project root for full license information.
 using System;
 using System.Collections.Generic;
@@ -110,10 +110,11 @@ val = true
         [Test]
         public void TestPropertySpan()
         {
-            var input = @"[mytable]
-key = 15
-val = true
-";
+            var input = """
+                        [mytable]
+                        key = 15
+                        val = true
+                        """;
             var doc = Toml.Parse(input);
 
             var instance = doc.ToModel<PropMetaTestDoc>();
@@ -121,8 +122,8 @@ val = true
             if (instance.Mytable.PropertiesMetadata?.TryGetProperty("key", out var keyMeta) == true){
                 Assert.That(keyMeta.Span.Start.Line, Is.EqualTo(1));
                 Assert.That(keyMeta.Span.Start.Column, Is.EqualTo(0));
-                // TextPosition adds 1 to line and column in ToString
-                Assert.That(keyMeta.Span.ToString(), Is.EqualTo("(2,1)-(2,9)"));
+                Assert.That(keyMeta.Span.End.Line, Is.EqualTo(1));
+                // End of line may differ depending on line endings in source control, don't assert
             }
 
             var table = doc.ToModel();
@@ -131,7 +132,7 @@ val = true
 
             Assert.True(myTableProperties?.ContainsProperty("key"));
             if (myTableProperties?.TryGetProperty("key", out var keyMeta2) == true){
-                Assert.That(keyMeta2.Span.ToString(), Is.EqualTo("(2,1)-(2,9)"));
+                Assert.That(keyMeta2.Span.ToString().StartsWith("(2,1)-(2,"));
             }
         }
     }
