@@ -13,6 +13,19 @@ namespace Tomlyn.Tests
     public class BasicTests
     {
         [Test]
+        public void TestTableArraysContainingPrimitiveArraysSerialize()
+        {
+            var test = @"[[table_array]]
+primitive_list = [4, 5, 6]
+";
+
+            var model = Toml.ToModel(test);
+            var tomlOut = Toml.FromModel(model);
+
+            Assert.AreEqual(test, tomlOut);
+        }
+
+        [Test]
         public void TestHelloWorld()
         {
             var toml = @"global = ""this is a string""
