@@ -98,7 +98,7 @@ val = true
         }
 
       class PropMetaTestDoc : ITomlMetadataProvider{
-            public PropMetaTestTable Mytable {get; set;}
+            public PropMetaTestTable? Mytable {get; set;}
             public TomlPropertiesMetadata? PropertiesMetadata { get; set; }
         }
         class PropMetaTestTable : ITomlMetadataProvider{
@@ -118,8 +118,8 @@ val = true
             var doc = Toml.Parse(input);
 
             var instance = doc.ToModel<PropMetaTestDoc>();
-            Assert.True(instance.Mytable.PropertiesMetadata?.ContainsProperty("key"));
-            if (instance.Mytable.PropertiesMetadata?.TryGetProperty("key", out var keyMeta) == true){
+            Assert.True(instance.Mytable?.PropertiesMetadata?.ContainsProperty("key"));
+            if (instance.Mytable?.PropertiesMetadata?.TryGetProperty("key", out var keyMeta) == true){
                 Assert.That(keyMeta.Span.Start.Line, Is.EqualTo(1));
                 Assert.That(keyMeta.Span.Start.Column, Is.EqualTo(0));
                 Assert.That(keyMeta.Span.End.Line, Is.EqualTo(1));
