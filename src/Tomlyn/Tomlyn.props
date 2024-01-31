@@ -2,7 +2,7 @@
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net7.0</TargetFrameworks>
-    <LangVersion>10.0</LangVersion>
+    <LangVersion>latest</LangVersion>
     <Description>Tomlyn is a TOML parser, validator and authoring library for .NET.</Description>
     <Copyright>Alexandre Mutel</Copyright>
     <Authors>Alexandre Mutel</Authors>
@@ -21,6 +21,12 @@
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+
+    <PolySharpIncludeRuntimeSupportedAttributes>true</PolySharpIncludeRuntimeSupportedAttributes>
+
+
+
+
   </PropertyGroup>
 
   <ItemGroup>
@@ -35,6 +41,12 @@
     </PackageReference>
     <!--Add support for sourcelink-->
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.*" PrivateAssets="All" />
+    <!--Polyfill language features for .NET Standard 2.0 et all, generating internal
+        items only for the compiler. Enables langversion=latest-->
+    <PackageReference Include="PolySharp" Version="1.*">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 
   <Target Name="PatchVersion" AfterTargets="MinVer">
