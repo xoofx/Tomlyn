@@ -104,7 +104,7 @@ internal class ModelToTomlTransform
     private string EscapeKey(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return $"\"{name.EscapeForToml()}\"";
-        
+
         // A-Za-z0-9_-
         foreach (var c in name)
         {
@@ -200,8 +200,8 @@ internal class ModelToTomlTransform
             }
 
             // Sort primitive first
-            properties = properties.OrderBy(_ => _,
-            Comparer<KeyValuePair<string,object>>.Create((left, right) =>
+            properties = properties.OrderBy(p => p,
+            Comparer<KeyValuePair<string,object?>>.Create((left, right) =>
             {
                 var leftValue = left.Value;
                 var rightValue = right.Value;
