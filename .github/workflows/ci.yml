@@ -11,7 +11,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: [windows-latest, ubuntu-latest]
 
     steps:
     - name: Checkout
@@ -20,10 +20,12 @@ jobs:
         submodules: true
         fetch-depth: 0
 
-    - name: Install .NET 7.0
-      uses: actions/setup-dotnet@v3
+    - name: Install .NET 6 & 8
+      uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: '7.0.x'
+        dotnet-version: |
+            6
+            8.
 
     - name: Build, Test, Pack, Publish
       shell: bash

@@ -1,5 +1,5 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
-// Licensed under the BSD-Clause 2 license. 
+// Licensed under the BSD-Clause 2 license.
 // See license.txt file in the project root for full license information.
 
 using System;
@@ -27,5 +27,14 @@ namespace Tomlyn.Tests
         {
             return text.Replace("\r\n", "\n");
         }
+
+        #if NET5_0_OR_GREATER
+        #else
+        public static string ReplaceLineEndings(this string text, string? newLine = null)
+        {
+            newLine ??= Environment.NewLine;
+            return text.Replace("\r\n", "\n").Replace("\n", newLine);
+        }
+        #endif
     }
 }
