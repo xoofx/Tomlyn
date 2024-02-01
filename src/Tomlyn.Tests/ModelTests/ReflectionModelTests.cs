@@ -94,8 +94,10 @@ list = [4, 5, 6]
                 Float64Value = 2.5,
                 DateTime = new DateTime(1970, 1, 1),
                 DateTimeOffset = new DateTimeOffset(1980, 1, 1, 0, 23, 1, TimeSpan.FromHours(-2)),
+#if NET6_0_OR_GREATER
                 DateOnly = new DateOnly(1970, 5, 27),
                 TimeOnly = new TimeOnly(7, 32, 0, 999),
+#endif
                 TomlDateTime = new TomlDateTime(new DateTimeOffset(new DateTime(1990, 11, 15)), 0, TomlDateTimeKind.LocalDateTime)
             };
 
@@ -149,8 +151,10 @@ list = [4, 5, 6]
                 Float64Value = 2.5,
                 DateTime = new DateTime(1970, 1, 1),
                 DateTimeOffset = new DateTimeOffset(1980, 1, 1, 0, 23, 1, TimeSpan.FromHours(-2)),
+#if NET6_0_OR_GREATER
                 DateOnly = new DateOnly(1970, 5, 27),
                 TimeOnly = new TimeOnly(7, 32, 0, 999),
+#endif
                 TomlDateTime = new TomlDateTime(new DateTimeOffset(new DateTime(1990, 11, 15)), 0, TomlDateTimeKind.LocalDateTime)
             };
 
@@ -207,8 +211,10 @@ list = [4, 5, 6]
                 Float64Value = 2.5,
                 DateTime = new DateTime(1970, 1, 1),
                 DateTimeOffset = new DateTimeOffset(1980, 1, 1, 0, 23, 1, TimeSpan.FromHours(-2)),
+#if NET6_0_OR_GREATER
                 DateOnly = new DateOnly(1970, 5, 27),
                 TimeOnly = new TimeOnly(7, 32, 0, 999),
+#endif
                 TomlDateTime = new TomlDateTime(new DateTimeOffset(new DateTime(1990, 11, 15)), 0, TomlDateTimeKind.LocalDateTime)
             };
 
@@ -280,8 +286,10 @@ list = [4, 5, 6]
                 Float64Value = 2.5,
                 DateTime = new DateTime(1970, 1, 1),
                 DateTimeOffset = new DateTimeOffset(1980, 1, 1, 0, 23, 1, TimeSpan.FromHours(-2)),
+#if NET6_0_OR_GREATER
                 DateOnly = new DateOnly(1970, 5, 27),
                 TimeOnly = new TimeOnly(7, 32, 0, 999),
+#endif
                 TomlDateTime = new TomlDateTime(new DateTimeOffset(new DateTime(1990, 11, 15)), 0, TomlDateTimeKind.LocalDateTime)
             };
 
