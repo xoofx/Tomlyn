@@ -28,8 +28,7 @@ namespace Tomlyn.Tests
             return text.Replace("\r\n", "\n");
         }
 
-        #if NET5_0_OR_GREATER
-        #else
+        #if !NET5_0_OR_GREATER
         public static string ReplaceLineEndings(this string text, string? newLine = null)
         {
             newLine ??= Environment.NewLine;
