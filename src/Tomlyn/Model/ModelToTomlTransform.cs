@@ -174,7 +174,6 @@ internal class ModelToTomlTransform
         try
         {
 
-
             // Pre-convert values to TOML values
             var convertToToml = _context.ConvertToToml;
             if (convertToToml != null)
