@@ -27,7 +27,7 @@ jobs:
       with:
         dotnet-version: |
             6
-            8.
+            8
 
     - name: Build, Test, Pack, Publish
       shell: bash
