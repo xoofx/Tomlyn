@@ -82,4 +82,4 @@ Modified version of the logo `Thor` by [Mike Rowe](https://thenounproject.com/it
 
 ## Author
 
-Alexandre Mutel aka [xoofx](http://xoofx.com).
+Alexandre Mutel aka [xoofx](http://xoofx.github.io).
