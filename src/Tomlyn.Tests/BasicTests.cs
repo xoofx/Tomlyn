@@ -160,5 +160,22 @@ key2 = 456
             var doc = Toml.Parse(test);
             Assert.AreEqual(test, doc.ToString());
         }
+
+        [Test]
+        public void TestInlineArray()
+        {
+            var input = @"x = [1,
+2,
+3
+]
+";
+            var model = Toml.ToModel(input);
+            var array =  model["x"] as TomlArray;
+            Assert.NotNull(array);
+            Assert.AreEqual(3, array.Count);
+            Assert.AreEqual(1, array[0]);
+            Assert.AreEqual(2, array[1]);
+            Assert.AreEqual(3, array[2]);
+        }
     }
 }

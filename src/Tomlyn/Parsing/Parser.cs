@@ -371,14 +371,9 @@ namespace Tomlyn.Parsing
 
             var previousState = _lexer.State;
             _lexer.State = LexerState.Key;
-            var previousLine = _hideNewLine;
-            _hideNewLine = false;
             inlineTable.OpenBrace = EatToken(TokenKind.OpenBrace);
             try
             {
-
-                // toml-specs: Inline tables are intended to appear on a single line. 
-                // -> So we don't hide newlines
 
                 bool? expectingEndOfInitializer = null;
 
@@ -392,7 +387,6 @@ namespace Tomlyn.Parsing
                             LogError(previousSpan, $"Unexpected trailing comma `,` not permitted after the last key/value pair in an inline table.");
                         }
 
-                        _hideNewLine = previousLine;
                         _lexer.State = previousState;
                         inlineTable.CloseBrace = EatToken();
                         break;
@@ -428,7 +422,6 @@ namespace Tomlyn.Parsing
             finally
             {
                 _lexer.State = previousState;
-                _hideNewLine = previousLine;
             }
 
             return Close(inlineTable);

@@ -6,25 +6,24 @@ using System;
 using NUnit.Framework;
 using Tomlyn.Model;
 
-namespace Tomlyn.Tests
+namespace Tomlyn.Tests;
+
+public class SerializationTests
 {
-    public class SerializationTests
+    [Test]
+    public void TestCrlfInMultilineString()
     {
-        [Test]
-        public void TestCrlfInMultilineString()
+        var model = new TomlTable
         {
-            var model = new TomlTable
-            {
-                PropertiesMetadata = new TomlPropertiesMetadata()
-            };
-            model.PropertiesMetadata.SetProperty("property", new TomlPropertyMetadata
-            {
-                DisplayKind = TomlPropertyDisplayKind.StringLiteralMulti
-            });
+            PropertiesMetadata = new TomlPropertiesMetadata()
+        };
+        model.PropertiesMetadata.SetProperty("property", new TomlPropertyMetadata
+        {
+            DisplayKind = TomlPropertyDisplayKind.StringLiteralMulti
+        });
 
-            model["property"] = "string\r\nwith\r\nnewlines";
+        model["property"] = "string\r\nwith\r\nnewlines";
 
-            Assert.AreEqual("property = '''string\r\nwith\r\nnewlines'''" + Environment.NewLine, Toml.FromModel(model));
-        }
+        Assert.AreEqual("property = '''string\r\nwith\r\nnewlines'''" + Environment.NewLine, Toml.FromModel(model));
     }
 }
