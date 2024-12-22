@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks Condition="'$(OS)' == 'Windows_NT'">net6.0;net8.0;net48</TargetFrameworks>
-    <TargetFrameworks Condition="'$(OS)' != 'Windows_NT'">net6.0;net8.0</TargetFrameworks>
+    <TargetFrameworks Condition="'$(OS)' == 'Windows_NT'">net8.0;net48</TargetFrameworks>
+    <TargetFrameworks Condition="'$(OS)' != 'Windows_NT'">net8.0</TargetFrameworks>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -13,12 +13,12 @@
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="nunit" Version="3.14.0" />
-    <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
-    <PackageReference Include="System.Text.Json" Version="8.0.1" />
-    <PackageReference Include="Portable.System.DateTimeOnly" Version="8.0.0" Condition="'$(TargetFramework)' == 'net48'" />
-    <PackageReference Include="Microsoft.Bcl.HashCode" Version="1.1.1" Condition="'$(TargetFramework)' == 'net48'" />
+    <PackageReference Include="nunit" Version="4.3.1" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="System.Text.Json" Version="9.0.0" />
+    <PackageReference Include="Portable.System.DateTimeOnly" Version="8.0.2" Condition="'$(TargetFramework)' == 'net48'" />
+    <PackageReference Include="Microsoft.Bcl.HashCode" Version="6.0.0" Condition="'$(TargetFramework)' == 'net48'" />
     <PackageReference Include="PolySharp" Version="1.*">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -27,6 +27,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Tomlyn\Tomlyn.csproj" />
+    <Using Include="NUnit.Framework.Legacy.ClassicAssert" Alias="Assert" />
+    <Using Include="NUnit.Framework.Legacy.CollectionAssert" Alias="CollectionAssert" />
+    <Using Include="NUnit.Framework.Legacy.StringAssert" Alias="StringAssert" />
+    <Using Include="NUnit.Framework.Legacy.DirectoryAssert" Alias="DirectoryAssert" />
+    <Using Include="NUnit.Framework.Legacy.FileAssert" Alias="FileAssert" />
   </ItemGroup>
 
 </Project>
