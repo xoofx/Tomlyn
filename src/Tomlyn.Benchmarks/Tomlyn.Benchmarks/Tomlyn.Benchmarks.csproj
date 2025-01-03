@@ -15,4 +15,10 @@
       <ProjectReference Include="..\..\Tomlyn\Tomlyn.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <None Update="twitter.toml">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+    </ItemGroup>
+
 </Project>

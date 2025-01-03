@@ -10,6 +10,7 @@ namespace Tomlyn.Benchmarks;
 [MemoryDiagnoser(false)]
 public class BasicBenchmark
 {
+    // spec-example-1.toml
     private const string TomlString = """
                              # This is a TOML document.
 
