@@ -255,7 +255,9 @@ internal class ModelToTomlTransform
                 }
 
                 bool isLastValue = lastValue is not null && ReferenceEquals(lastValue, prop.Value);
-                var propToInline = (!isLastValue || lastInline) && propInline;
+
+                var displayKind = GetDisplayKind(prop.Key);
+                var propToInline = (!isLastValue || lastInline) && propInline && (displayKind != TomlPropertyDisplayKind.NoInline);
 
                 // If we switch from non inline to inline, ensure that the scope is here
                 if (!inline && propToInline)

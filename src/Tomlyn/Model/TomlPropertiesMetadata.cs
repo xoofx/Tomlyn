@@ -91,4 +91,5 @@ public enum TomlPropertyDisplayKind
     StringLiteralMulti,
 
     InlineTable,
+    NoInline
 }
