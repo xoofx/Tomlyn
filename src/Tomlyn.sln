@@ -25,6 +25,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "doc", "doc", "{B2B13EDA-EE6
 		..\doc\readme.md = ..\doc\readme.md
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tomlyn.Benchmarks", "Tomlyn.Benchmarks\Tomlyn.Benchmarks\Tomlyn.Benchmarks.csproj", "{11321FC1-171B-448A-AA42-1627CD574084}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +41,10 @@ Global
 		{5C705EBA-9B3D-44CE-B9FC-ADBBEB88E414}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5C705EBA-9B3D-44CE-B9FC-ADBBEB88E414}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5C705EBA-9B3D-44CE-B9FC-ADBBEB88E414}.Release|Any CPU.Build.0 = Release|Any CPU
+		{11321FC1-171B-448A-AA42-1627CD574084}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{11321FC1-171B-448A-AA42-1627CD574084}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{11321FC1-171B-448A-AA42-1627CD574084}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{11321FC1-171B-448A-AA42-1627CD574084}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
