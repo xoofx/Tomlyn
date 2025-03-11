@@ -23,10 +23,6 @@
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
 
     <PolySharpIncludeRuntimeSupportedAttributes>true</PolySharpIncludeRuntimeSupportedAttributes>
-
-
-
-
   </PropertyGroup>
 
   <ItemGroup>
@@ -35,12 +31,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="MinVer" Version="3.1.0">
+    <PackageReference Include="MinVer" Version="6.0.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <!--Add support for sourcelink-->
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.*" PrivateAssets="All" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.*" PrivateAssets="All" />
     <!--Polyfill language features for .NET Standard 2.0 et all, generating internal
         items only for the compiler. Enables langversion=latest-->
     <PackageReference Include="PolySharp" Version="1.*">
