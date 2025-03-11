@@ -24,7 +24,8 @@ public class SerializationTests
 
         model["property"] = "string\r\nwith\r\nnewlines";
 
-        Assert.AreEqual("property = '''string\r\nwith\r\nnewlines'''" + Environment.NewLine, Toml.FromModel(model));
+        var result = Toml.FromModel(model).Trim();
+        AssertHelper.AreEqualNormalizeNewLine("property = '''string\r\nwith\r\nnewlines'''", result);
     }
 
     [Test]
@@ -41,7 +42,55 @@ public class SerializationTests
         };
 
         var result = Toml.FromModel(model).ReplaceLineEndings("\n").Trim();
-        Console.WriteLine(result);
-        Assert.AreEqual("mixed-array = [{a = 1}, 2, 3]", result);
+        AssertHelper.AreEqualNormalizeNewLine("mixed-array = [{a = 1}, 2, 3]", result);
+    }
+
+    [Test]
+    public void TestNestedEmptyArrays()
+    {
+        var outer = new TomlTable
+        {
+            ["inner1"] = new TomlTable { },
+            ["inner2"] = new TomlTable {
+                { "array1", new TomlArray {} },
+                { "array2", new TomlArray {} }
+            },
+            ["inner3"] = new TomlTable {
+                { "array1", new TomlArray {} },
+                { "array2", new TomlArray {} },
+                { "array3", new TomlArray { "hello" } },
+                { "array4", new TomlArray { } },
+                { "array5", new TomlArray { } },
+                { "array6", new TomlArray { } }
+            },
+            ["inner4"] = new TomlTable {
+                { "array1", new TomlArray {} },
+                { "string", "value" },
+                { "array2", new TomlArray {} },
+                { "array3", new TomlArray {} },
+            },
+        };
+
+        var expecting = """
+                        [inner1]
+                        [inner2]
+                        array1 = []
+                        array2 = []
+                        [inner3]
+                        array1 = []
+                        array2 = []
+                        array3 = ["hello"]
+                        array4 = []
+                        array5 = []
+                        array6 = []
+                        [inner4]
+                        array1 = []
+                        string = "value"
+                        array2 = []
+                        array3 = []
+                        """.ReplaceLineEndings("\n");
+        
+        var result = Toml.FromModel(outer).ReplaceLineEndings("\n").Trim();
+        AssertHelper.AreEqualNormalizeNewLine(expecting, result);
     }
 }

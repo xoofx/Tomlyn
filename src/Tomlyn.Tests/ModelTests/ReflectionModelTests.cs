@@ -755,7 +755,8 @@ key2 = 3
         [Test]
         public void TestModelWithSpecialDictionary()
         {
-            var input = @"[values.test]
+            var input = @"[values]
+[values.test]
 a = 1
 b = true
 ".ReplaceLineEndings().Trim();

@@ -4,10 +4,7 @@
 
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
-using System.Text;
-using System.Linq;
 using Tomlyn.Helpers;
 using Tomlyn.Model.Accessors;
 using Tomlyn.Syntax;
@@ -22,7 +19,7 @@ internal class ModelToTomlTransform
     private readonly TextWriter _writer;
     private readonly List<ObjectPath> _paths;
     private readonly List<ObjectPath> _currentPaths;
-    private readonly Stack<List<KeyValuePair<string, object?>>> _tempPropertiesStack;
+    private readonly Stack<List<KeyValueAccessor>> _tempPropertiesStack;
     private ITomlMetadataProvider? _metadataProvider;
 
     public ModelToTomlTransform(object rootObject, DynamicModelWriteContext context)
@@ -31,7 +28,7 @@ internal class ModelToTomlTransform
         _context = context;
         _writer = context.Writer;
         _paths = new List<ObjectPath>();
-        _tempPropertiesStack = new Stack<List<KeyValuePair<string, object?>>>();
+        _tempPropertiesStack = new Stack<List<KeyValueAccessor>>();
         _currentPaths = new List<ObjectPath>();
     }
 
@@ -163,17 +160,27 @@ internal class ModelToTomlTransform
         _paths.RemoveAt(_paths.Count - 1);
     }
 
+
+    private List<KeyValueAccessor> RentTempProperties()
+    {
+        return _tempPropertiesStack.Count > 0 ? _tempPropertiesStack.Pop() : new List<KeyValueAccessor>();
+    }
+
+    private void ReleaseTempProperties(List<KeyValueAccessor> tempProperties)
+    {
+        tempProperties.Clear();
+        _tempPropertiesStack.Push(tempProperties);
+    }
+
     private bool VisitObject(ObjectDynamicAccessor accessor, object currentObject, bool inline)
     {
         bool hasElements = false;
-        var isFirst = true;
 
         var previousMetadata = _metadataProvider;
         _metadataProvider = currentObject as ITomlMetadataProvider;
-        var properties = _tempPropertiesStack.Count > 0 ? _tempPropertiesStack.Pop() : new List<KeyValuePair<string, object?>>();
+        var properties = RentTempProperties();
         try
         {
-
             // Pre-convert values to TOML values
             var convertToToml = _context.ConvertToToml;
             if (convertToToml != null)
@@ -189,107 +196,89 @@ internal class ModelToTomlTransform
                         {
                             value = result;
                         }
-                        properties.Add(new KeyValuePair<string, object?>(property.Key, value));
+                        properties.Add(new KeyValueAccessor(property.Key, value, _context.GetAccessor(value.GetType())));
                     }
                 }
             }
             else
             {
-                properties.AddRange(accessor.GetProperties(currentObject));
-            }
-
-            // Sort primitive first
-            properties = properties.OrderBy(p => p,
-            Comparer<KeyValuePair<string,object?>>.Create((left, right) =>
-            {
-                var leftValue = left.Value;
-                var rightValue = right.Value;
-                if (leftValue is null) return rightValue is null ? 0 : -1;
-                if (rightValue is null) return 1;
-
-                var leftAccessor = _context.GetAccessor(leftValue.GetType());
-                var rightAccessor = _context.GetAccessor(rightValue.GetType());
-                if (leftAccessor.Kind == ReflectionObjectKind.Primitive)
+                foreach (var property in accessor.GetProperties(currentObject))
                 {
-                    return (rightAccessor.Kind == ReflectionObjectKind.Primitive) ? 0 : -1;
-                }
-                else if (rightAccessor.Kind == ReflectionObjectKind.Primitive)
-                {
-                    return 1;
-                }
-
-                // Otherwise don't change the order if we don't have primitives
-                return 0;
-            })).ToList();
-
-            // Probe inline for each key
-            // If we require a key to be inlined, inline the rest
-            // unless for the last key, if it doesn't need to be inline, we keep it as it is
-            bool propInline = inline;
-
-            object? lastValue = null;
-            bool lastInline = false;
-            if (!inline)
-            {
-                foreach (var prop in properties)
-                {
-                    lastValue = prop.Value;
-                    bool isRequiringInline = IsRequiringInline(prop.Value);
-                    lastInline = isRequiringInline;
-                    if (isRequiringInline)
+                    var value = property.Value;
+                    if (value is not null)
                     {
-                        propInline = true;
+                        properties.Add(new KeyValueAccessor(property.Key, value, _context.GetAccessor(value.GetType())));
                     }
                 }
             }
 
-            foreach (var prop in properties)
+            if (inline)
             {
-                // Skip any null properties
-                if (prop.Value is null) continue;
-                var name = prop.Key;
-
-                if (inline && !isFirst)
+                // Write all properties inlined
+                for (var i = 0; i < properties.Count; i++)
                 {
-                    _writer.Write(", ");
+                    var prop = properties[i];
+                    if (i > 0)
+                    {
+                        _writer.Write(", ");
+                    }
+
+                    WriteKeyValue(prop, true);
+                    hasElements = true;
                 }
-
-                bool isLastValue = lastValue is not null && ReferenceEquals(lastValue, prop.Value);
-
-                var displayKind = GetDisplayKind(prop.Key);
-                var propToInline = (!isLastValue || lastInline) && propInline && (displayKind != TomlPropertyDisplayKind.NoInline);
-
-                // If we switch from non inline to inline, ensure that the scope is here
-                if (!inline && propToInline)
+            }
+            else
+            {
+                // We have a mix of inlined and non-inlined properties
+                // Write always inlined properties: primitives and other objects that require to be inlined
+                List<KeyValueAccessor>? nonInlinedProperties = null;
+                foreach (var prop in properties)
                 {
-                    EnsureScope();
-                }
-
-                if (!inline)
-                {
+                    var propDisplayKind = GetDisplayKind(prop.Key);
+                    if (prop.Accessor is not PrimitiveDynamicAccessor && (propDisplayKind == TomlPropertyDisplayKind.NoInline || !IsRequiringInline(prop)))
+                    {
+                        nonInlinedProperties ??= RentTempProperties();
+                        nonInlinedProperties.Add(prop);
+                        continue;
+                    }
+                    var name = prop.Key;
                     WriteLeadingTrivia(name);
-                }
+                    WriteKeyValue(prop, true);
 
-                var valueAccessor = WriteKeyValue(name, prop.Value, propToInline);
-
-                // Special case to not output duplicated new lines that were already handled
-                // WriteKeyValue
-                if (!inline && (valueAccessor is PrimitiveDynamicAccessor || propToInline))
-                {
                     WriteTrailingTrivia(name);
                     _writer.WriteLine();
                     WriteTrailingTriviaAfterEndOfLine(name);
+                    hasElements = true;
                 }
 
-                hasElements = true;
-                isFirst = false;
+                // Write non-inlined properties
+                if (nonInlinedProperties is not null)
+                {
+                    foreach (var prop in nonInlinedProperties)
+                    {
+                        var name = prop.Key;
+                        WriteLeadingTrivia(name);
+
+                        WriteKeyValue(prop, false);
+
+                        if (prop.Accessor is not ObjectDynamicAccessor && prop.Value is not TomlTableArray)
+                        {
+                            WriteTrailingTrivia(name);
+                            _writer.WriteLine();
+                            WriteTrailingTriviaAfterEndOfLine(name);
+                        }
+
+                        hasElements = true;
+                    }
+
+                    ReleaseTempProperties(nonInlinedProperties);
+                }
             }
         }
         finally
         {
             _metadataProvider = previousMetadata;
-            properties.Clear();
-            _tempPropertiesStack.Push(properties);
+            ReleaseTempProperties(properties);
         }
 
         return hasElements;
@@ -332,24 +321,18 @@ internal class ModelToTomlTransform
         }
     }
 
-    private DynamicAccessor WriteKeyValue(string name, object value, bool inline)
+    private void WriteKeyValue(in KeyValueAccessor keyValueAccessor, bool inline)
     {
-        var accessor = _context.GetAccessor(value.GetType());
+        var name = keyValueAccessor.Key;
+        var value = keyValueAccessor.Value;
+        var accessor = keyValueAccessor.Accessor;
 
         switch (accessor)
         {
             case ListDynamicAccessor listDynamicAccessor:
             {
-                bool wasInline = inline;
-                // Switch to inline if the object is a primitive
-                if (!inline)
-                {
-                    inline = IsRequiringInline(listDynamicAccessor, value, 1);
-                }
-
                 if (inline)
                 {
-                    if (!wasInline) EnsureScope();
                     WriteKey(name);
                     _writer.Write(" = [");
                     VisitList(listDynamicAccessor, value, true);
@@ -374,21 +357,17 @@ internal class ModelToTomlTransform
                 else
                 {
                     PushName(name, false);
-                    var hasElements = VisitObject(objectAccessor, value, false);
-                    if (!hasElements)
+                    var previousMetadataProvider = _metadataProvider;
+                    _metadataProvider = value as ITomlMetadataProvider;
+                    try
                     {
-                        var previousMetadataProvider = _metadataProvider;
-                        _metadataProvider = value as ITomlMetadataProvider;
-                        try
-                        {
-                            // Force to have a scope to create the object
-                            EnsureScope();
-                        }
-                        finally
-                        {
-                            _metadataProvider = previousMetadataProvider;
-                        }
+                        WriteHeaderTable();
                     }
+                    finally
+                    {
+                        _metadataProvider = previousMetadataProvider;
+                    }
+                    VisitObject(objectAccessor, value, false);
                     PopName();
                 }
                 break;
@@ -401,8 +380,6 @@ internal class ModelToTomlTransform
             default:
                 throw new ArgumentOutOfRangeException(nameof(accessor));
         }
-
-        return accessor;
     }
 
     private TomlPropertyDisplayKind GetDisplayKind(string name)
@@ -416,77 +393,26 @@ internal class ModelToTomlTransform
         return kind;
     }
 
-    private bool IsRequiringInline(object? value)
+    private bool IsRequiringInline(in KeyValueAccessor prop)
     {
-        if (value is null) return false;
-
-        var accessor = _context.GetAccessor(value.GetType());
-
-        switch (accessor)
+        if (prop.Accessor is ListDynamicAccessor listDynamicAccessor && prop.Value is not TomlTableArray)
         {
-            case ListDynamicAccessor listDynamicAccessor:
-                    return IsRequiringInline(listDynamicAccessor, value, 1);
-            default:
-                return false;
-        }
-    }
-
-    private bool IsRequiringInline(ListDynamicAccessor accessor, object value, int parentConsecutiveList)
-    {
-        // Always disable inline for TomlTableArray
-        // This is only working for default TomlTableArray model
-        if (value is TomlTableArray) return false;
-
-        bool inlining = false;
-
-        foreach (var element in accessor.GetElements(value))
-        {
-            if (element is null) continue; // TODO: should this log an error?
-            var elementAccessor = _context.GetAccessor(element.GetType());
-
-            if (elementAccessor is PrimitiveDynamicAccessor)
+            bool hasOnlyObjects = true;
+            bool hasElements = false;
+            foreach (var element in listDynamicAccessor.GetElements(prop.Value))
             {
-                return true;
-            }
+                if (element is null) continue; // TODO should this be an error?
+                var elementAccessor = _context.GetAccessor(element.GetType());
 
-            if (elementAccessor is ListDynamicAccessor listDynamicAccessor)
-            {
-                inlining = IsRequiringInline(listDynamicAccessor, element, parentConsecutiveList + 1);
-            }
-            else if (elementAccessor is ObjectDynamicAccessor objAccessor)
-            {
-                // Case of an array-of-array of table
-                if (parentConsecutiveList > 1) return true;
-                inlining = IsRequiringInline(objAccessor, element);
-            }
+                if (elementAccessor is not ObjectDynamicAccessor)
+                {
+                    hasOnlyObjects = false;
+                }
 
-            if (inlining) return true;
-        }
-
-        // Specially for empty list
-        return parentConsecutiveList > 1;
-    }
-
-    private bool IsRequiringInline(ObjectDynamicAccessor accessor, object value)
-    {
-        foreach (var prop in accessor.GetProperties(value))
-        {
-            var propValue = prop.Value;
-            if (propValue is null)
-            {
-                continue;
+                hasElements = true;
             }
-
-            var propValueAccessor = _context.GetAccessor(propValue.GetType());
-            if (propValueAccessor is ListDynamicAccessor listDynamicAccessor)
-            {
-                return IsRequiringInline(listDynamicAccessor, propValue, 1);
-
-            }
-            else if (propValueAccessor is ObjectDynamicAccessor objAccessor)
-            {
-                return IsRequiringInline(objAccessor, propValue);
-            }
+            
+            return !hasElements || !hasOnlyObjects;
         }
 
         return false;
@@ -631,4 +557,6 @@ internal class ModelToTomlTransform
     }
 
     private record struct ObjectPath(string Name, bool IsTableArray);
+    
+    private readonly record struct KeyValueAccessor(string Key, object Value, DynamicAccessor Accessor);
 }
