@@ -437,24 +437,30 @@ internal class ModelToTomlTransform
         // This is only working for default TomlTableArray model
         if (value is TomlTableArray) return false;
 
+        bool inlining = false;
+
         foreach (var element in accessor.GetElements(value))
         {
             if (element is null) continue; // TODO: should this log an error?
             var elementAccessor = _context.GetAccessor(element.GetType());
 
-            if (elementAccessor is PrimitiveDynamicAccessor) return true;
+            if (elementAccessor is PrimitiveDynamicAccessor)
+            {
+                return true;
+            }
 
             if (elementAccessor is ListDynamicAccessor listDynamicAccessor)
             {
-                return IsRequiringInline(listDynamicAccessor, element, parentConsecutiveList + 1);
-
+                inlining = IsRequiringInline(listDynamicAccessor, element, parentConsecutiveList + 1);
             }
             else if (elementAccessor is ObjectDynamicAccessor objAccessor)
             {
                 // Case of an array-of-array of table
                 if (parentConsecutiveList > 1) return true;
-                return IsRequiringInline(objAccessor, element);
+                inlining = IsRequiringInline(objAccessor, element);
             }
+
+            if (inlining) return true;
         }
 
         // Specially for empty list

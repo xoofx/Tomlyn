@@ -26,4 +26,22 @@ public class SerializationTests
 
         Assert.AreEqual("property = '''string\r\nwith\r\nnewlines'''" + Environment.NewLine, Toml.FromModel(model));
     }
+
+    [Test]
+    public void TestArrayWithPrimitives()
+    {
+        var model = new TomlTable()
+        {
+            ["mixed-array"] = new TomlArray()
+            {
+                new TomlTable() { ["a"] = 1 },
+                2,  // If instead the second or final item in the array was the table, it works as expected.
+                3
+            }
+        };
+
+        var result = Toml.FromModel(model).ReplaceLineEndings("\n").Trim();
+        Console.WriteLine(result);
+        Assert.AreEqual("mixed-array = [{a = 1}, 2, 3]", result);
+    }
 }
