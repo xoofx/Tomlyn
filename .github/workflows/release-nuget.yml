@@ -1,0 +1,38 @@
+name: release-nuget
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  pack-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Compute version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Pack
+        run: |
+          dotnet pack src/Tomlyn/Tomlyn.csproj -c Release -o artifacts \
+            /p:PackageId=AOT.Tomlyn \
+            /p:Authors="xoofx\\aiqinxuancai" \
+            /p:Version=$VERSION \
+            /p:PackageVersion=$VERSION
+
+      - name: Push
+        run: |
+          dotnet nuget push "artifacts/*.nupkg" \
+            --source "https://api.nuget.org/v3/index.json" \
+            --api-key "${{ secrets.NUGET_TOKEN }}" \
+            --skip-duplicate
