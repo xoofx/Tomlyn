@@ -84,6 +84,19 @@ namespace Tomlyn
         /// <param name="options">Optional parameters for the serialization.</param>
         /// <returns>The TOML string representation from the specified model.</returns>
         /// <exception cref="TomlException">If there are errors while trying to serialize to a TOML string.</exception>
+        public static string FromModel<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicFields)] T>(T model, TomlModelOptions? options = null)
+        {
+            if (model is null) throw new ArgumentNullException(nameof(model));
+            return FromModel((object)model, options);
+        }
+
+        /// <summary>
+        /// Gets the TOML string representation from the specified model.
+        /// </summary>
+        /// <param name="model">The type of the mode</param>
+        /// <param name="options">Optional parameters for the serialization.</param>
+        /// <returns>The TOML string representation from the specified model.</returns>
+        /// <exception cref="TomlException">If there are errors while trying to serialize to a TOML string.</exception>
         public static string FromModel(object model, TomlModelOptions? options = null)
         {
             if (TryFromModel(model, out var modelAsToml, out var diagnostics, options))
@@ -102,6 +115,20 @@ namespace Tomlyn
         /// <param name="options">Optional parameters for the serialization.</param>
         /// <returns>The TOML string representation from the specified model.</returns>
         /// <returns><c>true</c> if the conversion was successful; <c>false</c> otherwise.</returns>
+        public static bool TryFromModel<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicFields)] T>(T model, [NotNullWhen(true)] out string? modelAsToml, out DiagnosticsBag diagnostics, TomlModelOptions? options = null)
+        {
+            return TryFromModel((object)model!, out modelAsToml, out diagnostics, options);
+        }
+
+        /// <summary>
+        /// Tries to get the TOML string representation from the specified model.
+        /// </summary>
+        /// <param name="model">The model instance to serialize to TOML.</param>
+        /// <param name="modelAsToml">The TOML string representation from the specified model if this method returns true.</param>
+        /// <param name="diagnostics">The diagnostics error messages if this method returns false.</param>
+        /// <param name="options">Optional parameters for the serialization.</param>
+        /// <returns>The TOML string representation from the specified model.</returns>
+        /// <returns><c>true</c> if the conversion was successful; <c>false</c> otherwise.</returns>
         public static bool TryFromModel(object model, [NotNullWhen(true)] out string? modelAsToml, out DiagnosticsBag diagnostics, TomlModelOptions? options = null)
         {
             modelAsToml = null;
@@ -109,6 +136,20 @@ namespace Tomlyn
             if (!TryFromModel(model, writer, out diagnostics, options)) return false;
             modelAsToml = writer.ToString();
             return true;
+        }
+
+        /// <summary>
+        /// Tries to get the TOML string representation from the specified model.
+        /// </summary>
+        /// <param name="model">The model instance to serialize to TOML.</param>
+        /// <param name="writer">The TOML string representation written to a <see cref="TextWriter"/> if this method returns true.</param>
+        /// <param name="diagnostics">The diagnostics error messages if this method returns false.</param>
+        /// <param name="options">Optional parameters for the serialization.</param>
+        /// <returns>The TOML string representation from the specified model.</returns>
+        /// <returns><c>true</c> if the conversion was successful; <c>false</c> otherwise.</returns>
+        public static bool TryFromModel<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicFields)] T>(T model, TextWriter writer, out DiagnosticsBag diagnostics, TomlModelOptions? options = null)
+        {
+            return TryFromModel((object)model!, writer, out diagnostics, options);
         }
 
         /// <summary>
@@ -148,7 +189,7 @@ namespace Tomlyn
         /// <param name="sourcePath">An optional path/file name to identify errors</param>
         /// <param name="options">The options for the mapping.</param>
         /// <returns>A parsed TOML document</returns>
-        public static T ToModel<T>(string text, string? sourcePath = null, TomlModelOptions? options = null) where T : class, new()
+        public static T ToModel<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicFields)] T>(string text, string? sourcePath = null, TomlModelOptions? options = null) where T : class, new()
         {
             var syntax = Parse(text, sourcePath);
             if (syntax.HasErrors)
@@ -167,7 +208,7 @@ namespace Tomlyn
         /// <param name="sourcePath">An optional path/file name to identify errors</param>
         /// <param name="options">The options for the mapping.</param>
         /// <returns>A parsed TOML document</returns>
-        public static bool TryToModel<T>(string text, [NotNullWhen(true)] out T? model, [NotNullWhen(false)] out DiagnosticsBag? diagnostics, string? sourcePath = null, TomlModelOptions? options = null) where T : class, new()
+        public static bool TryToModel<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicFields)] T>(string text, [NotNullWhen(true)] out T? model, [NotNullWhen(false)] out DiagnosticsBag? diagnostics, string? sourcePath = null, TomlModelOptions? options = null) where T : class, new()
         {
             var syntax = Parse(text, sourcePath);
             if (syntax.HasErrors)
@@ -199,7 +240,7 @@ namespace Tomlyn
         /// <param name="options">The options for the mapping.</param>
         /// <returns>The result of mapping <see cref="DocumentSyntax"/> to a runtime model of type T </returns>
         /// <exception cref="TomlException">If there were errors when mapping to properties.</exception>
-        public static T ToModel<T>(this DocumentSyntax syntax, TomlModelOptions? options = null) where T : class, new()
+        public static T ToModel<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicFields)] T>(this DocumentSyntax syntax, TomlModelOptions? options = null) where T : class, new()
         {
             if (!TryToModel<T>(syntax, out var data, out var diagnostics, options))
             {
@@ -218,7 +259,7 @@ namespace Tomlyn
         /// <param name="diagnostics">The diagnostics if this method returns false.</param>
         /// <param name="options">The options for the mapping.</param>
         /// <returns><c>true</c> if the mapping was successful; <c>false</c> otherwise. In that case the output <paramref name="diagnostics"/> will contain error messages.</returns>
-        public static bool TryToModel<T>(this DocumentSyntax syntax, [NotNullWhen(true)] out T? model, out DiagnosticsBag diagnostics, TomlModelOptions? options = null) where T : class, new()
+        public static bool TryToModel<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicFields)] T>(this DocumentSyntax syntax, [NotNullWhen(true)] out T? model, out DiagnosticsBag diagnostics, TomlModelOptions? options = null) where T : class, new()
         {
             model = new T();
             var context = new DynamicModelReadContext(options ?? new TomlModelOptions());
