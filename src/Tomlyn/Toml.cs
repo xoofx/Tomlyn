@@ -220,6 +220,26 @@ namespace Tomlyn
         /// <returns><c>true</c> if the mapping was successful; <c>false</c> otherwise. In that case the output <paramref name="diagnostics"/> will contain error messages.</returns>
         public static bool TryToModel<T>(this DocumentSyntax syntax, [NotNullWhen(true)] out T? model, out DiagnosticsBag diagnostics, TomlModelOptions? options = null) where T : class, new()
         {
+            if (TomlGeneratedModelRegistry.TryGet(typeof(T), out var generatedModel))
+            {
+                if (syntax.HasErrors)
+                {
+                    diagnostics = syntax.Diagnostics;
+                    model = null;
+                    return false;
+                }
+
+                var table = TomlTable.From(syntax);
+                if (generatedModel.TryRead(table, out var generated, out diagnostics, options))
+                {
+                    model = (T)generated!;
+                    return true;
+                }
+
+                model = null;
+                return false;
+            }
+
             model = new T();
             var context = new DynamicModelReadContext(options ?? new TomlModelOptions());
             SyntaxToModelTransform visitor = new SyntaxToModelTransform(context, model);

@@ -44,7 +44,8 @@ public class TomlModelOptions
         AttributeListForGetName = new List<string>()
         {
             "System.Runtime.Serialization.DataMemberAttribute",
-            "System.Text.Json.Serialization.JsonPropertyNameAttribute"
+            "System.Text.Json.Serialization.JsonPropertyNameAttribute",
+            "Tomlyn.TomlPropertyNameAttribute"
         };
     }
 
@@ -133,6 +134,7 @@ public class TomlModelOptions
     /// By default, the list contains:
     /// - System.Runtime.Serialization.DataMemberAttribute
     /// - System.Text.Json.Serialization.JsonPropertyNameAttribute
+    /// - Tomlyn.TomlPropertyNameAttribute
     /// </remarks>
     public List<string> AttributeListForGetName { get; }
 
