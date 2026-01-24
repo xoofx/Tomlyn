@@ -1,5 +1,5 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
-// Licensed under the BSD-Clause 2 license. 
+// Licensed under the BSD-Clause 2 license.
 // See license.txt file in the project root for full license information.
 using System;
 using System.Collections.Generic;
@@ -14,6 +14,10 @@ namespace Tomlyn.Syntax
     /// </summary>
     public abstract class SyntaxNode : SyntaxNodeBase
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="SyntaxNode"/> class.
+        /// </summary>
+        /// <param name="kind">The kind of syntax node.</param>
         protected SyntaxNode(SyntaxKind kind)
         {
             Kind = kind;
@@ -58,7 +62,8 @@ namespace Tomlyn.Syntax
         /// <returns>A child at the specified index</returns>
         /// <remarks>The index is safe to use</remarks>
         protected abstract SyntaxNode? GetChildImpl(int index);
-        
+
+        /// <inheritdoc />
         public override string ToString()
         {
             var writer = new StringWriter();

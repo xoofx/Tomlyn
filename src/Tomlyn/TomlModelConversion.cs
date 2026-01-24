@@ -7,6 +7,14 @@ namespace Tomlyn;
 /// </summary>
 public static class TomlModelConversion
 {
+    /// <summary>
+    /// Tries to convert a value to the requested target type using built-in rules and custom options.
+    /// </summary>
+    /// <param name="value">The input value to convert.</param>
+    /// <param name="targetType">The target type.</param>
+    /// <param name="options">Optional conversion options.</param>
+    /// <param name="outputValue">The converted value when successful.</param>
+    /// <returns><c>true</c> if conversion succeeded; otherwise <c>false</c>.</returns>
     public static bool TryConvert(object? value, Type targetType, TomlModelOptions? options, out object? outputValue)
     {
         if (value is null || targetType.IsInstanceOfType(value))

@@ -1,5 +1,5 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
-// Licensed under the BSD-Clause 2 license. 
+// Licensed under the BSD-Clause 2 license.
 // See license.txt file in the project root for full license information.
 using System;
 using Tomlyn.Helpers;
@@ -41,18 +41,26 @@ namespace Tomlyn.Syntax
             set => ParentToThis(ref _key, value, TokenKind.BasicKey);
         }
 
+        /// <inheritdoc />
         public override int ChildrenCount => 1;
 
+        /// <inheritdoc />
         public override void Accept(SyntaxVisitor visitor)
         {
             visitor.Visit(this);
         }
 
+        /// <inheritdoc />
         protected override SyntaxNode? GetChildImpl(int index)
         {
             return Key;
         }
-        
+
+        /// <summary>
+        /// Determines whether the specified string is a valid bare key.
+        /// </summary>
+        /// <param name="name">The candidate key.</param>
+        /// <returns><c>true</c> if the string is a valid bare key; otherwise <c>false</c>.</returns>
         public static bool IsBareKey(string name)
         {
             if (name == null) throw new ArgumentNullException(nameof(name));
@@ -67,6 +75,7 @@ namespace Tomlyn.Syntax
             return true;
         }
 
+        /// <inheritdoc />
         protected override string ToDebuggerDisplay()
         {
             return $"{base.ToDebuggerDisplay()}: {(Key is not null ? TomlFormatHelper.ToString(Key.ToString(), TomlPropertyDisplayKind.Default) : string.Empty)}";

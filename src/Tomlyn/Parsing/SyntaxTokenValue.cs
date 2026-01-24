@@ -1,5 +1,5 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
-// Licensed under the BSD-Clause 2 license. 
+// Licensed under the BSD-Clause 2 license.
 // See license.txt file in the project root for full license information.
 using System;
 using Tomlyn.Syntax;
@@ -49,11 +49,17 @@ namespace Tomlyn.Parsing
         /// </summary>
         public readonly object? Value;
 
+        /// <inheritdoc />
         public override string ToString()
         {
             return $"{Kind}({Start}:{End})";
         }
 
+        /// <summary>
+        /// Gets the text represented by this token from a source string.
+        /// </summary>
+        /// <param name="text">The full source text.</param>
+        /// <returns>The token text, or <c>null</c> if out of range.</returns>
         public string? GetText(string text)
         {
             if (Kind == TokenKind.Eof)
@@ -72,17 +78,20 @@ namespace Tomlyn.Parsing
             return text.GetString(Start.Offset, End.Offset - Start.Offset + 1);
         }
 
+        /// <inheritdoc />
         public bool Equals(SyntaxTokenValue other)
         {
             return Kind == other.Kind && Start.Equals(other.Start) && End.Equals(other.End);
         }
 
+        /// <inheritdoc />
         public override bool Equals(object? obj)
         {
             if (ReferenceEquals(null, obj)) return false;
             return obj is SyntaxTokenValue && Equals((SyntaxTokenValue) obj);
         }
 
+        /// <inheritdoc />
         public override int GetHashCode()
         {
             unchecked
@@ -94,11 +103,23 @@ namespace Tomlyn.Parsing
             }
         }
 
+        /// <summary>
+        /// Compares two <see cref="SyntaxTokenValue"/> instances for equality.
+        /// </summary>
+        /// <param name="left">The left value.</param>
+        /// <param name="right">The right value.</param>
+        /// <returns><c>true</c> if the values are equal; otherwise <c>false</c>.</returns>
         public static bool operator ==(SyntaxTokenValue left, SyntaxTokenValue right)
         {
             return left.Equals(right);
         }
 
+        /// <summary>
+        /// Compares two <see cref="SyntaxTokenValue"/> instances for inequality.
+        /// </summary>
+        /// <param name="left">The left value.</param>
+        /// <param name="right">The right value.</param>
+        /// <returns><c>true</c> if the values are not equal; otherwise <c>false</c>.</returns>
         public static bool operator !=(SyntaxTokenValue left, SyntaxTokenValue right)
         {
             return !left.Equals(right);

@@ -1,5 +1,5 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
-// Licensed under the BSD-Clause 2 license. 
+// Licensed under the BSD-Clause 2 license.
 // See license.txt file in the project root for full license information.
 using System;
 
@@ -56,19 +56,23 @@ namespace Tomlyn.Syntax
         /// </summary>
         public SyntaxList<DottedKeyItemSyntax> DotKeys { get; }
 
+        /// <inheritdoc />
         public override void Accept(SyntaxVisitor visitor)
         {
             visitor.Visit(this);
         }
 
+        /// <inheritdoc />
         public override int ChildrenCount => 2;
 
+        /// <inheritdoc />
         protected override SyntaxNode? GetChildImpl(int index)
         {
             if (index == 0) return Key;
             return DotKeys;
         }
 
+        /// <inheritdoc />
         protected override string ToDebuggerDisplay()
         {
             return $"{base.ToDebuggerDisplay()}: {ToString()}";

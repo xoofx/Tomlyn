@@ -1,5 +1,5 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
-// Licensed under the BSD-Clause 2 license. 
+// Licensed under the BSD-Clause 2 license.
 // See license.txt file in the project root for full license information.
 using System.Globalization;
 using Tomlyn.Helpers;
@@ -21,7 +21,7 @@ namespace Tomlyn.Syntax
         }
 
         /// <summary>
-        /// Creates an <see cref="IntegerValueSyntax"/> 
+        /// Creates an <see cref="IntegerValueSyntax"/>
         /// </summary>
         /// <param name="value">The integer value</param>
         public IntegerValueSyntax(long value) : this()
@@ -44,17 +44,21 @@ namespace Tomlyn.Syntax
         /// </summary>
         public long Value { get; set; }
 
+        /// <inheritdoc />
         public override void Accept(SyntaxVisitor visitor)
         {
             visitor.Visit(this);
         }
+        /// <inheritdoc />
         public override int ChildrenCount => 1;
 
+        /// <inheritdoc />
         protected override SyntaxNode? GetChildImpl(int index)
         {
             return Token;
         }
 
+        /// <inheritdoc />
         protected override string ToDebuggerDisplay()
         {
             return $"{base.ToDebuggerDisplay()}: {TomlFormatHelper.ToString(Value)}";

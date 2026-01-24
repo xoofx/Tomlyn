@@ -1,5 +1,5 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
-// Licensed under the BSD-Clause 2 license. 
+// Licensed under the BSD-Clause 2 license.
 // See license.txt file in the project root for full license information.
 using System;
 using System.Collections;
@@ -39,9 +39,10 @@ namespace Tomlyn.Model
         /// <inheritdoc/>
         public TomlPropertiesMetadata? PropertiesMetadata { get; set; }
 
+        /// <inheritdoc />
         public IEnumerator<KeyValuePair<string, object>> GetEnumerator()
         {
-            
+
             foreach (var keyPair in _order)
             {
                 yield return new KeyValuePair<string, object>(keyPair.Key, keyPair.Value.Target);
@@ -58,6 +59,7 @@ namespace Tomlyn.Model
             Add(item.Key, item.Value);
         }
 
+        /// <inheritdoc />
         public void Clear()
         {
             _map.Clear();
@@ -104,10 +106,13 @@ namespace Tomlyn.Model
             return false;
         }
 
+        /// <inheritdoc />
         public int Count => _map.Count;
 
+        /// <inheritdoc />
         public bool IsReadOnly => false;
 
+        /// <inheritdoc />
         public void Add(string key, object value)
         {
             if (value == null) throw new ArgumentNullException(nameof(value));
@@ -116,11 +121,13 @@ namespace Tomlyn.Model
             _order.Add(new KeyValuePair<string, ValueHolder>(key, valueHolder));
         }
 
+        /// <inheritdoc />
         public bool ContainsKey(string key)
         {
             return _map.ContainsKey(key);
         }
 
+        /// <inheritdoc />
         public bool Remove(string key)
         {
             if (_map.Remove(key))
@@ -139,6 +146,7 @@ namespace Tomlyn.Model
             return false;
         }
 
+        /// <inheritdoc />
         public bool TryGetValue(string key, out object value)
         {
             value = null!;
@@ -151,6 +159,7 @@ namespace Tomlyn.Model
             return false;
         }
 
+        /// <inheritdoc />
         public object this[string key]
         {
             get => _map[key].Target;
@@ -168,6 +177,7 @@ namespace Tomlyn.Model
             }
         }
 
+        /// <inheritdoc />
         public ICollection<string> Keys
         {
             get
@@ -181,6 +191,7 @@ namespace Tomlyn.Model
             }
         }
 
+        /// <inheritdoc />
         public ICollection<object> Values
         {
             get
@@ -193,7 +204,14 @@ namespace Tomlyn.Model
                 return list;
             }
         }
-        
+
+        /// <summary>
+        /// Creates a <see cref="TomlTable"/> from a <see cref="DocumentSyntax"/>.
+        /// </summary>
+        /// <param name="documentSyntax">The parsed document syntax.</param>
+        /// <returns>A <see cref="TomlTable"/> representing the document.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="documentSyntax"/> is <c>null</c>.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the document contains errors.</exception>
         public static TomlTable From(DocumentSyntax documentSyntax)
         {
             if (documentSyntax == null) throw new ArgumentNullException(nameof(documentSyntax));

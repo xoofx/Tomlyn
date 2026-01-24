@@ -5,6 +5,7 @@ Tomlyn provides several ways to interact with TOML content:
 - [1. Convert a TOML string to a runtime model](#1-convert-a-toml-string-to-a-runtime-model)
   - [1.1 To a generic model `TomlTable`](#11-to-a-generic-model-tomltable)
   - [1.2 To a custom model](#12-to-a-custom-model)
+  - [1.3 Source-generated model mappers (AOT-friendly)](#13-source-generated-model-mappers-aot-friendly)
 - [2. Convert a runtime model to TOML string](#2-convert-a-runtime-model-to-toml-string)
   - [2.1 `TomlTable` to a TOML string](#21-tomltable-to-a-toml-string)
   - [2.2 A custom model to a TOML string](#22-a-custom-model-to-a-toml-string)
@@ -124,6 +125,50 @@ class MyTable
     public string? ThisPropertyIsIgnored {get; set;}
 }
 ```
+
+### 1.3 Source-generated model mappers (AOT-friendly)
+
+Tomlyn can generate optimized model mappers at build time for projects that need AOT-friendly, reflection-free mapping.
+
+To enable it:
+
+1. Reference the source generator as an analyzer (project reference or package).
+2. Annotate a root model type with `TomlModelAttribute`.
+
+Example for a project reference:
+
+```xml
+<ItemGroup>
+  <ProjectReference Include="..\Tomlyn.SourceGeneration\Tomlyn.SourceGeneration.csproj"
+          OutputItemType="Analyzer"
+          ReferenceOutputAssembly="false" />
+</ItemGroup>
+```
+
+Annotate your root model (nested types are discovered transitively) and use the same `Toml.ToModel<T>` API:
+
+```c#
+using Tomlyn;
+
+[TomlModel]
+public partial class AppConfig
+{
+  public string? Title { get; set; }
+
+  public DatabaseConfig? Database { get; set; }
+}
+
+public partial class DatabaseConfig
+{
+  public string? Host { get; set; }
+
+  public int Port { get; set; }
+}
+
+var config = Toml.ToModel<AppConfig>(toml);
+```
+
+When a generated mapper is available, `Toml.ToModel<T>` will use it automatically. You can still customize naming with `TomlPropertyNameAttribute` or by configuring `TomlModelOptions`.
 
 ## 2. Convert a runtime model to TOML string
 

@@ -20,7 +20,7 @@ namespace Tomlyn.Tests
                 StandardTests.DisplayHeader("Expected");
                 Console.WriteLine(expected);
             }
-            Assert.AreEqual(expected, actual, message);
+            Assert.AreEqual(expected, actual, message ?? string.Empty);
         }
 
         public static string NormalizeEndOfLine(string text)

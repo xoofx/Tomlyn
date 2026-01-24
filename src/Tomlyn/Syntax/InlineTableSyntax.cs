@@ -1,5 +1,5 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
-// Licensed under the BSD-Clause 2 license. 
+// Licensed under the BSD-Clause 2 license.
 // See license.txt file in the project root for full license information.
 using System;
 
@@ -54,7 +54,7 @@ namespace Tomlyn.Syntax
         /// The items of this table.
         /// </summary>
         public SyntaxList<InlineTableItemSyntax> Items { get; }
-        
+
         /// <summary>
         /// The token close brace `}`
         /// </summary>
@@ -64,13 +64,16 @@ namespace Tomlyn.Syntax
             set => ParentToThis(ref _closeBrace, value, TokenKind.CloseBrace);
         }
 
+        /// <inheritdoc />
         public override void Accept(SyntaxVisitor visitor)
         {
             visitor.Visit(this);
         }
 
+        /// <inheritdoc />
         public override int ChildrenCount => 3;
 
+        /// <inheritdoc />
         protected override SyntaxNode? GetChildImpl(int index)
         {
             switch (index)
@@ -84,6 +87,7 @@ namespace Tomlyn.Syntax
             }
         }
 
+        /// <inheritdoc />
         protected override string ToDebuggerDisplay()
         {
             return $"{base.ToDebuggerDisplay()} Count = {Items.ChildrenCount}";

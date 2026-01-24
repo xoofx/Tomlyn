@@ -1,5 +1,5 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
-// Licensed under the BSD-Clause 2 license. 
+// Licensed under the BSD-Clause 2 license.
 // See license.txt file in the project root for full license information.
 using System;
 using System.Globalization;
@@ -36,13 +36,16 @@ namespace Tomlyn.Syntax
         /// </summary>
         public TomlDateTime Value { get; set; }
 
+        /// <inheritdoc />
         public override int ChildrenCount => 1;
 
+        /// <inheritdoc />
         public override void Accept(SyntaxVisitor visitor)
         {
             visitor.Visit(this);
         }
 
+        /// <inheritdoc />
         protected override SyntaxNode? GetChildImpl(int index)
         {
             return Token;
@@ -63,6 +66,7 @@ namespace Tomlyn.Syntax
             }
         }
 
+        /// <inheritdoc />
         protected override string ToDebuggerDisplay()
         {
             return $"{base.ToDebuggerDisplay()}: {TomlFormatHelper.ToString(Value)}";

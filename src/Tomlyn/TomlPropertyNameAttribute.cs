@@ -8,10 +8,17 @@ namespace Tomlyn;
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, Inherited = false)]
 public sealed class TomlPropertyNameAttribute : Attribute
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TomlPropertyNameAttribute"/> class.
+    /// </summary>
+    /// <param name="name">The TOML key name.</param>
     public TomlPropertyNameAttribute(string name)
     {
         Name = name;
     }
 
+    /// <summary>
+    /// Gets the TOML key name.
+    /// </summary>
     public string Name { get; }
 }

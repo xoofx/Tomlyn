@@ -20,14 +20,25 @@ using System;
 /// <param name="Kind">The kind of datetime offset.</param>
 public record struct TomlDateTime(DateTimeOffset DateTime, int SecondPrecision, TomlDateTimeKind Kind) : IConvertible
 {
+    /// <summary>
+    /// Initializes a local-date TOML value from a date component.
+    /// </summary>
+    /// <param name="year">The year component.</param>
+    /// <param name="month">The month component.</param>
+    /// <param name="day">The day component.</param>
     public TomlDateTime(int year, int month, int day) : this(new DateTimeOffset(new DateTime(year, month, day)), 0, TomlDateTimeKind.LocalDate)
     {
     }
 
+    /// <summary>
+    /// Initializes a local-date-time TOML value from a <see cref="DateTime"/>.
+    /// </summary>
+    /// <param name="datetime">The date/time value.</param>
     public TomlDateTime(DateTime datetime) : this(new DateTimeOffset(datetime), 0, TomlDateTimeKind.LocalDateTime)
     {
     }
 
+    /// <inheritdoc />
     public override string ToString() => ((IConvertible)this).ToString(CultureInfo.InvariantCulture);
 
     [ExcludeFromCodeCoverage]

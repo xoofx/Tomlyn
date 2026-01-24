@@ -1,5 +1,5 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
-// Licensed under the BSD-Clause 2 license. 
+// Licensed under the BSD-Clause 2 license.
 // See license.txt file in the project root for full license information.
 
 using Tomlyn.Helpers;
@@ -50,18 +50,22 @@ namespace Tomlyn.Syntax
             set => _value = value;
         }
 
+        /// <inheritdoc />
         public override void Accept(SyntaxVisitor visitor)
         {
             visitor.Visit(this);
         }
 
+        /// <inheritdoc />
         public override int ChildrenCount => 1;
 
+        /// <inheritdoc />
         protected override SyntaxNode? GetChildImpl(int index)
         {
             return Token;
         }
 
+        /// <inheritdoc />
         protected override string ToDebuggerDisplay()
         {
             return $"{base.ToDebuggerDisplay()}: {TomlFormatHelper.ToString(Value)}";

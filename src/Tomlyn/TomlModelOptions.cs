@@ -7,6 +7,9 @@ using Tomlyn.Model;
 
 namespace Tomlyn;
 
+/// <summary>
+/// Options that control TOML model mapping and serialization behavior.
+/// </summary>
 public class TomlModelOptions
 {
     /// <summary>
@@ -24,6 +27,9 @@ public class TomlModelOptions
     /// </summary>
     public static readonly Func<string, string> DefaultConvertFieldName = TomlNamingHelper.PascalToSnakeCase;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TomlModelOptions"/> class.
+    /// </summary>
     public TomlModelOptions()
     {
         GetPropertyName = DefaultGetPropertyNameImpl;
@@ -86,11 +92,11 @@ public class TomlModelOptions
 
     /// <summary>
     /// Gets or sets the convert function called when deserializing a value from TOML to a model (e.g string to Uri).
-    /// 
+    ///
     /// Must return null if cannot convert. The arguments of the function are:
     /// - The input object value to convert.
     /// - The target type to convert to.
-    /// 
+    ///
     /// Returns an instance of target type converted from the input value or null if conversion is not supported.
     /// </summary>
     [Obsolete($"Use {nameof(ConvertToModel)} instead")]
@@ -102,11 +108,11 @@ public class TomlModelOptions
 
     /// <summary>
     /// Gets or sets the convert function called when deserializing a value from TOML to a model (e.g string to Uri).
-    /// 
+    ///
     /// Must return null if cannot convert. The arguments of the function are:
     /// - The input object value to convert.
     /// - The target type to convert to.
-    /// 
+    ///
     /// Returns an instance of target type converted from the input value or null if conversion is not supported.
     /// </summary>
     public Func<object, Type, object?>? ConvertToModel { get; set; }

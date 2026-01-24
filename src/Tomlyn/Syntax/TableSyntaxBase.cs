@@ -1,5 +1,5 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
-// Licensed under the BSD-Clause 2 license. 
+// Licensed under the BSD-Clause 2 license.
 // See license.txt file in the project root for full license information.
 
 using Tomlyn.Helpers;
@@ -62,13 +62,15 @@ namespace Tomlyn.Syntax
         /// Gets the key-values associated with this table.
         /// </summary>
         public SyntaxList<KeyValueSyntax> Items { get; }
-        
+
+        /// <inheritdoc />
         public override int ChildrenCount => 5;
 
         internal abstract TokenKind OpenTokenKind { get; }
 
         internal abstract TokenKind CloseTokenKind { get; }
 
+        /// <inheritdoc />
         protected override SyntaxNode? GetChildImpl(int index)
         {
             switch (index)

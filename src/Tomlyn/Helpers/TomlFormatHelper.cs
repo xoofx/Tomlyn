@@ -9,10 +9,24 @@ using Tomlyn.Text;
 
 namespace Tomlyn.Helpers;
 
+/// <summary>
+/// Helper methods to format values into TOML-compliant strings.
+/// </summary>
 public class TomlFormatHelper
 {
+    /// <summary>
+    /// Converts a boolean to its TOML representation.
+    /// </summary>
+    /// <param name="b">The boolean value.</param>
+    /// <returns>The TOML string.</returns>
     public static string ToString(bool b) => b ? "true" : "false";
 
+    /// <summary>
+    /// Converts a string to its TOML representation using the provided display kind.
+    /// </summary>
+    /// <param name="s">The string value.</param>
+    /// <param name="displayKind">The display kind.</param>
+    /// <returns>The TOML string.</returns>
     public static string ToString(string s, TomlPropertyDisplayKind displayKind)
     {
         switch (displayKind)
@@ -42,6 +56,12 @@ public class TomlFormatHelper
         }
     }
 
+    /// <summary>
+    /// Converts a 32-bit integer to its TOML representation.
+    /// </summary>
+    /// <param name="i32">The integer value.</param>
+    /// <param name="displayKind">The display kind.</param>
+    /// <returns>The TOML string.</returns>
     public static string ToString(int i32, TomlPropertyDisplayKind displayKind)
     {
         return displayKind switch
@@ -53,6 +73,12 @@ public class TomlFormatHelper
         };
     }
 
+    /// <summary>
+    /// Converts a 64-bit integer to its TOML representation.
+    /// </summary>
+    /// <param name="i64">The integer value.</param>
+    /// <param name="displayKind">The display kind.</param>
+    /// <returns>The TOML string.</returns>
     public static string ToString(long i64, TomlPropertyDisplayKind displayKind)
     {
         return displayKind switch
@@ -64,6 +90,12 @@ public class TomlFormatHelper
         };
     }
 
+    /// <summary>
+    /// Converts an unsigned 32-bit integer to its TOML representation.
+    /// </summary>
+    /// <param name="u32">The integer value.</param>
+    /// <param name="displayKind">The display kind.</param>
+    /// <returns>The TOML string.</returns>
     public static string ToString(uint u32, TomlPropertyDisplayKind displayKind)
     {
         return displayKind switch
@@ -75,11 +107,23 @@ public class TomlFormatHelper
         };
     }
 
+    /// <summary>
+    /// Converts an unsigned 64-bit integer to its TOML representation.
+    /// </summary>
+    /// <param name="u64">The integer value.</param>
+    /// <param name="displayKind">The display kind.</param>
+    /// <returns>The TOML string.</returns>
     public static string ToString(ulong u64, TomlPropertyDisplayKind displayKind)
     {
         return ToString(unchecked((long) u64), displayKind);
     }
 
+    /// <summary>
+    /// Converts an 8-bit signed integer to its TOML representation.
+    /// </summary>
+    /// <param name="i8">The integer value.</param>
+    /// <param name="displayKind">The display kind.</param>
+    /// <returns>The TOML string.</returns>
     public static string ToString(sbyte i8, TomlPropertyDisplayKind displayKind)
     {
         return displayKind switch
@@ -91,6 +135,12 @@ public class TomlFormatHelper
         };
     }
 
+    /// <summary>
+    /// Converts an 8-bit unsigned integer to its TOML representation.
+    /// </summary>
+    /// <param name="u8">The integer value.</param>
+    /// <param name="displayKind">The display kind.</param>
+    /// <returns>The TOML string.</returns>
     public static string ToString(byte u8, TomlPropertyDisplayKind displayKind)
     {
         return displayKind switch
@@ -101,6 +151,12 @@ public class TomlFormatHelper
             _ => u8.ToString(CultureInfo.InvariantCulture)
         };
     }
+    /// <summary>
+    /// Converts a 16-bit signed integer to its TOML representation.
+    /// </summary>
+    /// <param name="i16">The integer value.</param>
+    /// <param name="displayKind">The display kind.</param>
+    /// <returns>The TOML string.</returns>
     public static string ToString(short i16, TomlPropertyDisplayKind displayKind)
     {
         return displayKind switch
@@ -112,6 +168,12 @@ public class TomlFormatHelper
         };
     }
 
+    /// <summary>
+    /// Converts a 16-bit unsigned integer to its TOML representation.
+    /// </summary>
+    /// <param name="u16">The integer value.</param>
+    /// <param name="displayKind">The display kind.</param>
+    /// <returns>The TOML string.</returns>
     public static string ToString(ushort u16, TomlPropertyDisplayKind displayKind)
     {
         return displayKind switch
@@ -123,6 +185,11 @@ public class TomlFormatHelper
         };
     }
 
+    /// <summary>
+    /// Converts a single-precision floating point value to its TOML representation.
+    /// </summary>
+    /// <param name="value">The float value.</param>
+    /// <returns>The TOML string.</returns>
     public static string ToString(float value)
     {
         if (float.IsNaN(value))
@@ -140,6 +207,11 @@ public class TomlFormatHelper
         return AppendDecimalPoint(value.ToString("g9", CultureInfo.InvariantCulture));
     }
 
+    /// <summary>
+    /// Converts a double-precision floating point value to its TOML representation.
+    /// </summary>
+    /// <param name="value">The double value.</param>
+    /// <returns>The TOML string.</returns>
     public static string ToString(double value)
     {
         if (double.IsNaN(value))
@@ -158,9 +230,20 @@ public class TomlFormatHelper
     }
 
 
+    /// <summary>
+    /// Converts a <see cref="TomlDateTime"/> to its TOML representation.
+    /// </summary>
+    /// <param name="tomlDateTime">The value to format.</param>
+    /// <returns>The TOML string.</returns>
     public static string ToString(TomlDateTime tomlDateTime) => tomlDateTime.ToString();
 
 
+    /// <summary>
+    /// Converts a <see cref="DateTime"/> to its TOML representation.
+    /// </summary>
+    /// <param name="dateTime">The date/time value.</param>
+    /// <param name="displayKind">The display kind.</param>
+    /// <returns>The TOML string.</returns>
     public static string ToString(DateTime dateTime, TomlPropertyDisplayKind displayKind)
     {
         return new TomlDateTime(dateTime, 0,
@@ -169,6 +252,12 @@ public class TomlFormatHelper
                 : displayKind)).ToString();
     }
 
+    /// <summary>
+    /// Converts a <see cref="DateTimeOffset"/> to its TOML representation.
+    /// </summary>
+    /// <param name="dateTimeOffset">The date/time value.</param>
+    /// <param name="displayKind">The display kind.</param>
+    /// <returns>The TOML string.</returns>
     public static string ToString(DateTimeOffset dateTimeOffset, TomlPropertyDisplayKind displayKind)
     {
         return new TomlDateTime(dateTimeOffset, 0,
@@ -178,6 +267,12 @@ public class TomlFormatHelper
     }
 
 #if NET6_0_OR_GREATER
+    /// <summary>
+    /// Converts a <see cref="DateOnly"/> to its TOML representation.
+    /// </summary>
+    /// <param name="dateOnly">The date value.</param>
+    /// <param name="displayKind">The display kind.</param>
+    /// <returns>The TOML string.</returns>
     public static string ToString(DateOnly dateOnly, TomlPropertyDisplayKind displayKind)
     {
         return new TomlDateTime(dateOnly.ToDateTime(TimeOnly.MinValue), 0,
@@ -186,6 +281,12 @@ public class TomlFormatHelper
                 : displayKind)).ToString();
     }
 
+    /// <summary>
+    /// Converts a <see cref="TimeOnly"/> to its TOML representation.
+    /// </summary>
+    /// <param name="timeOnly">The time value.</param>
+    /// <param name="displayKind">The display kind.</param>
+    /// <returns>The TOML string.</returns>
     public static string ToString(TimeOnly timeOnly, TomlPropertyDisplayKind displayKind)
     {
         return new TomlDateTime(DateOnly.MinValue.ToDateTime(timeOnly), 0,

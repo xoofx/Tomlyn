@@ -39,7 +39,7 @@ list = [4, 5, 6]
                 ConvertToToml = (value) => value is Uri uri ? uri.ToString() : null
             };
             var success = Toml.TryToModel<TestConfigWithUri>(text, out var result, out var diagnostics, null, options);
-            
+
             Assert.True(success);
             Assert.AreEqual(expected, result?.ServiceUri);
 
@@ -653,9 +653,9 @@ id3 = ""id3"" # error
             // Expecting 3 errors
             Assert.AreEqual(3, diagnostics.Count);
 
-            Debug.Assert(model is not null);
+            var nonNullModel = model!;
             // The model is still partially valid
-            Assert.AreEqual("this is a name", model.Name);
+            Assert.AreEqual("this is a name", nonNullModel.Name);
 
             var diag = diagnostics[0];
             Assert.AreEqual(3, diag.Span.Start.Line);
@@ -710,9 +710,9 @@ id3 = ""id3"" # error
             // Expecting 3 errors
             Assert.AreEqual(3, diagnostics.Count);
 
-            Debug.Assert(model is not null);
+            var nonNullModel = model!;
             // The model is still partially valid
-            Assert.AreEqual("this is a name", model.Name);
+            Assert.AreEqual("this is a name", nonNullModel.Name);
 
             var diag = diagnostics[0];
             Assert.AreEqual(3, diag.Span.Start.Line);
@@ -790,7 +790,8 @@ b = true
             StandardTests.DisplayHeader("input");
             Console.WriteLine(input);
             var model = Toml.ToModel<ModelWithArray>(input);
-            CollectionAssert.AreEqual(new string[] { "1", "2", "3"}, model.Values);
+            Assert.NotNull(model.Values);
+            CollectionAssert.AreEqual(new string[] { "1", "2", "3"}, model.Values!);
         }
 
         [Test]
@@ -805,7 +806,8 @@ b = true
             options.IncludeFields = true;
 
             var model = Toml.ToModel<ModelWithArray>(input, options: options);
-            CollectionAssert.AreEqual(new string[] { "1", "2", "3" }, model.Values);
+            Assert.NotNull(model.Values);
+            CollectionAssert.AreEqual(new string[] { "1", "2", "3" }, model.Values!);
         }
 
         [Test]

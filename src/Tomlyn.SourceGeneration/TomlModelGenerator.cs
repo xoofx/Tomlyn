@@ -9,9 +9,16 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Tomlyn.SourceGeneration;
 
+/// <summary>
+/// Generates optimized TOML model mappers for types annotated with <c>Tomlyn.TomlModelAttribute</c>.
+/// </summary>
 [Generator]
 public sealed class TomlModelGenerator : IIncrementalGenerator
 {
+    /// <summary>
+    /// Configures the incremental generator pipeline.
+    /// </summary>
+    /// <param name="context">The generator initialization context.</param>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var modelTypes = context.SyntaxProvider

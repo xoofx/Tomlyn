@@ -19,6 +19,7 @@ Tomlyn is a [TOML](https://toml.io/en/) parser, validator and authoring library 
 - Allow to map a TOML string to a default runtime model via `Toml.ToModel(string)`
 - Allow to map a TOML string to a custom runtime model via `Toml.ToModel<T>(string)`
   - Very convenient for loading custom configurations for example.
+- Source generator for AOT-friendly model mapping via `TomlModelAttribute` (apply to a root type; nested models are discovered transitively).
 - Allow to generate a TOML string from a runtime model via `string Toml.FromModel(object)`
   - Preserve comments, by default with the default runtime model, or by implementing the `ITomlMetadataProvider`.
 - Allow to parse to a `DocumentSyntax` via `Toml.Parse(string)`.

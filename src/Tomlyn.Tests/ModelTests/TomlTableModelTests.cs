@@ -61,11 +61,12 @@ c.d = 'yo'
             Assert.AreEqual((long)1, model["a"]);
             Assert.AreEqual(true, model["b"]);
             Assert.IsInstanceOf<TomlTable>(model["c"]);
-            var subTable = ((TomlTable?) model["c"]);
-            Debug.Assert(subTable is not null);
-            Assert.True(subTable.ContainsKey("d"));
-            Assert.AreEqual(1, subTable.Count);
-            Assert.AreEqual("yo", subTable["d"]);
+            var subTable = (TomlTable?)model["c"];
+            Assert.NotNull(subTable);
+            var nonNullSubTable = subTable!;
+            Assert.True(nonNullSubTable.ContainsKey("d"));
+            Assert.AreEqual(1, nonNullSubTable.Count);
+            Assert.AreEqual("yo", nonNullSubTable["d"]);
         }
 
         [Test]

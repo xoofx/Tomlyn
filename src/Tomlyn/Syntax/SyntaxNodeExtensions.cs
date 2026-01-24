@@ -1,5 +1,5 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
-// Licensed under the BSD-Clause 2 license. 
+// Licensed under the BSD-Clause 2 license.
 // See license.txt file in the project root for full license information.
 using System;
 using System.Collections.Generic;
@@ -27,7 +27,7 @@ namespace Tomlyn.Syntax
                     if (!includeCommentsAndWhitespaces) continue;
                 }
                 else if (token is not SyntaxToken) continue;
-                
+
                 yield return token;
             }
         }
@@ -91,54 +91,108 @@ namespace Tomlyn.Syntax
             }
         }
 
+        /// <summary>
+        /// Adds an integer key/value pair to a list of key/value nodes.
+        /// </summary>
+        /// <param name="list">The target list.</param>
+        /// <param name="name">The key name.</param>
+        /// <param name="value">The integer value.</param>
         public static void Add(this SyntaxList<KeyValueSyntax> list, string name, int value)
         {
             if (list == null) throw new ArgumentNullException(nameof(list));
             list.Add(new KeyValueSyntax(name, new IntegerValueSyntax(value)));
         }
 
+        /// <summary>
+        /// Adds a long key/value pair to a list of key/value nodes.
+        /// </summary>
+        /// <param name="list">The target list.</param>
+        /// <param name="name">The key name.</param>
+        /// <param name="value">The long value.</param>
         public static void Add(this SyntaxList<KeyValueSyntax> list, string name, long value)
         {
             if (list == null) throw new ArgumentNullException(nameof(list));
             list.Add(new KeyValueSyntax(name, new IntegerValueSyntax(value)));
         }
 
+        /// <summary>
+        /// Adds a boolean key/value pair to a list of key/value nodes.
+        /// </summary>
+        /// <param name="list">The target list.</param>
+        /// <param name="name">The key name.</param>
+        /// <param name="value">The boolean value.</param>
         public static void Add(this SyntaxList<KeyValueSyntax> list, string name, bool value)
         {
             if (list == null) throw new ArgumentNullException(nameof(list));
             list.Add(new KeyValueSyntax(name, new BooleanValueSyntax(value)));
         }
 
+        /// <summary>
+        /// Adds a floating-point key/value pair to a list of key/value nodes.
+        /// </summary>
+        /// <param name="list">The target list.</param>
+        /// <param name="name">The key name.</param>
+        /// <param name="value">The floating-point value.</param>
         public static void Add(this SyntaxList<KeyValueSyntax> list, string name, double value)
         {
             if (list == null) throw new ArgumentNullException(nameof(list));
             list.Add(new KeyValueSyntax(name, new FloatValueSyntax(value)));
         }
 
+        /// <summary>
+        /// Adds a string key/value pair to a list of key/value nodes.
+        /// </summary>
+        /// <param name="list">The target list.</param>
+        /// <param name="name">The key name.</param>
+        /// <param name="value">The string value.</param>
         public static void Add(this SyntaxList<KeyValueSyntax> list, string name, string value)
         {
             if (list == null) throw new ArgumentNullException(nameof(list));
             list.Add(new KeyValueSyntax(name, new StringValueSyntax(value)));
         }
 
+        /// <summary>
+        /// Adds an integer array key/value pair to a list of key/value nodes.
+        /// </summary>
+        /// <param name="list">The target list.</param>
+        /// <param name="name">The key name.</param>
+        /// <param name="values">The array of integers.</param>
         public static void Add(this SyntaxList<KeyValueSyntax> list, string name, int[] values)
         {
             if (list == null) throw new ArgumentNullException(nameof(list));
             list.Add(new KeyValueSyntax(name, new ArraySyntax(values)));
         }
-        
+
+        /// <summary>
+        /// Adds a string array key/value pair to a list of key/value nodes.
+        /// </summary>
+        /// <param name="list">The target list.</param>
+        /// <param name="name">The key name.</param>
+        /// <param name="values">The array of strings.</param>
         public static void Add(this SyntaxList<KeyValueSyntax> list, string name, string[] values)
         {
             if (list == null) throw new ArgumentNullException(nameof(list));
             list.Add(new KeyValueSyntax(name, new ArraySyntax(values)));
         }
 
+        /// <summary>
+        /// Adds a date/time value node to a list of key/value nodes.
+        /// </summary>
+        /// <param name="list">The target list.</param>
+        /// <param name="name">The key name.</param>
+        /// <param name="value">The date/time value node.</param>
         public static void Add(this SyntaxList<KeyValueSyntax> list, string name, DateTimeValueSyntax value)
 		{
 			if (list == null) throw new ArgumentNullException(nameof(list));
 			list.Add(new KeyValueSyntax(name, value));
 		}
 
+        /// <summary>
+        /// Adds a trailing comment to a key/value node.
+        /// </summary>
+        /// <param name="keyValue">The key/value node.</param>
+        /// <param name="comment">The comment text.</param>
+        /// <returns>The same key/value node.</returns>
         public static KeyValueSyntax AddTrailingComment(this KeyValueSyntax keyValue, string comment)
         {
             if (keyValue == null) throw new ArgumentNullException(nameof(keyValue));
@@ -147,16 +201,35 @@ namespace Tomlyn.Syntax
             return keyValue;
         }
 
+        /// <summary>
+        /// Adds leading whitespace trivia to the node.
+        /// </summary>
+        /// <typeparam name="T">The node type.</typeparam>
+        /// <param name="node">The target node.</param>
+        /// <returns>The same node.</returns>
         public static T AddLeadingWhitespace<T>(this T node) where T : SyntaxNode
         {
             return AddLeadingTrivia(node, SyntaxFactory.Whitespace());
         }
 
+        /// <summary>
+        /// Adds trailing whitespace trivia to the node.
+        /// </summary>
+        /// <typeparam name="T">The node type.</typeparam>
+        /// <param name="node">The target node.</param>
+        /// <returns>The same node.</returns>
         public static T AddTrailingWhitespace<T>(this T node) where T : SyntaxNode
         {
             return AddTrailingTrivia(node, SyntaxFactory.Whitespace());
         }
 
+        /// <summary>
+        /// Adds leading trivia to the node.
+        /// </summary>
+        /// <typeparam name="T">The node type.</typeparam>
+        /// <param name="node">The target node.</param>
+        /// <param name="trivia">The trivia to add.</param>
+        /// <returns>The same node.</returns>
         public static T AddLeadingTrivia<T>(this T node, SyntaxTrivia trivia) where T : SyntaxNode
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
@@ -170,6 +243,13 @@ namespace Tomlyn.Syntax
             return node;
         }
 
+        /// <summary>
+        /// Adds trailing trivia to the node.
+        /// </summary>
+        /// <typeparam name="T">The node type.</typeparam>
+        /// <param name="node">The target node.</param>
+        /// <param name="trivia">The trivia to add.</param>
+        /// <returns>The same node.</returns>
         public static T AddTrailingTrivia<T>(this T node, SyntaxTrivia trivia) where T : SyntaxNode
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
@@ -183,21 +263,47 @@ namespace Tomlyn.Syntax
             return node;
         }
 
+        /// <summary>
+        /// Adds a leading comment to the node.
+        /// </summary>
+        /// <typeparam name="T">The node type.</typeparam>
+        /// <param name="node">The target node.</param>
+        /// <param name="comment">The comment text.</param>
+        /// <returns>The same node.</returns>
         public static T AddLeadingComment<T>(this T node, string comment) where T : SyntaxNode
         {
             return AddLeadingTrivia(node, SyntaxFactory.Comment(comment));
         }
-        
+
+        /// <summary>
+        /// Adds a trailing comment to the node.
+        /// </summary>
+        /// <typeparam name="T">The node type.</typeparam>
+        /// <param name="node">The target node.</param>
+        /// <param name="comment">The comment text.</param>
+        /// <returns>The same node.</returns>
         public static T AddTrailingComment<T>(this T node, string comment) where T : SyntaxNode
         {
             return AddTrailingTrivia(node, SyntaxFactory.Comment(comment));
         }
 
+        /// <summary>
+        /// Adds a leading newline trivia to the node.
+        /// </summary>
+        /// <typeparam name="T">The node type.</typeparam>
+        /// <param name="node">The target node.</param>
+        /// <returns>The same node.</returns>
         public static T AddLeadingTriviaNewLine<T>(this T node) where T : SyntaxNode
         {
             return AddLeadingTrivia(node, SyntaxFactory.NewLineTrivia());
         }
 
+        /// <summary>
+        /// Adds a trailing newline trivia to the node.
+        /// </summary>
+        /// <typeparam name="T">The node type.</typeparam>
+        /// <param name="node">The target node.</param>
+        /// <returns>The same node.</returns>
         public static T AddTrailingTriviaNewLine<T>(this T node) where T : SyntaxNode
         {
             return AddTrailingTrivia(node, SyntaxFactory.NewLineTrivia());

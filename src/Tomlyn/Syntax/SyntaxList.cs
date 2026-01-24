@@ -1,5 +1,5 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
-// Licensed under the BSD-Clause 2 license. 
+// Licensed under the BSD-Clause 2 license.
 // See license.txt file in the project root for full license information.
 using System;
 using System.Collections;
@@ -13,20 +13,29 @@ namespace Tomlyn.Syntax
     /// </summary>
     public abstract class SyntaxList : SyntaxNode
     {
+        /// <summary>
+        /// Gets the backing list of child nodes.
+        /// </summary>
         protected readonly List<SyntaxNode> Children;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="SyntaxList"/> class.
+        /// </summary>
         internal SyntaxList() : base(SyntaxKind.List)
         {
             Children = new List<SyntaxNode>();
         }
 
+        /// <inheritdoc />
         public sealed override int ChildrenCount => Children.Count;
 
+        /// <inheritdoc />
         protected override SyntaxNode GetChildImpl(int index)
         {
             return Children[index];
         }
 
+        /// <inheritdoc />
         public override void Accept(SyntaxVisitor visitor)
         {
             visitor.Visit(this);
@@ -58,11 +67,17 @@ namespace Tomlyn.Syntax
             node.Parent = this;
         }
 
+        /// <summary>
+        /// Gets a typed child at the specified index.
+        /// </summary>
+        /// <param name="index">Index of the child.</param>
+        /// <returns>The child node at the specified index.</returns>
         public new TSyntaxNode? GetChild(int index)
         {
             return (TSyntaxNode?)base.GetChild(index);
         }
 
+        /// <inheritdoc />
         protected override SyntaxNode GetChildImpl(int index)
         {
             return Children[index];
@@ -128,6 +143,7 @@ namespace Tomlyn.Syntax
                 _index = -1;
             }
 
+            /// <inheritdoc />
             public bool MoveNext()
             {
                 if (_index + 1 == _nodes.Count) return false;
@@ -135,11 +151,13 @@ namespace Tomlyn.Syntax
                 return true;
             }
 
+            /// <inheritdoc />
             public void Reset()
             {
                 _index = -1;
             }
 
+            /// <inheritdoc />
             public TSyntaxNode Current
             {
                 get
@@ -149,8 +167,10 @@ namespace Tomlyn.Syntax
                 }
             }
 
+            /// <inheritdoc />
             object IEnumerator.Current => Current;
 
+            /// <inheritdoc />
             public void Dispose()
             {
             }

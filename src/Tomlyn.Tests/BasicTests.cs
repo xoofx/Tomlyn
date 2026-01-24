@@ -1,5 +1,5 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
-// Licensed under the BSD-Clause 2 license. 
+// Licensed under the BSD-Clause 2 license.
 // See license.txt file in the project root for full license information.
 
 using System;
@@ -170,12 +170,13 @@ key2 = 456
 ]
 ";
             var model = Toml.ToModel(input);
-            var array =  model["x"] as TomlArray;
+            var array = model["x"] as TomlArray;
             Assert.NotNull(array);
-            Assert.AreEqual(3, array.Count);
-            Assert.AreEqual(1, array[0]);
-            Assert.AreEqual(2, array[1]);
-            Assert.AreEqual(3, array[2]);
+            var nonNullArray = array!;
+            Assert.AreEqual(3, nonNullArray.Count);
+            Assert.AreEqual(1, nonNullArray[0]);
+            Assert.AreEqual(2, nonNullArray[1]);
+            Assert.AreEqual(3, nonNullArray[2]);
         }
     }
 }
