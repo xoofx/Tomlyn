@@ -7,6 +7,7 @@
     <File Path="../.github/workflows/ci.yml" />
     <File Path="../.gitignore" />
     <File Path="../.gitmodules" />
+    <File Path="../AGENTS.md" />
     <File Path="../changelog.md" />
     <File Path="../license.txt" />
     <File Path="../readme.md" />
