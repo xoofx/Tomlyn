@@ -28,7 +28,7 @@ public class TomlNamingHelper
             var pc = (char)0;
             foreach (var c in name)
             {
-                if (char.IsUpper(c) && !char.IsUpper(pc) && pc != 0 && pc != '_')
+                if (char.IsUpper(c) && pc != 0 && pc != '_')
                 {
                     builder.Append('_');
                 }
