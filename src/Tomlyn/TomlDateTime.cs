@@ -26,7 +26,7 @@ public record struct TomlDateTime(DateTimeOffset DateTime, int SecondPrecision, 
     /// <param name="year">The year component.</param>
     /// <param name="month">The month component.</param>
     /// <param name="day">The day component.</param>
-    public TomlDateTime(int year, int month, int day) : this(new DateTimeOffset(DateTime.SpecifyKind(new DateTime(year, month, day), DateTimeKind.Unspecified), TimeSpan.Zero), 0, TomlDateTimeKind.LocalDate)
+    public TomlDateTime(int year, int month, int day) : this(new DateTimeOffset(System.DateTime.SpecifyKind(new System.DateTime(year, month, day), DateTimeKind.Unspecified), TimeSpan.Zero), 0, TomlDateTimeKind.LocalDate)
     {
     }
 
@@ -34,7 +34,7 @@ public record struct TomlDateTime(DateTimeOffset DateTime, int SecondPrecision, 
     /// Initializes a local-date-time TOML value from a <see cref="DateTime"/>.
     /// </summary>
     /// <param name="datetime">The date/time value.</param>
-    public TomlDateTime(DateTime datetime) : this(new DateTimeOffset(DateTime.SpecifyKind(datetime, DateTimeKind.Unspecified), TimeSpan.Zero), 0, TomlDateTimeKind.LocalDateTime)
+    public TomlDateTime(DateTime datetime) : this(new DateTimeOffset(System.DateTime.SpecifyKind(datetime, DateTimeKind.Unspecified), TimeSpan.Zero), 0, TomlDateTimeKind.LocalDateTime)
     {
     }
 
