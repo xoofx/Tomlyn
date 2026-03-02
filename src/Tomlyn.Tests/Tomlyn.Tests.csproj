@@ -17,6 +17,7 @@
     <PackageReference Include="nunit" />
     <PackageReference Include="NUnit3TestAdapter" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="System.Text.Json" />
     <PackageReference Include="Portable.System.DateTimeOnly" Condition="'$(TargetFramework)' == 'net48'" />
     <PackageReference Include="Microsoft.Bcl.HashCode" Condition="'$(TargetFramework)' == 'net48'" />
@@ -29,7 +30,7 @@
     <ProjectReference Include="..\Tomlyn\Tomlyn.csproj" />
     <ProjectReference Include="..\Tomlyn.SourceGeneration\Tomlyn.SourceGeneration.csproj"
                       OutputItemType="Analyzer"
-                      ReferenceOutputAssembly="false"
+                      ReferenceOutputAssembly="true"
                       PrivateAssets="all" />
     <Using Include="NUnit.Framework.Legacy.ClassicAssert" Alias="Assert" />
     <Using Include="NUnit.Framework.Legacy.CollectionAssert" Alias="CollectionAssert" />

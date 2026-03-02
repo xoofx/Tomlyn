@@ -46,10 +46,19 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    private static readonly DiagnosticDescriptor InvalidSourceGenerationOption = new(
+        id: "TOMLYN005",
+        title: "Invalid source generation option",
+        messageFormat: "Invalid source generation option on context '{0}': {1}",
+        category: "Tomlyn.SourceGeneration",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     private const string TomlSerializerContextMetadataName = "Tomlyn.Serialization.TomlSerializerContext";
     private const string JsonSerializableAttributeMetadataName = "System.Text.Json.Serialization.JsonSerializableAttribute";
     private const string JsonSourceGenerationOptionsAttributeMetadataName = "System.Text.Json.Serialization.JsonSourceGenerationOptionsAttribute";
     private const string TomlSourceGenerationOptionsAttributeMetadataName = "Tomlyn.Serialization.TomlSourceGenerationOptionsAttribute";
+    private const string TomlConverterMetadataName = "Tomlyn.Serialization.TomlConverter";
 
     private sealed class ContextModel
     {
@@ -81,9 +90,18 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
     {
         public bool? WriteIndented { get; set; }
         public int? IndentSize { get; set; }
+        public int? NewLine { get; set; }
         public string? PropertyNamingPolicyExpression { get; set; }
         public string? DictionaryKeyPolicyExpression { get; set; }
         public bool? PropertyNameCaseInsensitive { get; set; }
+        public int? DefaultIgnoreCondition { get; set; }
+        public int? DuplicateKeyHandling { get; set; }
+        public int? MappingOrder { get; set; }
+        public int? DottedKeyHandling { get; set; }
+        public int? RootValueHandling { get; set; }
+        public string? RootValueKeyName { get; set; }
+        public int? InlineTablePolicy { get; set; }
+        public int? TableArrayStyle { get; set; }
         public ImmutableArray<ITypeSymbol> ConverterTypes { get; set; } = ImmutableArray<ITypeSymbol>.Empty;
     }
 
@@ -197,6 +215,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         ValidateConverters(context, model);
+        ValidateSourceGenerationOptions(context, model);
 
         var expanded = ExpandTypeGraph(context, model);
         var ordered = expanded
@@ -295,6 +314,26 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             builder.Append("        options = options with { PropertyNameCaseInsensitive = ").Append(model.Options.PropertyNameCaseInsensitive.Value ? "true" : "false").AppendLine(" };");
         }
 
+        if (model.Options.DefaultIgnoreCondition is not null && TryGetTomlIgnoreConditionExpression(model.Options.DefaultIgnoreCondition.Value, out var ignoreConditionExpression))
+        {
+            builder.Append("        options = options with { DefaultIgnoreCondition = ").Append(ignoreConditionExpression).AppendLine(" };");
+        }
+
+        if (model.Options.DuplicateKeyHandling is not null && TryGetTomlDuplicateKeyHandlingExpression(model.Options.DuplicateKeyHandling.Value, out var duplicateKeyHandlingExpression))
+        {
+            builder.Append("        options = options with { DuplicateKeyHandling = ").Append(duplicateKeyHandlingExpression).AppendLine(" };");
+        }
+
+        if (model.Options.MappingOrder is not null && TryGetTomlMappingOrderPolicyExpression(model.Options.MappingOrder.Value, out var mappingOrderExpression))
+        {
+            builder.Append("        options = options with { MappingOrder = ").Append(mappingOrderExpression).AppendLine(" };");
+        }
+
+        if (model.Options.DottedKeyHandling is not null && TryGetTomlDottedKeyHandlingExpression(model.Options.DottedKeyHandling.Value, out var dottedKeyHandlingExpression))
+        {
+            builder.Append("        options = options with { DottedKeyHandling = ").Append(dottedKeyHandlingExpression).AppendLine(" };");
+        }
+
         if (model.Options.WriteIndented is not null)
         {
             builder.Append("        options = options with { WriteIndented = ").Append(model.Options.WriteIndented.Value ? "true" : "false").AppendLine(" };");
@@ -303,6 +342,31 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         if (model.Options.IndentSize is not null)
         {
             builder.Append("        options = options with { IndentSize = ").Append(model.Options.IndentSize.Value.ToString(CultureInfo.InvariantCulture)).AppendLine(" };");
+        }
+
+        if (model.Options.NewLine is not null && TryGetTomlNewLineKindExpression(model.Options.NewLine.Value, out var newLineExpression))
+        {
+            builder.Append("        options = options with { NewLine = ").Append(newLineExpression).AppendLine(" };");
+        }
+
+        if (model.Options.RootValueHandling is not null && TryGetTomlRootValueHandlingExpression(model.Options.RootValueHandling.Value, out var rootValueHandlingExpression))
+        {
+            builder.Append("        options = options with { RootValueHandling = ").Append(rootValueHandlingExpression).AppendLine(" };");
+        }
+
+        if (!string.IsNullOrWhiteSpace(model.Options.RootValueKeyName))
+        {
+            builder.Append("        options = options with { RootValueKeyName = \"").Append(EscapeStringLiteral(model.Options.RootValueKeyName!)).AppendLine("\" };");
+        }
+
+        if (model.Options.InlineTablePolicy is not null && TryGetTomlInlineTablePolicyExpression(model.Options.InlineTablePolicy.Value, out var inlineTableExpression))
+        {
+            builder.Append("        options = options with { InlineTablePolicy = ").Append(inlineTableExpression).AppendLine(" };");
+        }
+
+        if (model.Options.TableArrayStyle is not null && TryGetTomlTableArrayStyleExpression(model.Options.TableArrayStyle.Value, out var tableArrayExpression))
+        {
+            builder.Append("        options = options with { TableArrayStyle = ").Append(tableArrayExpression).AppendLine(" };");
         }
 
         builder.AppendLine("        return options;");
@@ -1156,6 +1220,9 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 case "IndentSize":
                     if (value.Value is int indent) options.IndentSize = indent;
                     break;
+                case "NewLine":
+                    if (value.Value is int nl) options.NewLine = nl;
+                    break;
                 case "PropertyNameCaseInsensitive":
                     if (value.Value is bool pnci) options.PropertyNameCaseInsensitive = pnci;
                     break;
@@ -1164,6 +1231,30 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     break;
                 case "DictionaryKeyPolicy":
                     options.DictionaryKeyPolicyExpression = ToJsonNamingPolicyExpression(value);
+                    break;
+                case "DefaultIgnoreCondition":
+                    if (value.Value is int dic) options.DefaultIgnoreCondition = dic;
+                    break;
+                case "DuplicateKeyHandling":
+                    if (value.Value is int dkh) options.DuplicateKeyHandling = dkh;
+                    break;
+                case "MappingOrder":
+                    if (value.Value is int mappingOrder) options.MappingOrder = mappingOrder;
+                    break;
+                case "DottedKeyHandling":
+                    if (value.Value is int dottedKeyHandling) options.DottedKeyHandling = dottedKeyHandling;
+                    break;
+                case "RootValueHandling":
+                    if (value.Value is int rootValueHandling) options.RootValueHandling = rootValueHandling;
+                    break;
+                case "RootValueKeyName":
+                    if (value.Value is string rootValueKeyName) options.RootValueKeyName = rootValueKeyName;
+                    break;
+                case "InlineTablePolicy":
+                    if (value.Value is int inlineTablePolicy) options.InlineTablePolicy = inlineTablePolicy;
+                    break;
+                case "TableArrayStyle":
+                    if (value.Value is int tableArrayStyle) options.TableArrayStyle = tableArrayStyle;
                     break;
                 case "Converters":
                     if (value.Kind == TypedConstantKind.Array && !value.Values.IsDefault)
@@ -1198,9 +1289,21 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 continue;
             }
 
-            if (named.TypeKind is not (TypeKind.Class or TypeKind.Struct))
+            if (named.TypeKind != TypeKind.Class)
             {
-                context.ReportDiagnostic(Diagnostic.Create(InvalidConverterType, model.ContextSymbol.Locations.FirstOrDefault(), type.ToDisplayString(), "Converters must be classes or structs."));
+                context.ReportDiagnostic(Diagnostic.Create(InvalidConverterType, model.ContextSymbol.Locations.FirstOrDefault(), type.ToDisplayString(), "Converters must be classes."));
+                continue;
+            }
+
+            if (named.IsAbstract)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InvalidConverterType, model.ContextSymbol.Locations.FirstOrDefault(), type.ToDisplayString(), "Converters must not be abstract."));
+                continue;
+            }
+
+            if (!DerivesFrom(named, "global::" + TomlConverterMetadataName))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InvalidConverterType, model.ContextSymbol.Locations.FirstOrDefault(), type.ToDisplayString(), $"Converters must derive from {TomlConverterMetadataName}."));
                 continue;
             }
 
@@ -1211,6 +1314,79 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
     }
 
+    private static void ValidateSourceGenerationOptions(SourceProductionContext context, ContextModel model)
+    {
+        if (model.Options.IndentSize is not null && model.Options.IndentSize.Value < 1)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                InvalidSourceGenerationOption,
+                model.ContextSymbol.Locations.FirstOrDefault(),
+                model.ContextSymbol.ToDisplayString(),
+                "IndentSize must be at least 1."));
+            model.Options.IndentSize = null;
+        }
+
+        ValidateEnumOption(context, model, "NewLine", model.Options.NewLine, TryGetTomlNewLineKindExpression, v => model.Options.NewLine = v);
+        ValidateEnumOption(context, model, "DefaultIgnoreCondition", model.Options.DefaultIgnoreCondition, TryGetTomlIgnoreConditionExpression, v => model.Options.DefaultIgnoreCondition = v);
+        ValidateEnumOption(context, model, "DuplicateKeyHandling", model.Options.DuplicateKeyHandling, TryGetTomlDuplicateKeyHandlingExpression, v => model.Options.DuplicateKeyHandling = v);
+        ValidateEnumOption(context, model, "MappingOrder", model.Options.MappingOrder, TryGetTomlMappingOrderPolicyExpression, v => model.Options.MappingOrder = v);
+        ValidateEnumOption(context, model, "DottedKeyHandling", model.Options.DottedKeyHandling, TryGetTomlDottedKeyHandlingExpression, v => model.Options.DottedKeyHandling = v);
+        ValidateEnumOption(context, model, "RootValueHandling", model.Options.RootValueHandling, TryGetTomlRootValueHandlingExpression, v => model.Options.RootValueHandling = v);
+        ValidateEnumOption(context, model, "InlineTablePolicy", model.Options.InlineTablePolicy, TryGetTomlInlineTablePolicyExpression, v => model.Options.InlineTablePolicy = v);
+        ValidateEnumOption(context, model, "TableArrayStyle", model.Options.TableArrayStyle, TryGetTomlTableArrayStyleExpression, v => model.Options.TableArrayStyle = v);
+
+        if (model.Options.RootValueKeyName is not null && string.IsNullOrWhiteSpace(model.Options.RootValueKeyName))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                InvalidSourceGenerationOption,
+                model.ContextSymbol.Locations.FirstOrDefault(),
+                model.ContextSymbol.ToDisplayString(),
+                "RootValueKeyName cannot be empty or whitespace."));
+            model.Options.RootValueKeyName = null;
+        }
+    }
+
+    private delegate bool TryGetEnumExpression(int value, out string expression);
+
+    private static void ValidateEnumOption(
+        SourceProductionContext context,
+        ContextModel model,
+        string optionName,
+        int? value,
+        TryGetEnumExpression tryGetExpression,
+        Action<int?> clear)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        if (tryGetExpression(value.Value, out _))
+        {
+            return;
+        }
+
+        context.ReportDiagnostic(Diagnostic.Create(
+            InvalidSourceGenerationOption,
+            model.ContextSymbol.Locations.FirstOrDefault(),
+            model.ContextSymbol.ToDisplayString(),
+            $"{optionName} has unsupported value {(value.Value).ToString(CultureInfo.InvariantCulture)}."));
+        clear(null);
+    }
+
+    private static bool DerivesFrom(INamedTypeSymbol symbol, string baseTypeMetadataName)
+    {
+        for (var current = symbol.BaseType; current is not null; current = current.BaseType)
+        {
+            if (current.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == baseTypeMetadataName)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static string? ToJsonNamingPolicyExpression(TypedConstant constant)
     {
         if (constant.Kind != TypedConstantKind.Enum || constant.Value is not int value)
@@ -1219,12 +1395,115 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         var policy = (JsonKnownNamingPolicy)value;
-        if (policy == JsonKnownNamingPolicy.CamelCase)
+        return policy switch
         {
-            return "global::System.Text.Json.JsonNamingPolicy.CamelCase";
-        }
+            JsonKnownNamingPolicy.CamelCase => "global::System.Text.Json.JsonNamingPolicy.CamelCase",
+            JsonKnownNamingPolicy.SnakeCaseLower => "global::System.Text.Json.JsonNamingPolicy.SnakeCaseLower",
+            JsonKnownNamingPolicy.SnakeCaseUpper => "global::System.Text.Json.JsonNamingPolicy.SnakeCaseUpper",
+            JsonKnownNamingPolicy.KebabCaseLower => "global::System.Text.Json.JsonNamingPolicy.KebabCaseLower",
+            JsonKnownNamingPolicy.KebabCaseUpper => "global::System.Text.Json.JsonNamingPolicy.KebabCaseUpper",
+            _ => null,
+        };
+    }
 
-        return null;
+    private static bool TryGetTomlIgnoreConditionExpression(int value, out string expression)
+    {
+        expression = value switch
+        {
+            0 => "global::Tomlyn.TomlIgnoreCondition.Never",
+            1 => "global::Tomlyn.TomlIgnoreCondition.WhenWritingNull",
+            2 => "global::Tomlyn.TomlIgnoreCondition.WhenWritingDefault",
+            _ => null!,
+        };
+
+        return expression is not null;
+    }
+
+    private static bool TryGetTomlDuplicateKeyHandlingExpression(int value, out string expression)
+    {
+        expression = value switch
+        {
+            0 => "global::Tomlyn.TomlDuplicateKeyHandling.Error",
+            1 => "global::Tomlyn.TomlDuplicateKeyHandling.LastWins",
+            _ => null!,
+        };
+
+        return expression is not null;
+    }
+
+    private static bool TryGetTomlMappingOrderPolicyExpression(int value, out string expression)
+    {
+        expression = value switch
+        {
+            0 => "global::Tomlyn.TomlMappingOrderPolicy.Declaration",
+            1 => "global::Tomlyn.TomlMappingOrderPolicy.Alphabetical",
+            2 => "global::Tomlyn.TomlMappingOrderPolicy.OrderThenDeclaration",
+            3 => "global::Tomlyn.TomlMappingOrderPolicy.OrderThenAlphabetical",
+            _ => null!,
+        };
+
+        return expression is not null;
+    }
+
+    private static bool TryGetTomlDottedKeyHandlingExpression(int value, out string expression)
+    {
+        expression = value switch
+        {
+            0 => "global::Tomlyn.TomlDottedKeyHandling.Literal",
+            1 => "global::Tomlyn.TomlDottedKeyHandling.Expand",
+            _ => null!,
+        };
+
+        return expression is not null;
+    }
+
+    private static bool TryGetTomlRootValueHandlingExpression(int value, out string expression)
+    {
+        expression = value switch
+        {
+            0 => "global::Tomlyn.TomlRootValueHandling.Error",
+            1 => "global::Tomlyn.TomlRootValueHandling.WrapInRootKey",
+            _ => null!,
+        };
+
+        return expression is not null;
+    }
+
+    private static bool TryGetTomlNewLineKindExpression(int value, out string expression)
+    {
+        expression = value switch
+        {
+            0 => "global::Tomlyn.TomlNewLineKind.Lf",
+            1 => "global::Tomlyn.TomlNewLineKind.CrLf",
+            _ => null!,
+        };
+
+        return expression is not null;
+    }
+
+    private static bool TryGetTomlInlineTablePolicyExpression(int value, out string expression)
+    {
+        expression = value switch
+        {
+            0 => "global::Tomlyn.TomlInlineTablePolicy.Never",
+            1 => "global::Tomlyn.TomlInlineTablePolicy.WhenSmall",
+            2 => "global::Tomlyn.TomlInlineTablePolicy.Always",
+            _ => null!,
+        };
+
+        return expression is not null;
+    }
+
+    private static bool TryGetTomlTableArrayStyleExpression(int value, out string expression)
+    {
+        expression = value switch
+        {
+            0 => "global::Tomlyn.TomlTableArrayStyle.Headers",
+            1 => "global::Tomlyn.TomlTableArrayStyle.InlineArrayOfTables",
+            _ => null!,
+        };
+
+        return expression is not null;
     }
 
     private static string EscapeStringLiteral(string value)
