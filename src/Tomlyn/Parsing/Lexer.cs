@@ -1291,7 +1291,9 @@ namespace Tomlyn.Parsing
                 {
                     AddError($"Invalid control character U+{_c.Code:X4} in comment", _position, _position);
                 }
-                end = _position;
+                // _position.Offset points at the start of the current UTF-32 scalar; use the lexer
+                // internal next offset so end spans include the full UTF-8/UTF-16 sequence.
+                end = new TextPosition(_current.NextPosition.Offset - 1, _position.Line, _position.Column);
                 NextChar();
             }
 
