@@ -144,7 +144,26 @@ public sealed class TomlParser
     {
         var effectiveOptions = options ?? TomlSerializerOptions.Default;
         var bytes = utf8Toml.ToArray();
-        var sourceView = new StringUtf8SourceView(bytes, effectiveOptions.SourceName ?? string.Empty);
+        return Create(bytes, effectiveOptions);
+    }
+
+    /// <summary>
+    /// Creates a parser over UTF-8 TOML bytes.
+    /// </summary>
+    /// <param name="utf8Toml">The UTF-8 TOML payload.</param>
+    /// <param name="options">Optional parser/serializer options.</param>
+    /// <returns>A parser instance positioned before the first event.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="utf8Toml"/> is <c>null</c>.</exception>
+    /// <exception cref="TomlException">The TOML payload is invalid.</exception>
+    public static TomlParser Create(byte[] utf8Toml, TomlSerializerOptions? options = null)
+    {
+        if (utf8Toml is null)
+        {
+            throw new ArgumentNullException(nameof(utf8Toml));
+        }
+
+        var effectiveOptions = options ?? TomlSerializerOptions.Default;
+        var sourceView = new StringUtf8SourceView(utf8Toml, effectiveOptions.SourceName ?? string.Empty);
         var parserOptions = new TomlParserOptions();
         DiagnosticsBag? diagnostics = null;
         if (parserOptions.Mode == TomlParserMode.Tolerant)
@@ -174,7 +193,33 @@ public sealed class TomlParser
 
         var effectiveOptions = options ?? TomlSerializerOptions.Default;
         var bytes = utf8Toml.ToArray();
-        var sourceView = new StringUtf8SourceView(bytes, effectiveOptions.SourceName ?? string.Empty);
+        return Create(bytes, parserOptions, effectiveOptions);
+    }
+
+    /// <summary>
+    /// Creates a parser over UTF-8 TOML bytes.
+    /// </summary>
+    /// <param name="utf8Toml">The UTF-8 TOML payload.</param>
+    /// <param name="parserOptions">Parser options controlling error handling.</param>
+    /// <param name="options">Optional parser/serializer options.</param>
+    /// <returns>A parser instance positioned before the first event.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="utf8Toml"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="parserOptions"/> is <c>null</c>.</exception>
+    /// <exception cref="TomlException">The TOML payload is invalid.</exception>
+    public static TomlParser Create(byte[] utf8Toml, TomlParserOptions parserOptions, TomlSerializerOptions? options = null)
+    {
+        if (utf8Toml is null)
+        {
+            throw new ArgumentNullException(nameof(utf8Toml));
+        }
+
+        if (parserOptions is null)
+        {
+            throw new ArgumentNullException(nameof(parserOptions));
+        }
+
+        var effectiveOptions = options ?? TomlSerializerOptions.Default;
+        var sourceView = new StringUtf8SourceView(utf8Toml, effectiveOptions.SourceName ?? string.Empty);
         DiagnosticsBag? diagnostics = null;
         if (parserOptions.Mode == TomlParserMode.Tolerant)
         {

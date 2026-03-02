@@ -56,6 +56,17 @@ public sealed class TomlReader
     /// </summary>
     public static TomlReader Create(ReadOnlySpan<byte> utf8Toml, TomlSerializerOptions? options = null)
     {
+        var bytes = utf8Toml.ToArray();
+        return Create(bytes, options);
+    }
+
+    /// <summary>
+    /// Creates a TOML reader over a UTF-8 payload.
+    /// </summary>
+    /// <exception cref="ArgumentNullException"><paramref name="utf8Toml"/> is <c>null</c>.</exception>
+    public static TomlReader Create(byte[] utf8Toml, TomlSerializerOptions? options = null)
+    {
+        ArgumentGuard.ThrowIfNull(utf8Toml, nameof(utf8Toml));
         var effectiveOptions = options ?? TomlSerializerOptions.Default;
         var parser = TomlParser.Create(utf8Toml, effectiveOptions);
         return new TomlReader(parser, effectiveOptions);

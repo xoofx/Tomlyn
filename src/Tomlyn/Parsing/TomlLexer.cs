@@ -121,7 +121,24 @@ public sealed class TomlLexer
     public static TomlLexer Create(ReadOnlySpan<byte> utf8Toml, string? sourceName = null)
     {
         var bytes = utf8Toml.ToArray();
-        var sourceView = new StringUtf8SourceView(bytes, sourceName ?? string.Empty);
+        return Create(bytes, sourceName);
+    }
+
+    /// <summary>
+    /// Creates a lexer over UTF-8 TOML bytes.
+    /// </summary>
+    /// <param name="utf8Toml">The UTF-8 TOML payload.</param>
+    /// <param name="sourceName">An optional source name used in diagnostics.</param>
+    /// <returns>A lexer instance positioned before the first token.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="utf8Toml"/> is <c>null</c>.</exception>
+    public static TomlLexer Create(byte[] utf8Toml, string? sourceName = null)
+    {
+        if (utf8Toml is null)
+        {
+            throw new ArgumentNullException(nameof(utf8Toml));
+        }
+
+        var sourceView = new StringUtf8SourceView(utf8Toml, sourceName ?? string.Empty);
         var lexer = new Lexer<StringUtf8SourceView, StringCharacterUtf8Iterator>(sourceView)
         {
             DecodeScalars = false,
@@ -145,7 +162,31 @@ public sealed class TomlLexer
         }
 
         var bytes = utf8Toml.ToArray();
-        var sourceView = new StringUtf8SourceView(bytes, sourceName ?? string.Empty);
+        return Create(bytes, lexerOptions, sourceName);
+    }
+
+    /// <summary>
+    /// Creates a lexer over UTF-8 TOML bytes.
+    /// </summary>
+    /// <param name="utf8Toml">The UTF-8 TOML payload.</param>
+    /// <param name="lexerOptions">Options controlling lexer behavior.</param>
+    /// <param name="sourceName">An optional source name used in diagnostics.</param>
+    /// <returns>A lexer instance positioned before the first token.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="utf8Toml"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="lexerOptions"/> is <c>null</c>.</exception>
+    public static TomlLexer Create(byte[] utf8Toml, TomlLexerOptions lexerOptions, string? sourceName = null)
+    {
+        if (utf8Toml is null)
+        {
+            throw new ArgumentNullException(nameof(utf8Toml));
+        }
+
+        if (lexerOptions is null)
+        {
+            throw new ArgumentNullException(nameof(lexerOptions));
+        }
+
+        var sourceView = new StringUtf8SourceView(utf8Toml, sourceName ?? string.Empty);
         var lexer = new Lexer<StringUtf8SourceView, StringCharacterUtf8Iterator>(sourceView)
         {
             DecodeScalars = lexerOptions.DecodeScalars,
