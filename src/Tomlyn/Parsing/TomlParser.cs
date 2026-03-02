@@ -341,7 +341,6 @@ public sealed class TomlParser
         private readonly List<ContainerFrame> _containers;
 
         private DocumentState _state;
-        private TextPosition _valueSpanStart;
 
         public ParserCore(TSourceView sourceView, TomlParserOptions parserOptions, DiagnosticsBag? diagnostics)
         {
@@ -365,7 +364,6 @@ public sealed class TomlParser
             _containers = new List<ContainerFrame>(capacity: 8);
 
             _state = DocumentState.NotStarted;
-            _valueSpanStart = default;
         }
 
         public string? GetText(SourceSpan span) => _lexer.Source.GetString(span.Offset, span.Length);
@@ -723,7 +721,7 @@ public sealed class TomlParser
             Consume(isTableArray ? TokenKind.OpenBracketDouble : TokenKind.OpenBracket, LexerState.Key);
 
             _pathSegments.Clear();
-            ParseKeyPath(_pathSegments);
+            ParseKeyPath(_pathSegments, out _);
             if (_pathSegments.Count == 0)
             {
                 throw CreateException(CurrentSpan(), "Invalid table header.");
@@ -752,8 +750,7 @@ public sealed class TomlParser
         private void BeginKeyValueEntry(int implicitBaseIndex)
         {
             _pathSegments.Clear();
-            _valueSpanStart = _token.Start;
-            ParseKeyPath(_pathSegments);
+            ParseKeyPath(_pathSegments, out var leafSpan);
             if (_pathSegments.Count == 0)
             {
                 throw CreateException(CurrentSpan(), "Invalid key/value entry.");
@@ -768,8 +765,7 @@ public sealed class TomlParser
             EnsureImplicitPrefix(implicitBaseIndex, _pathSegments, prefixLength);
 
             var leaf = _pathSegments[_pathSegments.Count - 1];
-            var span = new SourceSpan(_lexer.Source.SourcePath, _valueSpanStart, _valueSpanStart);
-            _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.PropertyName, span: span, propertyName: leaf, stringValue: null, data: 0));
+            _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.PropertyName, span: leafSpan, propertyName: leaf, stringValue: null, data: 0));
 
             Consume(TokenKind.Equal, LexerState.Value);
         }
@@ -965,20 +961,23 @@ public sealed class TomlParser
             throw CreateException(CurrentSpan(), $"Unexpected token `{ToPrintable(_token)}` while parsing a value.");
         }
 
-        private void ParseKeyPath(List<string> segments)
+        private void ParseKeyPath(List<string> segments, out SourceSpan leafSpan)
         {
-            segments.Add(ParseKeySegment());
+            leafSpan = ParseKeySegment(out var firstSegment);
+            segments.Add(firstSegment);
             while (_token.Kind == TokenKind.Dot)
             {
                 Consume(TokenKind.Dot, LexerState.Key);
-                segments.Add(ParseKeySegment());
+                leafSpan = ParseKeySegment(out var segment);
+                segments.Add(segment);
             }
         }
 
-        private string ParseKeySegment()
+        private SourceSpan ParseKeySegment(out string segment)
         {
             if (_token.Kind == TokenKind.BasicKey)
             {
+                var span = CurrentSpan();
                 var text = _token.GetText(_lexer.Source);
                 if (string.IsNullOrEmpty(text))
                 {
@@ -986,11 +985,13 @@ public sealed class TomlParser
                 }
 
                 Consume(TokenKind.BasicKey, LexerState.Key);
-                return text!;
+                segment = text!;
+                return span;
             }
 
             if (_token.Kind.IsString())
             {
+                var span = CurrentSpan();
                 string text;
                 if (_decodeScalars)
                 {
@@ -1008,7 +1009,8 @@ public sealed class TomlParser
                 }
 
                 Consume(_token.Kind, LexerState.Key);
-                return text;
+                segment = text;
+                return span;
             }
 
             throw CreateException(CurrentSpan(), $"Unexpected token `{ToPrintable(_token)}` while parsing a key.");
