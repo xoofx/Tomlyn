@@ -124,6 +124,10 @@ namespace Tomlyn.Parsing
                     NextChar();
                     _token = new SyntaxTokenValue(TokenKind.Equal, start, start);
                     break;
+                case ',':
+                    _token = new SyntaxTokenValue(TokenKind.Comma, start, start);
+                    NextChar();
+                    break;
                 case '{':
                     _token = new SyntaxTokenValue(TokenKind.OpenBrace, _position, _position);
                     NextChar();
