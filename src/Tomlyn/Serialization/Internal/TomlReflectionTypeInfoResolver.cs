@@ -1,10 +1,12 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json.Serialization;
 using Tomlyn.Helpers;
 using Tomlyn.Serialization;
+using Tomlyn.Serialization.Converters;
 
 namespace Tomlyn.Serialization.Internal;
 
@@ -167,6 +169,7 @@ internal static class TomlReflectionTypeInfoResolver
                 ignore.WriteIgnoreCondition,
                 GetDefaultValue(property.PropertyType),
                 IsRequired(property),
+                IsExtensionData(property),
                 TryCreateMemberConverter(property, property.PropertyType, options)));
         }
 
@@ -206,6 +209,7 @@ internal static class TomlReflectionTypeInfoResolver
                 ignore.WriteIgnoreCondition,
                 GetDefaultValue(field.FieldType),
                 IsRequired(field),
+                IsExtensionData(field),
                 TryCreateMemberConverter(field, field.FieldType, options)));
         }
 
@@ -235,6 +239,21 @@ internal static class TomlReflectionTypeInfoResolver
         }
 
         if (member.IsDefined(typeof(JsonRequiredAttribute), inherit: true))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsExtensionData(MemberInfo member)
+    {
+        if (member.IsDefined(typeof(TomlExtensionDataAttribute), inherit: true))
+        {
+            return true;
+        }
+
+        if (member.IsDefined(typeof(JsonExtensionDataAttribute), inherit: true))
         {
             return true;
         }
@@ -300,6 +319,41 @@ internal static class TomlReflectionTypeInfoResolver
         }
 
         return converter;
+    }
+
+    private static bool TryGetExtensionDataValueType(Type dictionaryType, out Type valueType)
+    {
+        valueType = typeof(object);
+
+        if (!typeof(IDictionary).IsAssignableFrom(dictionaryType))
+        {
+            return false;
+        }
+
+        var interfaces = dictionaryType.GetInterfaces();
+        for (var i = 0; i < interfaces.Length; i++)
+        {
+            var iface = interfaces[i];
+            if (!iface.IsGenericType)
+            {
+                continue;
+            }
+
+            var definition = iface.GetGenericTypeDefinition();
+            if (definition != typeof(IDictionary<,>))
+            {
+                continue;
+            }
+
+            var args = iface.GetGenericArguments();
+            if (args.Length == 2 && args[0] == typeof(string))
+            {
+                valueType = args[1];
+                return true;
+            }
+        }
+
+        return true;
     }
 
     private readonly record struct IgnoreBehavior(bool IgnoreAlways, TomlIgnoreCondition? WriteIgnoreCondition);
@@ -424,6 +478,7 @@ internal static class TomlReflectionTypeInfoResolver
         TomlIgnoreCondition? WriteIgnoreCondition,
         object? DefaultValue,
         bool IsRequired,
+        bool IsExtensionData,
         TomlConverter? Converter);
 
     private static bool ShouldIgnoreValue(object? memberValue, TomlIgnoreCondition ignoreCondition, object? defaultValue)
@@ -444,19 +499,51 @@ internal static class TomlReflectionTypeInfoResolver
         private readonly ParameterBinding[] _parameters;
         private readonly Dictionary<string, int>? _parameterIndexByName;
         private readonly bool _hasRequiredMembers;
+        private readonly int _extensionDataIndex;
+        private readonly Type? _extensionDataValueType;
+        private readonly StringComparer _nameComparer;
 
         public ReflectionObjectTomlTypeInfo(Type type, TomlSerializerOptions options, List<MemberModel> members, ConstructorInfo? constructor)
             : base(type, options)
         {
             _members = members ?? throw new ArgumentNullException(nameof(members));
             _constructor = constructor;
+            _nameComparer = options.PropertyNameCaseInsensitive ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
             _indexByName = new Dictionary<string, int>(
                 _members.Count,
-                options.PropertyNameCaseInsensitive ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+                _nameComparer);
+
+            _extensionDataIndex = -1;
+            _extensionDataValueType = null;
+            for (var i = 0; i < _members.Count; i++)
+            {
+                if (!_members[i].IsExtensionData)
+                {
+                    continue;
+                }
+
+                if (_extensionDataIndex != -1)
+                {
+                    throw new InvalidOperationException($"Multiple extension data members are not supported on type '{type.FullName}'.");
+                }
+
+                if (!TryGetExtensionDataValueType(_members[i].MemberType, out var valueType))
+                {
+                    throw new InvalidOperationException($"Extension data member '{_members[i].Member.Name}' on '{type.FullName}' must be a dictionary-like type with string keys.");
+                }
+
+                _extensionDataIndex = i;
+                _extensionDataValueType = valueType;
+            }
 
             for (var i = 0; i < _members.Count; i++)
             {
                 var name = _members[i].SerializedName;
+                if (_members[i].IsExtensionData)
+                {
+                    continue;
+                }
+
                 if (!_indexByName.ContainsKey(name))
                 {
                     _indexByName.Add(name, i);
@@ -530,9 +617,20 @@ internal static class TomlReflectionTypeInfoResolver
             }
 
             writer.WriteStartTable();
+            HashSet<string>? usedKeys = null;
+            if (_extensionDataIndex != -1)
+            {
+                usedKeys = new HashSet<string>(_nameComparer);
+            }
+
             for (var i = 0; i < _members.Count; i++)
             {
                 var member = _members[i];
+                if (member.IsExtensionData)
+                {
+                    continue;
+                }
+
                 var memberValue = member.Getter(value);
 
                 var ignoreCondition = member.WriteIgnoreCondition ?? Options.DefaultIgnoreCondition;
@@ -542,6 +640,7 @@ internal static class TomlReflectionTypeInfoResolver
                 }
 
                 writer.WritePropertyName(member.SerializedName);
+                usedKeys?.Add(member.SerializedName);
                 if (member.Converter is { } converter)
                 {
                     converter.Write(writer, memberValue);
@@ -552,6 +651,44 @@ internal static class TomlReflectionTypeInfoResolver
                     typeInfo.Write(writer, memberValue);
                 }
             }
+
+            if (_extensionDataIndex != -1)
+            {
+                var extensionMember = _members[_extensionDataIndex];
+                var extensionDictionary = extensionMember.Getter(value) as IDictionary;
+                if (extensionDictionary is not null)
+                {
+                    foreach (DictionaryEntry entry in extensionDictionary)
+                    {
+                        if (entry.Key is not string key)
+                        {
+                            throw new TomlException($"Extension data keys must be strings but encountered '{entry.Key?.GetType().FullName}'.");
+                        }
+
+                        if (Options.DictionaryKeyPolicy is { } keyPolicy)
+                        {
+                            key = keyPolicy.ConvertName(key);
+                        }
+
+                        if (usedKeys is not null && usedKeys.Contains(key))
+                        {
+                            throw new TomlException($"Extension data key '{key}' conflicts with an existing member key.");
+                        }
+
+                        writer.WritePropertyName(key);
+                        if (_extensionDataValueType == typeof(object))
+                        {
+                            TomlUntypedObjectConverter.Instance.Write(writer, entry.Value);
+                        }
+                        else
+                        {
+                            var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, _extensionDataValueType!);
+                            typeInfo.Write(writer, entry.Value);
+                        }
+                    }
+                }
+            }
+
             writer.WriteEndTable();
         }
 
@@ -617,6 +754,15 @@ internal static class TomlReflectionTypeInfoResolver
                     continue;
                 }
 
+                if (_extensionDataIndex != -1)
+                {
+                    var extensionDictionary = EnsureExtensionDataDictionary(instance);
+                    reader.Read(); // value
+                    var extensionValue = ReadExtensionValue(reader);
+                    extensionDictionary[name] = extensionValue;
+                    continue;
+                }
+
                 reader.Read(); // value
                 reader.Skip();
             }
@@ -648,12 +794,75 @@ internal static class TomlReflectionTypeInfoResolver
             }
         }
 
+        private IDictionary EnsureExtensionDataDictionary(object instance)
+        {
+            if (_extensionDataIndex == -1)
+            {
+                throw new InvalidOperationException("No extension data member is configured.");
+            }
+
+            var extensionMember = _members[_extensionDataIndex];
+            var existing = extensionMember.Getter(instance);
+            if (existing is IDictionary dictionary)
+            {
+                return dictionary;
+            }
+
+            if (existing is null)
+            {
+                if (extensionMember.Setter is null)
+                {
+                    throw new TomlException($"Extension data member '{extensionMember.Member.Name}' is null and cannot be initialized.");
+                }
+
+                var created = CreateExtensionDataDictionary(extensionMember.MemberType);
+                extensionMember.Setter(instance, created);
+                return created;
+            }
+
+            throw new TomlException($"Extension data member '{extensionMember.Member.Name}' must be a dictionary-like type.");
+        }
+
+        private IDictionary CreateExtensionDataDictionary(Type memberType)
+        {
+            if (!memberType.IsInterface && !memberType.IsAbstract)
+            {
+                try
+                {
+                    var created = Activator.CreateInstance(memberType);
+                    if (created is IDictionary dictionary)
+                    {
+                        return dictionary;
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            var valueType = _extensionDataValueType ?? typeof(object);
+            var fallbackType = typeof(Dictionary<,>).MakeGenericType(typeof(string), valueType);
+            return (IDictionary)Activator.CreateInstance(fallbackType)!;
+        }
+
+        private object? ReadExtensionValue(TomlReader reader)
+        {
+            if (_extensionDataValueType == typeof(object))
+            {
+                return TomlUntypedObjectConverter.ReadValue(reader);
+            }
+
+            var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, _extensionDataValueType!);
+            return typeInfo.ReadAsObject(reader);
+        }
+
         private object ReadWithConstructor(TomlReader reader)
         {
             var ctorArgs = new object?[_parameters.Length];
             var ctorSeen = new bool[_parameters.Length];
             var memberValues = new object?[_members.Count];
             var memberSeen = new bool[_members.Count];
+            Dictionary<string, object?>? extensionData = null;
 
             reader.Read(); // first property or end
             while (reader.TokenType != TomlTokenType.EndTable)
@@ -783,6 +992,15 @@ internal static class TomlReflectionTypeInfoResolver
                 }
 
                 member.Setter(instance, memberValues[i]);
+            }
+
+            if (extensionData is not null && extensionData.Count > 0)
+            {
+                var dictionary = EnsureExtensionDataDictionary(instance);
+                foreach (var pair in extensionData)
+                {
+                    dictionary[pair.Key] = pair.Value;
+                }
             }
 
             return instance;
