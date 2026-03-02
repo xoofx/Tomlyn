@@ -33,6 +33,8 @@ public readonly struct TomlParseEvent
 
     /// <summary>
     /// Gets the property name when <see cref="Kind"/> is <see cref="TomlParseEventKind.PropertyName"/>.
+    /// This value is only populated when the parser was configured to decode scalars eagerly; otherwise use
+    /// <see cref="TomlParser.GetPropertyName"/> to decode it from the original input.
     /// </summary>
     public string? PropertyName { get; }
 
