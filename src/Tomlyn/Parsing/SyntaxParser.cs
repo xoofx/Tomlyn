@@ -13,6 +13,30 @@ public static class SyntaxParser
     /// <summary>
     /// Parses a TOML payload into a syntax tree.
     /// </summary>
+    /// <param name="lexer">A TOML lexer positioned before the first token.</param>
+    /// <param name="validate">When <c>true</c>, runs semantic validation after parsing.</param>
+    /// <returns>The parsed syntax tree, possibly containing diagnostics.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="lexer"/> is <c>null</c>.</exception>
+    public static DocumentSyntax Parse(TomlLexer lexer, bool validate = true)
+    {
+        if (lexer is null)
+        {
+            throw new ArgumentNullException(nameof(lexer));
+        }
+
+        var parser = new Parser<ISourceView>(lexer.CreateTokenProvider());
+        var doc = parser.Run();
+        if (validate && !doc.HasErrors)
+        {
+            Toml.Validate(doc);
+        }
+
+        return doc;
+    }
+
+    /// <summary>
+    /// Parses a TOML payload into a syntax tree.
+    /// </summary>
     /// <param name="toml">The TOML payload.</param>
     /// <param name="sourceName">An optional source name used in diagnostics.</param>
     /// <param name="validate">When <c>true</c>, runs semantic validation after parsing.</param>
@@ -25,16 +49,8 @@ public static class SyntaxParser
             throw new ArgumentNullException(nameof(toml));
         }
 
-        var sourceView = new StringSourceView(toml, sourceName ?? string.Empty);
-        var lexer = new Lexer<StringSourceView, StringCharacterIterator>(sourceView);
-        var parser = new Parser<StringSourceView>(lexer);
-        var doc = parser.Run();
-        if (validate && !doc.HasErrors)
-        {
-            Toml.Validate(doc);
-        }
-
-        return doc;
+        var lexer = TomlLexer.Create(toml, new TomlLexerOptions { DecodeScalars = true }, sourceName);
+        return Parse(lexer, validate);
     }
 
     /// <summary>
@@ -64,17 +80,8 @@ public static class SyntaxParser
     /// <returns>The parsed syntax tree, possibly containing diagnostics.</returns>
     public static DocumentSyntax Parse(ReadOnlySpan<byte> utf8Toml, string? sourceName = null, bool validate = true)
     {
-        var bytes = utf8Toml.ToArray();
-        var sourceView = new StringUtf8SourceView(bytes, sourceName ?? string.Empty);
-        var lexer = new Lexer<StringUtf8SourceView, StringCharacterUtf8Iterator>(sourceView);
-        var parser = new Parser<StringUtf8SourceView>(lexer);
-        var doc = parser.Run();
-        if (validate && !doc.HasErrors)
-        {
-            Toml.Validate(doc);
-        }
-
-        return doc;
+        var lexer = TomlLexer.Create(utf8Toml, new TomlLexerOptions { DecodeScalars = true }, sourceName);
+        return Parse(lexer, validate);
     }
 
     /// <summary>
@@ -96,5 +103,23 @@ public static class SyntaxParser
 
         return doc;
     }
-}
 
+    /// <summary>
+    /// Parses a TOML payload into a syntax tree and throws on any parse/validation error.
+    /// </summary>
+    /// <param name="lexer">A TOML lexer positioned before the first token.</param>
+    /// <param name="validate">When <c>true</c>, runs semantic validation after parsing.</param>
+    /// <returns>The parsed syntax tree.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="lexer"/> is <c>null</c>.</exception>
+    /// <exception cref="TomlException">The TOML payload is invalid.</exception>
+    public static DocumentSyntax ParseStrict(TomlLexer lexer, bool validate = true)
+    {
+        var doc = Parse(lexer, validate);
+        if (doc.HasErrors)
+        {
+            throw new TomlException(doc.Diagnostics);
+        }
+
+        return doc;
+    }
+}

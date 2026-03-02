@@ -233,11 +233,15 @@ public sealed class TomlLexer
         return true;
     }
 
+    internal ITokenProvider<ISourceView> CreateTokenProvider() => new TokenProvider(_adapter);
+
     private interface ILexerAdapter
     {
         bool HasErrors { get; }
 
         IEnumerable<DiagnosticMessage> Errors { get; }
+
+        ISourceView Source { get; }
 
         LexerState State { get; set; }
 
@@ -251,15 +255,19 @@ public sealed class TomlLexer
         where TCharReader : struct, CharacterIterator
     {
         private readonly Lexer<TSourceView, TCharReader> _lexer;
+        private readonly ISourceView _source;
 
         public LexerAdapter(Lexer<TSourceView, TCharReader> lexer)
         {
             _lexer = lexer;
+            _source = lexer.Source;
         }
 
         public bool HasErrors => _lexer.HasErrors;
 
         public IEnumerable<DiagnosticMessage> Errors => _lexer.Errors;
+
+        public ISourceView Source => _source;
 
         public LexerState State
         {
@@ -270,5 +278,31 @@ public sealed class TomlLexer
         public SyntaxTokenValue Token => _lexer.Token;
 
         public bool MoveNext() => _lexer.MoveNext();
+    }
+
+    private sealed class TokenProvider : ITokenProvider<ISourceView>
+    {
+        private readonly ILexerAdapter _adapter;
+
+        public TokenProvider(ILexerAdapter adapter)
+        {
+            _adapter = adapter;
+        }
+
+        public bool HasErrors => _adapter.HasErrors;
+
+        public ISourceView Source => _adapter.Source;
+
+        public LexerState State
+        {
+            get => _adapter.State;
+            set => _adapter.State = value;
+        }
+
+        public bool MoveNext() => _adapter.MoveNext();
+
+        public SyntaxTokenValue Token => _adapter.Token;
+
+        public IEnumerable<DiagnosticMessage> Errors => _adapter.Errors;
     }
 }
