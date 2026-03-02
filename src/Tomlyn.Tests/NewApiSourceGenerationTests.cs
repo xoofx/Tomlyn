@@ -11,6 +11,11 @@ public sealed class GeneratedPerson
     public long Age { get; set; }
 }
 
+public sealed class GeneratedSnakePerson
+{
+    public string FirstName { get; set; } = "";
+}
+
 public sealed class GeneratedOptionsPerson
 {
     public string Name { get; set; } = "";
@@ -29,6 +34,12 @@ public sealed class GeneratedOptionsConverter : TomlConverter<string>
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(GeneratedPerson))]
 internal partial class TestTomlSerializerContext : TomlSerializerContext
+{
+}
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+[JsonSerializable(typeof(GeneratedSnakePerson))]
+internal partial class TestTomlSerializerContextSnakeCase : TomlSerializerContext
 {
 }
 
@@ -82,6 +93,20 @@ public class NewApiSourceGenerationTests
         Assert.That(roundtrip, Is.Not.Null);
         Assert.That(roundtrip!.Name, Is.EqualTo("Ada"));
         Assert.That(roundtrip.Age, Is.EqualTo(37));
+    }
+
+    [Test]
+    public void GeneratedContext_CanApplySnakeCaseNamingPolicy()
+    {
+        var context = TestTomlSerializerContextSnakeCase.Default;
+        var toml = """
+            first_name = "Ada"
+            """;
+
+        var person = TomlSerializer.Deserialize(toml, context.GeneratedSnakePerson);
+
+        Assert.That(person, Is.Not.Null);
+        Assert.That(person!.FirstName, Is.EqualTo("Ada"));
     }
 
     [Test]

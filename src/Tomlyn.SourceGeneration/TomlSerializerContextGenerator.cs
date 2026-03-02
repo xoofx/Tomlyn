@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -795,7 +796,6 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         var namingPolicy = options.PropertyNamingPolicyExpression;
-        var useCamelCase = string.Equals(namingPolicy, "global::System.Text.Json.JsonNamingPolicy.CamelCase", StringComparison.Ordinal);
 
         var members = ImmutableArray.CreateBuilder<PocoMember>();
         foreach (var member in named.GetMembers().OfType<IPropertySymbol>())
@@ -821,7 +821,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 continue;
             }
 
-            var serializedName = GetSerializedName(member, member.Name, useCamelCase);
+            var serializedName = GetSerializedName(member, member.Name, namingPolicy);
             members.Add(new PocoMember(member.Name, serializedName, member.Type, ignore.WriteIgnore));
         }
 
@@ -849,7 +849,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 continue;
             }
 
-            var serializedName = GetSerializedName(member, member.Name, useCamelCase);
+            var serializedName = GetSerializedName(member, member.Name, namingPolicy);
             members.Add(new PocoMember(member.Name, serializedName, member.Type, ignore.WriteIgnore));
         }
 
@@ -955,7 +955,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         return false;
     }
 
-    private static string GetSerializedName(ISymbol member, string memberName, bool useCamelCase)
+    private static string GetSerializedName(ISymbol member, string memberName, string? namingPolicyExpression)
     {
         foreach (var attr in member.GetAttributes())
         {
@@ -975,12 +975,34 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             }
         }
 
-        if (useCamelCase)
+        if (namingPolicyExpression is not null && TryConvertKnownName(memberName, namingPolicyExpression, out var converted))
         {
-            return ToCamelCase(memberName);
+            return converted;
         }
 
         return memberName;
+    }
+
+    private static bool TryConvertKnownName(string name, string namingPolicyExpression, out string converted)
+    {
+        JsonNamingPolicy? policy = namingPolicyExpression switch
+        {
+            "global::System.Text.Json.JsonNamingPolicy.CamelCase" => JsonNamingPolicy.CamelCase,
+            "global::System.Text.Json.JsonNamingPolicy.SnakeCaseLower" => JsonNamingPolicy.SnakeCaseLower,
+            "global::System.Text.Json.JsonNamingPolicy.SnakeCaseUpper" => JsonNamingPolicy.SnakeCaseUpper,
+            "global::System.Text.Json.JsonNamingPolicy.KebabCaseLower" => JsonNamingPolicy.KebabCaseLower,
+            "global::System.Text.Json.JsonNamingPolicy.KebabCaseUpper" => JsonNamingPolicy.KebabCaseUpper,
+            _ => null,
+        };
+
+        if (policy is null)
+        {
+            converted = string.Empty;
+            return false;
+        }
+
+        converted = policy.ConvertName(name);
+        return true;
     }
 
     private static IgnoreBehavior GetIgnoreBehavior(ISymbol symbol)
@@ -1073,35 +1095,6 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             // Default: Always.
             return new JsonIgnoreAttributeModel(null);
         }
-    }
-
-    private static string ToCamelCase(string name)
-    {
-        if (string.IsNullOrEmpty(name))
-        {
-            return name;
-        }
-
-        if (!char.IsUpper(name[0]))
-        {
-            return name;
-        }
-
-        var chars = name.ToCharArray();
-        for (var i = 0; i < chars.Length; i++)
-        {
-            var hasNext = i + 1 < chars.Length;
-            if (i > 0 && hasNext && char.IsUpper(chars[i + 1]))
-            {
-                chars[i] = char.ToLowerInvariant(chars[i]);
-                continue;
-            }
-
-            chars[i] = char.ToLowerInvariant(chars[i]);
-            break;
-        }
-
-        return new string(chars);
     }
 
     private static bool IsBuiltInType(ITypeSymbol type)
