@@ -166,7 +166,8 @@ internal static class TomlReflectionTypeInfoResolver
                 GetOrder(property),
                 ignore.WriteIgnoreCondition,
                 GetDefaultValue(property.PropertyType),
-                IsRequired(property)));
+                IsRequired(property),
+                TryCreateMemberConverter(property, property.PropertyType, options)));
         }
 
         var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public);
@@ -204,7 +205,8 @@ internal static class TomlReflectionTypeInfoResolver
                 GetOrder(field),
                 ignore.WriteIgnoreCondition,
                 GetDefaultValue(field.FieldType),
-                IsRequired(field)));
+                IsRequired(field),
+                TryCreateMemberConverter(field, field.FieldType, options)));
         }
 
         return OrderMembers(members, options);
@@ -238,6 +240,66 @@ internal static class TomlReflectionTypeInfoResolver
         }
 
         return false;
+    }
+
+    private static TomlConverter? TryCreateMemberConverter(MemberInfo member, Type memberType, TomlSerializerOptions options)
+    {
+        var tomlConverter = member.GetCustomAttribute<TomlConverterAttribute>(inherit: true);
+        if (tomlConverter is not null)
+        {
+            return CreateConverterFromAttribute(tomlConverter.ConverterType, memberType, options);
+        }
+
+        var jsonConverter = member.GetCustomAttribute<JsonConverterAttribute>(inherit: true);
+        if (jsonConverter is not null && jsonConverter.ConverterType is not null)
+        {
+            return CreateConverterFromAttribute(jsonConverter.ConverterType, memberType, options);
+        }
+
+        return null;
+    }
+
+    private static TomlConverter CreateConverterFromAttribute(Type converterType, Type typeToConvert, TomlSerializerOptions options)
+    {
+        if (!typeof(TomlConverter).IsAssignableFrom(converterType))
+        {
+            throw new InvalidOperationException($"Converter type '{converterType.FullName}' must derive from '{typeof(TomlConverter).FullName}'.");
+        }
+
+        var converter = (TomlConverter?)Activator.CreateInstance(converterType);
+        if (converter is null)
+        {
+            throw new InvalidOperationException($"Failed to create converter '{converterType.FullName}'.");
+        }
+
+        if (converter is TomlConverterFactory factory)
+        {
+            var created = factory.CreateConverter(typeToConvert, options);
+            if (created is null)
+            {
+                throw new InvalidOperationException($"The converter factory '{factory.GetType().FullName}' returned null.");
+            }
+
+            if (created is TomlConverterFactory)
+            {
+                throw new InvalidOperationException($"The converter factory '{factory.GetType().FullName}' returned another {nameof(TomlConverterFactory)}.");
+            }
+
+            if (!created.CanConvert(typeToConvert))
+            {
+                throw new InvalidOperationException(
+                    $"The converter factory '{factory.GetType().FullName}' returned a converter that cannot convert '{typeToConvert.FullName}'.");
+            }
+
+            converter = created;
+        }
+
+        if (!converter.CanConvert(typeToConvert))
+        {
+            throw new InvalidOperationException($"Converter '{converterType.FullName}' cannot convert '{typeToConvert.FullName}'.");
+        }
+
+        return converter;
     }
 
     private readonly record struct IgnoreBehavior(bool IgnoreAlways, TomlIgnoreCondition? WriteIgnoreCondition);
@@ -361,7 +423,8 @@ internal static class TomlReflectionTypeInfoResolver
         int Order,
         TomlIgnoreCondition? WriteIgnoreCondition,
         object? DefaultValue,
-        bool IsRequired);
+        bool IsRequired,
+        TomlConverter? Converter);
 
     private static bool ShouldIgnoreValue(object? memberValue, TomlIgnoreCondition ignoreCondition, object? defaultValue)
     {
@@ -479,8 +542,15 @@ internal static class TomlReflectionTypeInfoResolver
                 }
 
                 writer.WritePropertyName(member.SerializedName);
-                var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, member.MemberType);
-                typeInfo.Write(writer, memberValue);
+                if (member.Converter is { } converter)
+                {
+                    converter.Write(writer, memberValue);
+                }
+                else
+                {
+                    var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, member.MemberType);
+                    typeInfo.Write(writer, memberValue);
+                }
             }
             writer.WriteEndTable();
         }
@@ -533,8 +603,16 @@ internal static class TomlReflectionTypeInfoResolver
                         continue;
                     }
 
-                    var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, member.MemberType);
-                    var memberValue = typeInfo.ReadAsObject(reader);
+                    object? memberValue;
+                    if (member.Converter is { } converter)
+                    {
+                        memberValue = converter.Read(reader, member.MemberType);
+                    }
+                    else
+                    {
+                        var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, member.MemberType);
+                        memberValue = typeInfo.ReadAsObject(reader);
+                    }
                     member.Setter(instance, memberValue);
                     continue;
                 }
@@ -598,8 +676,22 @@ internal static class TomlReflectionTypeInfoResolver
                     var binding = _parameters[parameterIndex];
 
                     reader.Read(); // value
-                    var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, binding.ParameterType);
-                    var value = typeInfo.ReadAsObject(reader);
+                    object? value;
+                    TomlConverter? converter = null;
+                    if (binding.MemberIndex is { } linkedIndex && linkedIndex >= 0 && linkedIndex < _members.Count)
+                    {
+                        converter = _members[linkedIndex].Converter;
+                    }
+
+                    if (converter is not null)
+                    {
+                        value = converter.Read(reader, binding.ParameterType);
+                    }
+                    else
+                    {
+                        var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, binding.ParameterType);
+                        value = typeInfo.ReadAsObject(reader);
+                    }
                     ctorArgs[parameterIndex] = value;
 
                     if (binding.MemberIndex is { } linkedMemberIndex && linkedMemberIndex >= 0 && linkedMemberIndex < _members.Count)
@@ -628,8 +720,16 @@ internal static class TomlReflectionTypeInfoResolver
                         continue;
                     }
 
-                    var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, member.MemberType);
-                    var value = typeInfo.ReadAsObject(reader);
+                    object? value;
+                    if (member.Converter is { } converter)
+                    {
+                        value = converter.Read(reader, member.MemberType);
+                    }
+                    else
+                    {
+                        var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, member.MemberType);
+                        value = typeInfo.ReadAsObject(reader);
+                    }
                     memberValues[memberIndex] = value;
                     continue;
                 }
