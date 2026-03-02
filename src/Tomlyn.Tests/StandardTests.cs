@@ -35,6 +35,7 @@ namespace Tomlyn.Tests
             @"\invalid\local-datetime\no-secs.toml",
             @"\invalid\local-time\no-secs.toml",
             @"\invalid\string\basic-byte-escapes.toml",   // \xHH basic string escape
+            @"\invalid\inline-table\trailing-comma.toml", // trailing commas in inline tables
         ];
 
         [TestCaseSource("ListTomlFiles", new object[] { ValidSpec }, Category = "toml-test")]
@@ -476,8 +477,61 @@ namespace Tomlyn.Tests
                 return true;
             }
 
+            if (expectedText is not null && actualText is not null)
+            {
+                var expectedNormalized = NormalizeTomlTestDateTimeText(expectedText);
+                var actualNormalized = NormalizeTomlTestDateTimeText(actualText);
+                if (string.Equals(expectedNormalized, actualNormalized, StringComparison.Ordinal))
+                {
+                    difference = string.Empty;
+                    return true;
+                }
+            }
+
             difference = $"Expected datetime `{expectedText}` but was `{actualText}`.";
             return false;
+        }
+
+        private static string NormalizeTomlTestDateTimeText(string text)
+        {
+            // toml-test encodes timestamps as RFC3339 strings, often normalizing fractional seconds
+            // to millisecond precision (e.g. ".600"). Tomlyn may preserve the original precision
+            // (e.g. ".6"). Normalize by trimming trailing zeros from the fractional part.
+            var dotIndex = text.IndexOf('.');
+            if (dotIndex < 0)
+            {
+                return text;
+            }
+
+            var index = dotIndex + 1;
+            while (index < text.Length && char.IsDigit(text[index]))
+            {
+                index++;
+            }
+
+            if (index == dotIndex + 1)
+            {
+                return text;
+            }
+
+            var fracEnd = index;
+            while (fracEnd > dotIndex + 1 && text[fracEnd - 1] == '0')
+            {
+                fracEnd--;
+            }
+
+            if (fracEnd == dotIndex + 1)
+            {
+                // Fraction becomes empty: remove the '.' as well.
+                return string.Concat(text.AsSpan(0, dotIndex), text.AsSpan(index));
+            }
+
+            if (fracEnd == index)
+            {
+                return text;
+            }
+
+            return string.Concat(text.AsSpan(0, fracEnd), text.AsSpan(index));
         }
 
         private static bool TryParseBool(string? text, out bool value)
