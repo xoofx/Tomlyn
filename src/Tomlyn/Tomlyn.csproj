@@ -2,8 +2,38 @@
   <Import Project="Tomlyn.props" />
   <PropertyGroup>
     <PackageId>Tomlyn</PackageId>
-    <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
+    <TargetFrameworks>net10.0;net8.0;netstandard2.0</TargetFrameworks>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0' Or '$(TargetFramework)' == 'net8.0'">
+    <!-- Enable AOT analyzers (not supported on netstandard2.0) -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <IsTrimmable>true</IsTrimmable>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <TomlynSourceGenAssembly>$(MSBuildThisFileDirectory)..\Tomlyn.SourceGeneration\bin\$(Configuration)\netstandard2.0\Tomlyn.SourceGeneration.dll</TomlynSourceGenAssembly>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="Tomlyn.targets" Pack="true" PackagePath="buildTransitive/Tomlyn.targets" />
+    <!-- Ship the source generator with the main package (no separate generator NuGet package). -->
+    <None Include="$(TomlynSourceGenAssembly)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Include="$(TomlynSourceGenAssembly).pdb" Condition="Exists('$(TomlynSourceGenAssembly).pdb')" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="ILLink.Substitutions.xml" LogicalName="ILLink.Substitutions.xml" />
+    <PackageReference Include="System.Text.Json" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
+    <PackageReference Include="System.Buffers" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tomlyn.SourceGeneration\Tomlyn.SourceGeneration.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+  </ItemGroup>
   <ItemGroup>
     <Folder Include="Compatibility\" />
   </ItemGroup>
