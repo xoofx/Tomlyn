@@ -139,7 +139,7 @@ public sealed class TomlReader
                 break;
             case TomlParseEventKind.PropertyName:
                 _tokenType = TomlTokenType.PropertyName;
-                _currentPropertyName = parseEvent.PropertyName;
+                _currentPropertyName = parseEvent.PropertyName ?? _parser.GetPropertyName();
                 break;
             case TomlParseEventKind.StartArray:
                 _tokenType = TomlTokenType.StartArray;

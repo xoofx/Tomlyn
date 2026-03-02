@@ -25,7 +25,7 @@ public class NewApiParsingPipelineTests
             events.Add(parser.Current.Kind);
             if (parser.Current.Kind == TomlParseEventKind.PropertyName)
             {
-                names.Add(parser.Current.PropertyName!);
+                names.Add(parser.GetPropertyName());
             }
         }
 

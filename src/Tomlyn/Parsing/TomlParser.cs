@@ -262,6 +262,38 @@ public sealed class TomlParser
     }
 
     /// <summary>
+    /// Gets the current property name by decoding it from the original TOML input.
+    /// </summary>
+    /// <returns>The decoded property name.</returns>
+    /// <exception cref="InvalidOperationException">The current event is not a property name.</exception>
+    public string GetPropertyName()
+    {
+        if (_current.Kind != TomlParseEventKind.PropertyName)
+        {
+            throw new InvalidOperationException($"Expected {TomlParseEventKind.PropertyName} but was {_current.Kind}.");
+        }
+
+        if (_current.PropertyName is not null)
+        {
+            return _current.PropertyName;
+        }
+
+        if (_current.Span is not { } span)
+        {
+            return string.Empty;
+        }
+
+        var raw = GetText(span);
+        if (raw is null)
+        {
+            return string.Empty;
+        }
+
+        var tokenKind = (TokenKind)_current.Data;
+        return tokenKind == TokenKind.BasicKey ? raw : TomlStringDecoder.Decode(raw, tokenKind);
+    }
+
+    /// <summary>
     /// Gets the parser options.
     /// </summary>
     public TomlParserOptions ParserOptions => _parserOptions;
@@ -334,9 +366,9 @@ public sealed class TomlParser
         private bool _terminatedDueToError;
 
         private readonly PendingQueue _pending;
-        private readonly List<string> _implicitFrames;
+        private readonly List<KeySegment> _implicitFrames;
         private readonly List<ExplicitFrame> _explicitFrames;
-        private readonly List<string> _pathSegments;
+        private readonly List<KeySegment> _pathSegments;
         private readonly List<ExplicitFrame> _targetExplicitFrames;
         private readonly List<ContainerFrame> _containers;
 
@@ -357,9 +389,9 @@ public sealed class TomlParser
             _terminatedDueToError = false;
             _pending = new PendingQueue();
 
-            _implicitFrames = new List<string>(capacity: 8);
+            _implicitFrames = new List<KeySegment>(capacity: 8);
             _explicitFrames = new List<ExplicitFrame>(capacity: 16);
-            _pathSegments = new List<string>(capacity: 8);
+            _pathSegments = new List<KeySegment>(capacity: 8);
             _targetExplicitFrames = new List<ExplicitFrame>(capacity: 16);
             _containers = new List<ContainerFrame>(capacity: 8);
 
@@ -750,7 +782,7 @@ public sealed class TomlParser
         private void BeginKeyValueEntry(int implicitBaseIndex)
         {
             _pathSegments.Clear();
-            ParseKeyPath(_pathSegments, out var leafSpan);
+            ParseKeyPath(_pathSegments, out _);
             if (_pathSegments.Count == 0)
             {
                 throw CreateException(CurrentSpan(), "Invalid key/value entry.");
@@ -765,7 +797,12 @@ public sealed class TomlParser
             EnsureImplicitPrefix(implicitBaseIndex, _pathSegments, prefixLength);
 
             var leaf = _pathSegments[_pathSegments.Count - 1];
-            _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.PropertyName, span: leafSpan, propertyName: leaf, stringValue: null, data: 0));
+            _pending.Enqueue(new TomlParseEvent(
+                TomlParseEventKind.PropertyName,
+                span: leaf.Span,
+                propertyName: _decodeScalars ? leaf.Value : null,
+                stringValue: null,
+                data: (ulong)leaf.TokenKind));
 
             Consume(TokenKind.Equal, LexerState.Value);
         }
@@ -807,11 +844,31 @@ public sealed class TomlParser
                 switch (frame.Kind)
                 {
                     case ExplicitFrameKind.Table:
-                        _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.PropertyName, span: null, propertyName: frame.Name, stringValue: null, data: 0));
+                        if (frame.Name is not { } tableName)
+                        {
+                            throw CreateException(CurrentSpan(), "Invalid explicit table frame.");
+                        }
+
+                        _pending.Enqueue(new TomlParseEvent(
+                            TomlParseEventKind.PropertyName,
+                            span: tableName.Span,
+                            propertyName: _decodeScalars ? tableName.Value : null,
+                            stringValue: null,
+                            data: (ulong)tableName.TokenKind));
                         _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.StartTable, span: null, propertyName: null, stringValue: null, data: 0));
                         break;
                     case ExplicitFrameKind.Array:
-                        _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.PropertyName, span: null, propertyName: frame.Name, stringValue: null, data: 0));
+                        if (frame.Name is not { } arrayName)
+                        {
+                            throw CreateException(CurrentSpan(), "Invalid explicit array frame.");
+                        }
+
+                        _pending.Enqueue(new TomlParseEvent(
+                            TomlParseEventKind.PropertyName,
+                            span: arrayName.Span,
+                            propertyName: _decodeScalars ? arrayName.Value : null,
+                            stringValue: null,
+                            data: (ulong)arrayName.TokenKind));
                         _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.StartArray, span: null, propertyName: null, stringValue: null, data: 0));
                         break;
                     case ExplicitFrameKind.TableArrayElement:
@@ -823,7 +880,7 @@ public sealed class TomlParser
             }
         }
 
-        private static void BuildExplicitTargetFrames(List<string> path, bool isTableArray, List<ExplicitFrame> frames)
+        private static void BuildExplicitTargetFrames(List<KeySegment> path, bool isTableArray, List<ExplicitFrame> frames)
         {
             for (var i = 0; i < path.Count - 1; i++)
             {
@@ -878,7 +935,12 @@ public sealed class TomlParser
                 return true;
             }
 
-            return string.Equals(left.Name, right.Name, StringComparison.Ordinal);
+            if (left.Name is not { } leftName || right.Name is not { } rightName)
+            {
+                return false;
+            }
+
+            return leftName.Hash == rightName.Hash;
         }
 
         private static bool FramesEqualSequence(List<ExplicitFrame> current, List<ExplicitFrame> target, int length)
@@ -961,7 +1023,7 @@ public sealed class TomlParser
             throw CreateException(CurrentSpan(), $"Unexpected token `{ToPrintable(_token)}` while parsing a value.");
         }
 
-        private void ParseKeyPath(List<string> segments, out SourceSpan leafSpan)
+        private void ParseKeyPath(List<KeySegment> segments, out SourceSpan leafSpan)
         {
             leafSpan = ParseKeySegment(out var firstSegment);
             segments.Add(firstSegment);
@@ -973,55 +1035,38 @@ public sealed class TomlParser
             }
         }
 
-        private SourceSpan ParseKeySegment(out string segment)
+        private SourceSpan ParseKeySegment(out KeySegment segment)
         {
             if (_token.Kind == TokenKind.BasicKey)
             {
                 var span = CurrentSpan();
-                var text = _token.GetText(_lexer.Source);
-                if (string.IsNullOrEmpty(text))
-                {
-                    throw CreateException(CurrentSpan(), "Invalid bare key.");
-                }
-
+                var hash = ComputeKeySegmentHash(TokenKind.BasicKey, _token.Start, _token.End);
+                var text = _decodeScalars ? _token.GetText(_lexer.Source) : null;
                 Consume(TokenKind.BasicKey, LexerState.Key);
-                segment = text!;
+                segment = new KeySegment(TokenKind.BasicKey, span, hash, text);
                 return span;
             }
 
             if (_token.Kind.IsString())
             {
                 var span = CurrentSpan();
-                string text;
-                if (_decodeScalars)
-                {
-                    text = _token.StringValue ?? string.Empty;
-                }
-                else
-                {
-                    var raw = _token.GetText(_lexer.Source);
-                    if (string.IsNullOrEmpty(raw))
-                    {
-                        throw CreateException(CurrentSpan(), "Invalid string key.");
-                    }
-
-                    text = TomlStringDecoder.Decode(raw!, _token.Kind);
-                }
-
+                var tokenKind = _token.Kind;
+                var hash = ComputeKeySegmentHash(tokenKind, _token.Start, _token.End);
+                var text = _decodeScalars ? (_token.StringValue ?? string.Empty) : null;
                 Consume(_token.Kind, LexerState.Key);
-                segment = text;
+                segment = new KeySegment(tokenKind, span, hash, text);
                 return span;
             }
 
             throw CreateException(CurrentSpan(), $"Unexpected token `{ToPrintable(_token)}` while parsing a key.");
         }
 
-        private void EnsureImplicitPrefix(int baseIndex, List<string> pathSegments, int prefixLength)
+        private void EnsureImplicitPrefix(int baseIndex, List<KeySegment> pathSegments, int prefixLength)
         {
             var common = 0;
             var currentCount = _implicitFrames.Count - baseIndex;
             while (common < currentCount && common < prefixLength &&
-                   string.Equals(_implicitFrames[baseIndex + common], pathSegments[common], StringComparison.Ordinal))
+                   _implicitFrames[baseIndex + common].Hash == pathSegments[common].Hash)
             {
                 common++;
             }
@@ -1034,10 +1079,151 @@ public sealed class TomlParser
 
             for (var i = common; i < prefixLength; i++)
             {
-                _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.PropertyName, span: null, propertyName: pathSegments[i], stringValue: null, data: 0));
+                var segment = pathSegments[i];
+                _pending.Enqueue(new TomlParseEvent(
+                    TomlParseEventKind.PropertyName,
+                    span: segment.Span,
+                    propertyName: _decodeScalars ? segment.Value : null,
+                    stringValue: null,
+                    data: (ulong)segment.TokenKind));
                 _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.StartTable, span: null, propertyName: null, stringValue: null, data: 0));
-                _implicitFrames.Add(pathSegments[i]);
+                _implicitFrames.Add(segment);
             }
+        }
+
+        private ulong ComputeKeySegmentHash(TokenKind tokenKind, TextPosition start, TextPosition end)
+        {
+            var iterator = _lexer.Source.GetIterator();
+            var startOffset = start.Offset;
+            var endExclusive = end.Offset + 1;
+
+            if (tokenKind == TokenKind.BasicKey)
+            {
+                return HashRaw(ref iterator, startOffset, endExclusive);
+            }
+
+            if (tokenKind == TokenKind.StringLiteral)
+            {
+                // Skip the surrounding apostrophes.
+                return HashRaw(ref iterator, startOffset + 1, end.Offset);
+            }
+
+            if (tokenKind == TokenKind.String)
+            {
+                // Skip the surrounding quotation marks and decode escapes.
+                return HashBasicString(ref iterator, startOffset + 1, end.Offset);
+            }
+
+            throw CreateException(CurrentSpan(), $"Unexpected key token kind `{tokenKind}`.");
+        }
+
+        private static ulong HashRaw(ref TCharReader iterator, int startOffset, int endExclusive)
+        {
+            var position = startOffset;
+            var hash = 14695981039346656037UL;
+            while (position < endExclusive)
+            {
+                var next = iterator.TryGetNext(ref position);
+                if (!next.HasValue)
+                {
+                    break;
+                }
+
+                hash = HashAdd(hash, next.Value.Code);
+            }
+
+            return hash;
+        }
+
+        private ulong HashBasicString(ref TCharReader iterator, int startOffset, int endExclusive)
+        {
+            var position = startOffset;
+            var hash = 14695981039346656037UL;
+            while (position < endExclusive)
+            {
+                var next = iterator.TryGetNext(ref position);
+                if (!next.HasValue)
+                {
+                    break;
+                }
+
+                var c = next.Value.Code;
+                if (c != '\\')
+                {
+                    hash = HashAdd(hash, c);
+                    continue;
+                }
+
+                var escape = iterator.TryGetNext(ref position);
+                if (!escape.HasValue)
+                {
+                    throw CreateException(CurrentSpan(), "Invalid escape sequence in key.");
+                }
+
+                hash = HashAdd(hash, DecodeEscape(ref iterator, ref position, endExclusive, escape.Value.Code));
+            }
+
+            return hash;
+        }
+
+        private int DecodeEscape(ref TCharReader iterator, ref int position, int endExclusive, int escapeCode)
+        {
+            switch (escapeCode)
+            {
+                case '"': return '"';
+                case '\\': return '\\';
+                case 'b': return '\b';
+                case 'e': return 0x1B;
+                case 'f': return '\f';
+                case 'n': return '\n';
+                case 'r': return '\r';
+                case 't': return '\t';
+                case 'x':
+                    return ReadHex(ref iterator, ref position, endExclusive, digits: 2);
+                case 'u':
+                    return ReadHex(ref iterator, ref position, endExclusive, digits: 4);
+                case 'U':
+                    return ReadHex(ref iterator, ref position, endExclusive, digits: 8);
+                default:
+                    throw CreateException(CurrentSpan(), $"Unexpected escape character `{(char)escapeCode}` in key.");
+            }
+        }
+
+        private int ReadHex(ref TCharReader iterator, ref int position, int endExclusive, int digits)
+        {
+            var value = 0;
+            for (var i = 0; i < digits; i++)
+            {
+                if (position >= endExclusive)
+                {
+                    throw CreateException(CurrentSpan(), "Incomplete hexadecimal escape sequence in key.");
+                }
+
+                var next = iterator.TryGetNext(ref position);
+                if (!next.HasValue)
+                {
+                    throw CreateException(CurrentSpan(), "Incomplete hexadecimal escape sequence in key.");
+                }
+
+                var c = next.Value.Code;
+                value = (value << 4) | HexValue(c);
+            }
+
+            return value;
+        }
+
+        private static int HexValue(int c)
+        {
+            if (c is >= '0' and <= '9') return c - '0';
+            if (c is >= 'a' and <= 'f') return 10 + (c - 'a');
+            if (c is >= 'A' and <= 'F') return 10 + (c - 'A');
+            throw new InvalidOperationException($"Invalid hex digit `{(char)c}`.");
+        }
+
+        private static ulong HashAdd(ulong hash, int codePoint)
+        {
+            hash ^= unchecked((uint)codePoint);
+            return hash * 1099511628211UL;
         }
 
         private TomlException CreateException(SourceSpan span, string message) => new TomlException(span, message);
@@ -1128,6 +1314,25 @@ public sealed class TomlParser
             AfterValue = 2,
         }
 
+        private readonly struct KeySegment
+        {
+            public KeySegment(TokenKind tokenKind, SourceSpan span, ulong hash, string? value)
+            {
+                TokenKind = tokenKind;
+                Span = span;
+                Hash = hash;
+                Value = value;
+            }
+
+            public TokenKind TokenKind { get; }
+
+            public SourceSpan Span { get; }
+
+            public ulong Hash { get; }
+
+            public string? Value { get; }
+        }
+
         private struct ContainerFrame
         {
             public ContainerFrame(ContainerKind kind, int inlineImplicitBase)
@@ -1156,7 +1361,7 @@ public sealed class TomlParser
 
         private readonly struct ExplicitFrame
         {
-            public ExplicitFrame(ExplicitFrameKind kind, string? name)
+            public ExplicitFrame(ExplicitFrameKind kind, KeySegment? name)
             {
                 Kind = kind;
                 Name = name;
@@ -1164,7 +1369,7 @@ public sealed class TomlParser
 
             public ExplicitFrameKind Kind { get; }
 
-            public string? Name { get; }
+            public KeySegment? Name { get; }
         }
 
         private sealed class PendingQueue
