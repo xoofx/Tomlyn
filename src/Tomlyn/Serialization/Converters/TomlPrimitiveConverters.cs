@@ -827,7 +827,7 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
         return reader.TokenType switch
         {
             TomlTokenType.StartTable => ReadTable(reader),
-            TomlTokenType.StartArray => ReadArray(reader),
+            TomlTokenType.StartArray => ReadArrayValue(reader),
             TomlTokenType.String => reader.GetString().AlsoAdvance(reader),
             TomlTokenType.Boolean => reader.GetBoolean().AlsoAdvance(reader),
             TomlTokenType.Integer => reader.GetInt64().AlsoAdvance(reader),
@@ -886,7 +886,7 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
         return reader.TokenType switch
         {
             TomlTokenType.StartTable => ReadTable(reader),
-            TomlTokenType.StartArray => ReadArray(reader),
+            TomlTokenType.StartArray => ReadArrayValue(reader),
             TomlTokenType.String => reader.GetString().AlsoAdvance(reader),
             TomlTokenType.Boolean => reader.GetBoolean().AlsoAdvance(reader),
             TomlTokenType.Integer => reader.GetInt64().AlsoAdvance(reader),
@@ -919,6 +919,43 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
 
         reader.Read();
         return table;
+    }
+
+    internal static object ReadArrayValue(TomlReader reader)
+    {
+        if (reader.TokenType != TomlTokenType.StartArray)
+        {
+            throw reader.CreateException($"Expected {TomlTokenType.StartArray} token but was {reader.TokenType}.");
+        }
+
+        // Prefer preserving arrays-of-tables as TomlTableArray to match TOML semantics and writer expectations.
+        // Note that empty arrays can't be distinguished and are treated as TomlArray.
+        reader.Read();
+        if (reader.TokenType == TomlTokenType.StartTable)
+        {
+            var tableArray = new TomlTableArray();
+            while (reader.TokenType != TomlTokenType.EndArray)
+            {
+                if (reader.TokenType != TomlTokenType.StartTable)
+                {
+                    throw reader.CreateException($"Expected {TomlTokenType.StartTable} token but was {reader.TokenType}.");
+                }
+
+                tableArray.Add(ReadTable(reader));
+            }
+
+            reader.Read();
+            return tableArray;
+        }
+
+        var array = new TomlArray();
+        while (reader.TokenType != TomlTokenType.EndArray)
+        {
+            array.Add(ReadValue(reader));
+        }
+
+        reader.Read();
+        return array;
     }
 
     internal static TomlArray ReadArray(TomlReader reader)

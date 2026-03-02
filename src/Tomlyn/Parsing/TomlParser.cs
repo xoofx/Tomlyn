@@ -879,7 +879,7 @@ public sealed class TomlParser
             CloseImplicitFrames(baseIndex: 0);
 
             _targetExplicitFrames.Clear();
-            BuildExplicitTargetFrames(_pathSegments, isTableArray, _targetExplicitFrames);
+            BuildExplicitTargetFrames(_pathSegments, isTableArray, _explicitFrames, _targetExplicitFrames);
             var prefixLength = GetExplicitCommonPrefixLength(_targetExplicitFrames, isTableArray);
             CloseExplicitFrames(prefixLength);
             OpenExplicitFrames(_targetExplicitFrames, prefixLength);
@@ -993,11 +993,21 @@ public sealed class TomlParser
             }
         }
 
-        private static void BuildExplicitTargetFrames(List<KeySegment> path, bool isTableArray, List<ExplicitFrame> frames)
+        private static void BuildExplicitTargetFrames(List<KeySegment> path, bool isTableArray, List<ExplicitFrame> currentFrames, List<ExplicitFrame> frames)
         {
+            var explicitIndex = 0;
+            var reuse = true;
+
             for (var i = 0; i < path.Count - 1; i++)
             {
-                frames.Add(new ExplicitFrame(ExplicitFrameKind.Table, path[i]));
+                var segment = path[i];
+                if (reuse && TryConsumeCurrentFrame(currentFrames, ref explicitIndex, segment, frames))
+                {
+                    continue;
+                }
+
+                reuse = false;
+                frames.Add(new ExplicitFrame(ExplicitFrameKind.Table, segment));
             }
 
             var last = path[path.Count - 1];
@@ -1005,11 +1015,40 @@ public sealed class TomlParser
             {
                 frames.Add(new ExplicitFrame(ExplicitFrameKind.Array, last));
                 frames.Add(new ExplicitFrame(ExplicitFrameKind.TableArrayElement, name: null));
+                return;
             }
-            else
+
+            frames.Add(new ExplicitFrame(ExplicitFrameKind.Table, last));
+        }
+
+        private static bool TryConsumeCurrentFrame(List<ExplicitFrame> currentFrames, ref int explicitIndex, KeySegment segment, List<ExplicitFrame> targetFrames)
+        {
+            if (explicitIndex >= currentFrames.Count)
             {
-                frames.Add(new ExplicitFrame(ExplicitFrameKind.Table, last));
+                return false;
             }
+
+            var current = currentFrames[explicitIndex];
+            if (current.Kind == ExplicitFrameKind.Table && current.Name is { } tableName && tableName.Hash == segment.Hash)
+            {
+                targetFrames.Add(current);
+                explicitIndex++;
+                return true;
+            }
+
+            if (current.Kind == ExplicitFrameKind.Array && current.Name is { } arrayName && arrayName.Hash == segment.Hash)
+            {
+                var elementIndex = explicitIndex + 1;
+                if (elementIndex < currentFrames.Count && currentFrames[elementIndex].Kind == ExplicitFrameKind.TableArrayElement)
+                {
+                    targetFrames.Add(current);
+                    targetFrames.Add(currentFrames[elementIndex]);
+                    explicitIndex += 2;
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private int GetExplicitCommonPrefixLength(List<ExplicitFrame> targetFrames, bool isTableArray)
