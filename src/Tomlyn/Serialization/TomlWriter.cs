@@ -33,6 +33,28 @@ public sealed class TomlWriter
 
     internal object? RootValue => _root;
 
+    internal TomlTable? CurrentTable => _stack.Count > 0 && _stack.Peek() is TomlTable table ? table : null;
+
+    internal void TryAttachMetadata(object instance)
+    {
+        ArgumentGuard.ThrowIfNull(instance, nameof(instance));
+
+        if (Options.MetadataStore is not { } store)
+        {
+            return;
+        }
+
+        if (!store.TryGetProperties(instance, out var metadata) || metadata is null)
+        {
+            return;
+        }
+
+        if (CurrentTable is { } table)
+        {
+            table.PropertiesMetadata = metadata;
+        }
+    }
+
     /// <summary>
     /// Gets the options instance used by this writer.
     /// </summary>

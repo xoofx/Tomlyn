@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Tomlyn.Model;
 using Tomlyn.Serialization;
 using Tomlyn.Syntax;
 using Tomlyn.Text;
@@ -346,11 +347,19 @@ public sealed class TomlParser
 
     internal string? GetText(TomlSourceSpan span) => _core.GetText(span);
 
+    internal TomlSyntaxTriviaMetadata[]? CurrentLeadingTrivia => _core.LeadingTrivia;
+
+    internal TomlSyntaxTriviaMetadata[]? CurrentTrailingTrivia => _core.TrailingTrivia;
+
     private interface IParserCore
     {
         bool MoveNext(out TomlParseEvent parseEvent);
 
         string? GetText(TomlSourceSpan span);
+
+        TomlSyntaxTriviaMetadata[]? LeadingTrivia { get; }
+
+        TomlSyntaxTriviaMetadata[]? TrailingTrivia { get; }
     }
 
     private sealed class ParserCore<TSourceView, TCharReader> : IParserCore
@@ -359,6 +368,7 @@ public sealed class TomlParser
     {
         private readonly TomlParserMode _mode;
         private readonly bool _decodeScalars;
+        private readonly bool _captureTrivia;
         private readonly DiagnosticsBag? _diagnostics;
         private readonly Lexer<TSourceView, TCharReader> _lexer;
         private SyntaxTokenValue _token;
@@ -366,6 +376,11 @@ public sealed class TomlParser
         private bool _terminatedDueToError;
 
         private readonly PendingQueue _pending;
+        private readonly TriviaQueue? _pendingTriviaQueue;
+        private readonly List<TomlSyntaxTriviaMetadata>? _pendingTrivia;
+        private string? _pendingWhitespace;
+        private TomlSyntaxTriviaMetadata[]? _leadingTrivia;
+        private TomlSyntaxTriviaMetadata[]? _trailingTrivia;
         private readonly List<KeySegment> _implicitFrames;
         private readonly List<ExplicitFrame> _explicitFrames;
         private readonly List<KeySegment> _pathSegments;
@@ -378,6 +393,7 @@ public sealed class TomlParser
         {
             _mode = parserOptions.Mode;
             _decodeScalars = parserOptions.DecodeScalars;
+            _captureTrivia = parserOptions.CaptureTrivia;
             _diagnostics = diagnostics;
             _lexer = new Lexer<TSourceView, TCharReader>(sourceView)
             {
@@ -388,6 +404,11 @@ public sealed class TomlParser
             _initialized = false;
             _terminatedDueToError = false;
             _pending = new PendingQueue();
+            _pendingTriviaQueue = _captureTrivia ? new TriviaQueue() : null;
+            _pendingTrivia = _captureTrivia ? new List<TomlSyntaxTriviaMetadata>(capacity: 8) : null;
+            _pendingWhitespace = null;
+            _leadingTrivia = null;
+            _trailingTrivia = null;
 
             _implicitFrames = new List<KeySegment>(capacity: 8);
             _explicitFrames = new List<ExplicitFrame>(capacity: 16);
@@ -400,10 +421,15 @@ public sealed class TomlParser
 
         public string? GetText(TomlSourceSpan span) => _lexer.Source.GetString(span.Offset, span.Length);
 
+        public TomlSyntaxTriviaMetadata[]? LeadingTrivia => _leadingTrivia;
+
+        public TomlSyntaxTriviaMetadata[]? TrailingTrivia => _trailingTrivia;
+
         public bool MoveNext(out TomlParseEvent parseEvent)
         {
             if (_pending.TryDequeue(out parseEvent))
             {
+                DequeueTrivia();
                 return true;
             }
 
@@ -433,12 +459,35 @@ public sealed class TomlParser
 
                 if (_pending.TryDequeue(out parseEvent))
                 {
+                    DequeueTrivia();
                     return true;
                 }
             }
 
             parseEvent = default;
+            _leadingTrivia = null;
+            _trailingTrivia = null;
             return false;
+        }
+
+        private void DequeueTrivia()
+        {
+            if (!_captureTrivia || _pendingTriviaQueue is null)
+            {
+                _leadingTrivia = null;
+                _trailingTrivia = null;
+                return;
+            }
+
+            if (_pendingTriviaQueue.TryDequeue(out var attachment))
+            {
+                _leadingTrivia = attachment.Leading;
+                _trailingTrivia = attachment.Trailing;
+                return;
+            }
+
+            _leadingTrivia = null;
+            _trailingTrivia = null;
         }
 
         private bool ProduceNext()
@@ -450,8 +499,8 @@ public sealed class TomlParser
 
             if (_state == DocumentState.NotStarted)
             {
-                _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.StartDocument, span: null, propertyName: null, stringValue: null, data: 0));
-                _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.StartTable, span: null, propertyName: null, stringValue: null, data: 0));
+                EnqueueEvent(new TomlParseEvent(TomlParseEventKind.StartDocument, span: null, propertyName: null, stringValue: null, data: 0));
+                EnqueueEvent(new TomlParseEvent(TomlParseEventKind.StartTable, span: null, propertyName: null, stringValue: null, data: 0));
                 _state = DocumentState.Statement;
                 EnsureInitialized();
                 return true;
@@ -489,7 +538,34 @@ public sealed class TomlParser
             bool result;
             while ((result = _lexer.MoveNext()) && _lexer.Token.Kind.IsHidden(hideNewLine: false))
             {
+                if (!_captureTrivia || _pendingTrivia is null)
+                {
+                    continue;
+                }
+
+                if (_lexer.Token.Kind == TokenKind.Whitespaces)
+                {
+                    var text = _lexer.Token.GetText(_lexer.Source) ?? string.Empty;
+                    _pendingWhitespace = _pendingWhitespace is null ? text : string.Concat(_pendingWhitespace, text);
+                    continue;
+                }
+
+                if (_lexer.Token.Kind == TokenKind.Comment)
+                {
+                    if (_pendingWhitespace is not null)
+                    {
+                        _pendingTrivia.Add(new TomlSyntaxTriviaMetadata(TokenKind.Whitespaces, _pendingWhitespace));
+                        _pendingWhitespace = null;
+                    }
+
+                    _pendingTrivia.Add(new TomlSyntaxTriviaMetadata(TokenKind.Comment, _lexer.Token.GetText(_lexer.Source) ?? string.Empty));
+                    continue;
+                }
+
+                _pendingWhitespace = null;
             }
+
+            _pendingWhitespace = null;
 
             _token = result ? _lexer.Token : new SyntaxTokenValue(TokenKind.Eof, new TextPosition(), new TextPosition());
 
@@ -506,8 +582,38 @@ public sealed class TomlParser
                 throw CreateException(CurrentSpan(), $"Expected `{expected.ToText() ?? expected.ToString()}` but was `{ToPrintable(_token)}`.");
             }
 
+            if (_captureTrivia && expected == TokenKind.NewLine && _pendingTrivia is { Count: > 0 })
+            {
+                var last = _pendingTrivia[_pendingTrivia.Count - 1];
+                if (last.Kind == TokenKind.Comment)
+                {
+                    _pendingTrivia.Add(new TomlSyntaxTriviaMetadata(TokenKind.NewLine, _token.GetText(_lexer.Source) ?? "\n"));
+                }
+            }
+
             _lexer.State = nextState;
             NextToken();
+        }
+
+        private void EnqueueEvent(TomlParseEvent parseEvent, TomlSyntaxTriviaMetadata[]? leadingTrivia = null, TomlSyntaxTriviaMetadata[]? trailingTrivia = null)
+        {
+            _pending.Enqueue(parseEvent);
+            if (_captureTrivia && _pendingTriviaQueue is not null)
+            {
+                _pendingTriviaQueue.Enqueue(new TriviaAttachment(leadingTrivia, trailingTrivia));
+            }
+        }
+
+        private TomlSyntaxTriviaMetadata[]? ExtractPendingTrivia()
+        {
+            if (!_captureTrivia || _pendingTrivia is null || _pendingTrivia.Count == 0)
+            {
+                return null;
+            }
+
+            var array = _pendingTrivia.ToArray();
+            _pendingTrivia.Clear();
+            return array;
         }
 
         private void SkipNewLines(LexerState lexerState)
@@ -540,8 +646,8 @@ public sealed class TomlParser
                     CloseImplicitFrames(baseIndex: 0);
                     CloseExplicitFrames(targetPrefixLength: 0);
 
-                    _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
-                    _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.EndDocument, span: null, propertyName: null, stringValue: null, data: 0));
+                    EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
+                    EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndDocument, span: null, propertyName: null, stringValue: null, data: 0));
                     _state = DocumentState.Ended;
                     return true;
                 }
@@ -610,7 +716,7 @@ public sealed class TomlParser
                     {
                         Consume(TokenKind.CloseBracket, DetermineLexerStateAfterContainerClose());
                         _containers.RemoveAt(_containers.Count - 1);
-                        _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.EndArray, span: null, propertyName: null, stringValue: null, data: 0));
+                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndArray, span: null, propertyName: null, stringValue: null, data: 0));
                         return true;
                     }
 
@@ -636,7 +742,7 @@ public sealed class TomlParser
                     {
                         Consume(TokenKind.CloseBracket, DetermineLexerStateAfterContainerClose());
                         _containers.RemoveAt(_containers.Count - 1);
-                        _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.EndArray, span: null, propertyName: null, stringValue: null, data: 0));
+                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndArray, span: null, propertyName: null, stringValue: null, data: 0));
                         return true;
                     }
 
@@ -649,7 +755,7 @@ public sealed class TomlParser
                 {
                     Consume(TokenKind.CloseBracket, DetermineLexerStateAfterContainerClose());
                     _containers.RemoveAt(_containers.Count - 1);
-                    _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.EndArray, span: null, propertyName: null, stringValue: null, data: 0));
+                    EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndArray, span: null, propertyName: null, stringValue: null, data: 0));
                     return true;
                 }
 
@@ -682,13 +788,13 @@ public sealed class TomlParser
                         if (_implicitFrames.Count > frame.InlineImplicitBase)
                         {
                             _implicitFrames.RemoveAt(_implicitFrames.Count - 1);
-                            _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
+                            EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
                             return true;
                         }
 
                         Consume(TokenKind.CloseBrace, DetermineLexerStateAfterContainerClose());
                         _containers.RemoveAt(_containers.Count - 1);
-                        _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
+                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
                         return true;
                     }
 
@@ -797,12 +903,14 @@ public sealed class TomlParser
             EnsureImplicitPrefix(implicitBaseIndex, _pathSegments, prefixLength);
 
             var leaf = _pathSegments[_pathSegments.Count - 1];
-            _pending.Enqueue(new TomlParseEvent(
+            var leadingTrivia = ExtractPendingTrivia();
+            EnqueueEvent(new TomlParseEvent(
                 TomlParseEventKind.PropertyName,
                 span: leaf.Span,
                 propertyName: _decodeScalars ? leaf.Value : null,
                 stringValue: null,
-                data: (ulong)leaf.TokenKind));
+                data: (ulong)leaf.TokenKind),
+                leadingTrivia: leadingTrivia);
 
             Consume(TokenKind.Equal, LexerState.Value);
         }
@@ -812,7 +920,7 @@ public sealed class TomlParser
             for (var i = _implicitFrames.Count - 1; i >= baseIndex; i--)
             {
                 _implicitFrames.RemoveAt(i);
-                _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
+                EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
             }
         }
 
@@ -825,10 +933,10 @@ public sealed class TomlParser
                 {
                     case ExplicitFrameKind.Table:
                     case ExplicitFrameKind.TableArrayElement:
-                        _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
+                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
                         break;
                     case ExplicitFrameKind.Array:
-                        _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.EndArray, span: null, propertyName: null, stringValue: null, data: 0));
+                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndArray, span: null, propertyName: null, stringValue: null, data: 0));
                         break;
                 }
 
@@ -841,6 +949,7 @@ public sealed class TomlParser
             for (var i = startIndex; i < targetFrames.Count; i++)
             {
                 var frame = targetFrames[i];
+                TomlSyntaxTriviaMetadata[]? leadingTrivia;
                 switch (frame.Kind)
                 {
                     case ExplicitFrameKind.Table:
@@ -849,13 +958,15 @@ public sealed class TomlParser
                             throw CreateException(CurrentSpan(), "Invalid explicit table frame.");
                         }
 
-                        _pending.Enqueue(new TomlParseEvent(
+                        leadingTrivia = ExtractPendingTrivia();
+                        EnqueueEvent(new TomlParseEvent(
                             TomlParseEventKind.PropertyName,
                             span: tableName.Span,
                             propertyName: _decodeScalars ? tableName.Value : null,
                             stringValue: null,
-                            data: (ulong)tableName.TokenKind));
-                        _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.StartTable, span: null, propertyName: null, stringValue: null, data: 0));
+                            data: (ulong)tableName.TokenKind),
+                            leadingTrivia: leadingTrivia);
+                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.StartTable, span: null, propertyName: null, stringValue: null, data: 0));
                         break;
                     case ExplicitFrameKind.Array:
                         if (frame.Name is not { } arrayName)
@@ -863,16 +974,18 @@ public sealed class TomlParser
                             throw CreateException(CurrentSpan(), "Invalid explicit array frame.");
                         }
 
-                        _pending.Enqueue(new TomlParseEvent(
+                        leadingTrivia = ExtractPendingTrivia();
+                        EnqueueEvent(new TomlParseEvent(
                             TomlParseEventKind.PropertyName,
                             span: arrayName.Span,
                             propertyName: _decodeScalars ? arrayName.Value : null,
                             stringValue: null,
-                            data: (ulong)arrayName.TokenKind));
-                        _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.StartArray, span: null, propertyName: null, stringValue: null, data: 0));
+                            data: (ulong)arrayName.TokenKind),
+                            leadingTrivia: leadingTrivia);
+                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.StartArray, span: null, propertyName: null, stringValue: null, data: 0));
                         break;
                     case ExplicitFrameKind.TableArrayElement:
-                        _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.StartTable, span: null, propertyName: null, stringValue: null, data: 0));
+                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.StartTable, span: null, propertyName: null, stringValue: null, data: 0));
                         break;
                 }
 
@@ -968,7 +1081,7 @@ public sealed class TomlParser
                 var span = new TomlSourceSpan(_lexer.Source.SourcePath,
                     new TomlTextPosition(spanStart.Offset, spanStart.Line, spanStart.Column),
                     new TomlTextPosition(_token.End.Offset, _token.End.Line, _token.End.Column));
-                _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.StartArray, span: span, propertyName: null, stringValue: null, data: 0));
+                EnqueueEvent(new TomlParseEvent(TomlParseEventKind.StartArray, span: span, propertyName: null, stringValue: null, data: 0));
                 Consume(TokenKind.OpenBracket, LexerState.Value);
                 _containers.Add(new ContainerFrame(ContainerKind.Array, inlineImplicitBase: 0));
                 return;
@@ -979,7 +1092,7 @@ public sealed class TomlParser
                 var span = new TomlSourceSpan(_lexer.Source.SourcePath,
                     new TomlTextPosition(spanStart.Offset, spanStart.Line, spanStart.Column),
                     new TomlTextPosition(_token.End.Offset, _token.End.Line, _token.End.Column));
-                _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.StartTable, span: span, propertyName: null, stringValue: null, data: 0));
+                EnqueueEvent(new TomlParseEvent(TomlParseEventKind.StartTable, span: span, propertyName: null, stringValue: null, data: 0));
                 Consume(TokenKind.OpenBrace, LexerState.Key);
                 _containers.Add(new ContainerFrame(ContainerKind.InlineTable, inlineImplicitBase: _implicitFrames.Count));
                 return;
@@ -991,38 +1104,53 @@ public sealed class TomlParser
 
             if (_token.Kind.IsString())
             {
+                var tokenKind = _token.Kind;
                 var text = _decodeScalars ? (_token.StringValue ?? string.Empty) : null;
-                _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.String, span: eventSpan, propertyName: null, stringValue: text, data: (ulong)_token.Kind));
-                Consume(_token.Kind, nextStateAfterScalar);
+                var parseEvent = new TomlParseEvent(TomlParseEventKind.String, span: eventSpan, propertyName: null, stringValue: text, data: (ulong)tokenKind);
+                Consume(tokenKind, nextStateAfterScalar);
+                var trailingTrivia = ExtractPendingTrivia();
+                EnqueueEvent(parseEvent, trailingTrivia: trailingTrivia);
                 return;
             }
 
             if (_token.Kind.IsInteger())
             {
-                _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.Integer, span: eventSpan, propertyName: null, stringValue: null, data: _token.Data));
-                Consume(_token.Kind, nextStateAfterScalar);
+                var tokenKind = _token.Kind;
+                var parseEvent = new TomlParseEvent(TomlParseEventKind.Integer, span: eventSpan, propertyName: null, stringValue: null, data: _token.Data);
+                Consume(tokenKind, nextStateAfterScalar);
+                var trailingTrivia = ExtractPendingTrivia();
+                EnqueueEvent(parseEvent, trailingTrivia: trailingTrivia);
                 return;
             }
 
             if (_token.Kind.IsFloat())
             {
-                _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.Float, span: eventSpan, propertyName: null, stringValue: null, data: _token.Data));
-                Consume(_token.Kind, nextStateAfterScalar);
+                var tokenKind = _token.Kind;
+                var parseEvent = new TomlParseEvent(TomlParseEventKind.Float, span: eventSpan, propertyName: null, stringValue: null, data: _token.Data);
+                Consume(tokenKind, nextStateAfterScalar);
+                var trailingTrivia = ExtractPendingTrivia();
+                EnqueueEvent(parseEvent, trailingTrivia: trailingTrivia);
                 return;
             }
 
             if (_token.Kind == TokenKind.True || _token.Kind == TokenKind.False)
             {
-                _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.Boolean, span: eventSpan, propertyName: null, stringValue: null, data: _token.Data));
-                Consume(_token.Kind, nextStateAfterScalar);
+                var tokenKind = _token.Kind;
+                var parseEvent = new TomlParseEvent(TomlParseEventKind.Boolean, span: eventSpan, propertyName: null, stringValue: null, data: _token.Data);
+                Consume(tokenKind, nextStateAfterScalar);
+                var trailingTrivia = ExtractPendingTrivia();
+                EnqueueEvent(parseEvent, trailingTrivia: trailingTrivia);
                 return;
             }
 
             if (_token.Kind.IsDateTime())
             {
+                var tokenKind = _token.Kind;
                 var literal = _token.StringValue ?? _token.GetText(_lexer.Source) ?? string.Empty;
-                _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.DateTime, span: eventSpan, propertyName: null, stringValue: literal, data: 0));
-                Consume(_token.Kind, nextStateAfterScalar);
+                var parseEvent = new TomlParseEvent(TomlParseEventKind.DateTime, span: eventSpan, propertyName: null, stringValue: literal, data: 0);
+                Consume(tokenKind, nextStateAfterScalar);
+                var trailingTrivia = ExtractPendingTrivia();
+                EnqueueEvent(parseEvent, trailingTrivia: trailingTrivia);
                 return;
             }
 
@@ -1080,19 +1208,19 @@ public sealed class TomlParser
             for (var i = currentCount - 1; i >= common; i--)
             {
                 _implicitFrames.RemoveAt(baseIndex + i);
-                _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
+                EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
             }
 
             for (var i = common; i < prefixLength; i++)
             {
                 var segment = pathSegments[i];
-                _pending.Enqueue(new TomlParseEvent(
+                EnqueueEvent(new TomlParseEvent(
                     TomlParseEventKind.PropertyName,
                     span: segment.Span,
                     propertyName: _decodeScalars ? segment.Value : null,
                     stringValue: null,
                     data: (ulong)segment.TokenKind));
-                _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.StartTable, span: null, propertyName: null, stringValue: null, data: 0));
+                EnqueueEvent(new TomlParseEvent(TomlParseEventKind.StartTable, span: null, propertyName: null, stringValue: null, data: 0));
                 _implicitFrames.Add(segment);
             }
         }
@@ -1279,12 +1407,12 @@ public sealed class TomlParser
                 if (frame.Kind == ContainerKind.InlineTable && _implicitFrames.Count > frame.InlineImplicitBase)
                 {
                     _implicitFrames.RemoveAt(_implicitFrames.Count - 1);
-                    _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
+                    EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
                     continue;
                 }
 
                 _containers.RemoveAt(_containers.Count - 1);
-                _pending.Enqueue(frame.Kind == ContainerKind.Array
+                EnqueueEvent(frame.Kind == ContainerKind.Array
                     ? new TomlParseEvent(TomlParseEventKind.EndArray, span: null, propertyName: null, stringValue: null, data: 0)
                     : new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
             }
@@ -1292,8 +1420,8 @@ public sealed class TomlParser
             CloseImplicitFrames(baseIndex: 0);
             CloseExplicitFrames(targetPrefixLength: 0);
 
-            _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
-            _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.EndDocument, span: null, propertyName: null, stringValue: null, data: 0));
+            EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
+            EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndDocument, span: null, propertyName: null, stringValue: null, data: 0));
             _state = DocumentState.Ended;
         }
 
@@ -1425,6 +1553,60 @@ public sealed class TomlParser
             private void Grow()
             {
                 var newBuffer = new TomlParseEvent[_buffer.Length * 2];
+                for (var i = 0; i < _count; i++)
+                {
+                    newBuffer[i] = _buffer[(_head + i) % _buffer.Length];
+                }
+
+                _buffer = newBuffer;
+                _head = 0;
+            }
+        }
+
+        private readonly record struct TriviaAttachment(TomlSyntaxTriviaMetadata[]? Leading, TomlSyntaxTriviaMetadata[]? Trailing);
+
+        private sealed class TriviaQueue
+        {
+            private TriviaAttachment[] _buffer;
+            private int _head;
+            private int _count;
+
+            public TriviaQueue()
+            {
+                _buffer = new TriviaAttachment[16];
+                _head = 0;
+                _count = 0;
+            }
+
+            public void Enqueue(TriviaAttachment value)
+            {
+                if (_count == _buffer.Length)
+                {
+                    Grow();
+                }
+
+                var index = (_head + _count) % _buffer.Length;
+                _buffer[index] = value;
+                _count++;
+            }
+
+            public bool TryDequeue(out TriviaAttachment value)
+            {
+                if (_count == 0)
+                {
+                    value = default;
+                    return false;
+                }
+
+                value = _buffer[_head];
+                _head = (_head + 1) % _buffer.Length;
+                _count--;
+                return true;
+            }
+
+            private void Grow()
+            {
+                var newBuffer = new TriviaAttachment[_buffer.Length * 2];
                 for (var i = 0; i < _count; i++)
                 {
                     newBuffer[i] = _buffer[(_head + i) % _buffer.Length];

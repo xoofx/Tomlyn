@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Tomlyn.Helpers;
+using Tomlyn.Model;
 using Tomlyn.Parsing;
 using Tomlyn.Syntax;
 using Tomlyn.Text;
@@ -27,6 +28,8 @@ public sealed class TomlReader
     private bool _hasDateTime;
     private TomlSourceSpan? _currentSpan;
     private string? _currentRawText;
+    private TomlSyntaxTriviaMetadata[]? _currentLeadingTrivia;
+    private TomlSyntaxTriviaMetadata[]? _currentTrailingTrivia;
     private TomlTokenType _tokenType;
 
     private TomlReader(TomlParser parser, TomlSerializerOptions options)
@@ -58,7 +61,11 @@ public sealed class TomlReader
     {
         ArgumentGuard.ThrowIfNull(toml, nameof(toml));
         var effectiveOptions = options ?? TomlSerializerOptions.Default;
-        var parser = TomlParser.Create(toml, effectiveOptions);
+        var parserOptions = new Tomlyn.Parsing.TomlParserOptions
+        {
+            CaptureTrivia = effectiveOptions.MetadataStore is not null,
+        };
+        var parser = TomlParser.Create(toml, parserOptions, effectiveOptions);
         return new TomlReader(parser, effectiveOptions);
     }
 
@@ -69,7 +76,11 @@ public sealed class TomlReader
     {
         ArgumentGuard.ThrowIfNull(reader, nameof(reader));
         var effectiveOptions = options ?? TomlSerializerOptions.Default;
-        var parser = TomlParser.Create(reader, effectiveOptions);
+        var parserOptions = new Tomlyn.Parsing.TomlParserOptions
+        {
+            CaptureTrivia = effectiveOptions.MetadataStore is not null,
+        };
+        var parser = TomlParser.Create(reader, parserOptions, effectiveOptions);
         return new TomlReader(parser, effectiveOptions);
     }
 
@@ -90,7 +101,11 @@ public sealed class TomlReader
     {
         ArgumentGuard.ThrowIfNull(utf8Toml, nameof(utf8Toml));
         var effectiveOptions = options ?? TomlSerializerOptions.Default;
-        var parser = TomlParser.Create(utf8Toml, effectiveOptions);
+        var parserOptions = new Tomlyn.Parsing.TomlParserOptions
+        {
+            CaptureTrivia = effectiveOptions.MetadataStore is not null,
+        };
+        var parser = TomlParser.Create(utf8Toml, parserOptions, effectiveOptions);
         return new TomlReader(parser, effectiveOptions);
     }
 
@@ -130,6 +145,12 @@ public sealed class TomlReader
     /// </summary>
     public TomlSourceSpan? CurrentSpan => _currentSpan;
 
+    internal TomlSyntaxTriviaMetadata[]? CurrentLeadingTrivia => _currentLeadingTrivia;
+
+    internal TomlSyntaxTriviaMetadata[]? CurrentTrailingTrivia => _currentTrailingTrivia;
+
+    internal TokenKind CurrentStringTokenKind => _currentStringTokenKind;
+
     /// <summary>
     /// Advances the reader to the next token.
     /// </summary>
@@ -143,6 +164,8 @@ public sealed class TomlReader
         _hasDateTime = false;
         _currentSpan = null;
         _currentRawText = null;
+        _currentLeadingTrivia = null;
+        _currentTrailingTrivia = null;
 
         if (_buffer is not null)
         {
@@ -187,6 +210,8 @@ public sealed class TomlReader
 
         var parseEvent = _parser.Current;
         _currentSpan = parseEvent.Span;
+        _currentLeadingTrivia = _parser.CurrentLeadingTrivia;
+        _currentTrailingTrivia = _parser.CurrentTrailingTrivia;
         switch (parseEvent.Kind)
         {
             case TomlParseEventKind.StartDocument:
@@ -245,6 +270,8 @@ public sealed class TomlReader
         _tokenType = token.TokenType;
         _currentSpan = token.Span;
         _currentRawText = token.RawText;
+        _currentLeadingTrivia = token.LeadingTrivia;
+        _currentTrailingTrivia = token.TrailingTrivia;
         _currentPropertyName = token.PropertyName;
         _currentString = token.StringValue;
         _currentData = token.Data;
@@ -490,7 +517,7 @@ public sealed class TomlReader
         }
 
         var tokens = new List<TomlReaderToken>();
-        tokens.Add(new TomlReaderToken(TomlTokenType.StartDocument, span: null, rawText: null, propertyName: null, stringValue: null, data: 0, stringTokenKind: default, dateTime: default, hasDateTime: false));
+        tokens.Add(new TomlReaderToken(TomlTokenType.StartDocument, span: null, rawText: null, leadingTrivia: null, trailingTrivia: null, propertyName: null, stringValue: null, data: 0, stringTokenKind: default, dateTime: default, hasDateTime: false));
 
         AddCurrentToken(tokens);
 
@@ -523,7 +550,7 @@ public sealed class TomlReader
             Read();
         }
 
-        tokens.Add(new TomlReaderToken(TomlTokenType.EndDocument, span: null, rawText: null, propertyName: null, stringValue: null, data: 0, stringTokenKind: default, dateTime: default, hasDateTime: false));
+        tokens.Add(new TomlReaderToken(TomlTokenType.EndDocument, span: null, rawText: null, leadingTrivia: null, trailingTrivia: null, propertyName: null, stringValue: null, data: 0, stringTokenKind: default, dateTime: default, hasDateTime: false));
 
         return new TomlReaderBuffer(tokens.ToArray(), _options);
     }
@@ -540,6 +567,8 @@ public sealed class TomlReader
             _tokenType,
             _currentSpan,
             rawText,
+            _currentLeadingTrivia,
+            _currentTrailingTrivia,
             _currentPropertyName,
             stringValue,
             _currentData,
@@ -555,6 +584,8 @@ internal readonly struct TomlReaderToken
         TomlTokenType tokenType,
         TomlSourceSpan? span,
         string? rawText,
+        TomlSyntaxTriviaMetadata[]? leadingTrivia,
+        TomlSyntaxTriviaMetadata[]? trailingTrivia,
         string? propertyName,
         string? stringValue,
         ulong data,
@@ -565,6 +596,8 @@ internal readonly struct TomlReaderToken
         TokenType = tokenType;
         Span = span;
         RawText = rawText;
+        LeadingTrivia = leadingTrivia;
+        TrailingTrivia = trailingTrivia;
         PropertyName = propertyName;
         StringValue = stringValue;
         Data = data;
@@ -576,6 +609,8 @@ internal readonly struct TomlReaderToken
     public TomlTokenType TokenType { get; }
     public TomlSourceSpan? Span { get; }
     public string? RawText { get; }
+    public TomlSyntaxTriviaMetadata[]? LeadingTrivia { get; }
+    public TomlSyntaxTriviaMetadata[]? TrailingTrivia { get; }
     public string? PropertyName { get; }
     public string? StringValue { get; }
     public ulong Data { get; }

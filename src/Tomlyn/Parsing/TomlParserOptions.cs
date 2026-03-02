@@ -15,4 +15,13 @@ public sealed record TomlParserOptions
     /// When <c>false</c> (default), string values are decoded on demand (for example via <see cref="TomlParser.GetString"/>).
     /// </summary>
     public bool DecodeScalars { get; init; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the parser captures comment trivia.
+    /// </summary>
+    /// <remarks>
+    /// When enabled, the parser records comment trivia around property names and scalar values so that higher-level
+    /// layers can populate <see cref="Tomlyn.Serialization.ITomlMetadataStore"/> instances.
+    /// </remarks>
+    public bool CaptureTrivia { get; init; }
 }
