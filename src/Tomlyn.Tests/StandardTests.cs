@@ -32,6 +32,8 @@ namespace Tomlyn.Tests
         [
             // TOML v1.1.0 additions (toml-test suite still marks them invalid).
             @"\invalid\datetime\no-secs.toml",            // minute-only times
+            @"\invalid\local-datetime\no-secs.toml",
+            @"\invalid\local-time\no-secs.toml",
             @"\invalid\string\basic-byte-escapes.toml",   // \xHH basic string escape
         ];
 
@@ -64,52 +66,20 @@ namespace Tomlyn.Tests
                     // Only in the case of a valid spec we check for rountrip
                     Assert.AreEqual(toml, roundtrip, "The roundtrip doesn't match");
 
-                    // Read the original json
-                    var expectedJson = (JObject)NormalizeJson(JObject.Parse(json))!;
+                    // Read the original json (toml-test encodes datetimes as strings; avoid Json.NET date coercion).
+                    var expectedJson = (JObject)NormalizeJson(ParseTomlTestJson(json))!;
                     // Convert the syntax tree into a model
                     var model = doc.ToModel();
                     // Convert the model into the expected json
                     var computedJson = ModelHelper.ToJson(model);
-
-                    // Write back the result to a string
-                    var expectedJsonAsString = expectedJson.ToString(Formatting.Indented);
-                    var computedJsonAsString = computedJson.ToString(Formatting.Indented);
-
-                    if (expectedJsonAsString != computedJsonAsString)
-                    {
-                        Console.WriteLine($"Testing {inputName}");
-                        Dump(toml, doc, roundtrip);
-                        DisplayHeader("json");
-                        Console.WriteLine(computedJsonAsString);
-
-                        DisplayHeader("expected json");
-                        Console.WriteLine(expectedJsonAsString);
-                    }
-
-                    Assert.AreEqual(expectedJsonAsString, computedJsonAsString);
+                    AssertTomlTestJsonEquivalent(expectedJson, computedJson, inputName, toml, doc, roundtrip);
 
                     var tomlFromModel = Toml.FromModel(model);
 
 
                     var model2 = Toml.ToModel<TomlTable>(tomlFromModel);
                     var computedJson2 = ModelHelper.ToJson(model2);
-                    var computedJson2AsString = computedJson2.ToString(Formatting.Indented);
-
-                    if (expectedJsonAsString != computedJson2AsString)
-                    {
-                        Console.WriteLine($"Testing {inputName}");
-                        Dump(toml, doc, roundtrip);
-                        DisplayHeader("expected json");
-                        Console.WriteLine(expectedJsonAsString);
-
-                        DisplayHeader("toml from model");
-                        Console.WriteLine(tomlFromModel);
-
-                        DisplayHeader("json2");
-                        Console.WriteLine(computedJson2AsString);
-                    }
-
-                    Assert.AreEqual(expectedJsonAsString, computedJson2AsString);
+                    AssertTomlTestJsonEquivalent(expectedJson, computedJson2, inputName, toml, doc, roundtrip, tomlFromModel);
                     break;
                 case InvalidSpec:
                     if (!doc.HasErrors)
@@ -244,6 +214,322 @@ namespace Tomlyn.Tests
                 next_file: ;
             }
             return tests;
+        }
+
+        private static JObject ParseTomlTestJson(string json)
+        {
+            using var reader = new JsonTextReader(new StringReader(json))
+            {
+                DateParseHandling = DateParseHandling.None,
+            };
+
+            return JObject.Load(reader);
+        }
+
+        private static void AssertTomlTestJsonEquivalent(JToken expected, JToken actual, string inputName, string toml, DocumentSyntax doc, string roundtrip, string? tomlFromModel = null)
+        {
+            if (TryCompareTomlTestJson(expected, actual, out var difference))
+            {
+                return;
+            }
+
+            Console.WriteLine($"Testing {inputName}");
+            Dump(toml, doc, roundtrip);
+            DisplayHeader("json");
+            Console.WriteLine(actual.ToString(Formatting.Indented));
+            DisplayHeader("expected json");
+            Console.WriteLine(expected.ToString(Formatting.Indented));
+            if (tomlFromModel is not null)
+            {
+                DisplayHeader("toml from model");
+                Console.WriteLine(tomlFromModel);
+            }
+
+            Assert.Fail($"TOML test JSON mismatch: {difference}");
+        }
+
+        private static bool TryCompareTomlTestJson(JToken expected, JToken actual, out string difference)
+        {
+            var path = "$";
+            if (TryCompareTomlTestJsonCore(expected, actual, ref path, out difference))
+            {
+                return true;
+            }
+
+            difference = $"{path}: {difference}";
+            return false;
+        }
+
+        private static bool TryCompareTomlTestJsonCore(JToken expected, JToken actual, ref string path, out string difference)
+        {
+            if (expected.Type != actual.Type)
+            {
+                difference = $"Expected token type {expected.Type} but was {actual.Type}.";
+                return false;
+            }
+
+            switch (expected.Type)
+            {
+                case JTokenType.Object:
+                    return TryCompareTomlTestJsonObject((JObject)expected, (JObject)actual, ref path, out difference);
+                case JTokenType.Array:
+                    return TryCompareTomlTestJsonArray((JArray)expected, (JArray)actual, ref path, out difference);
+                default:
+                    if (JToken.DeepEquals(expected, actual))
+                    {
+                        difference = string.Empty;
+                        return true;
+                    }
+
+                    difference = $"Expected `{expected}` but was `{actual}`.";
+                    return false;
+            }
+        }
+
+        private static bool TryCompareTomlTestJsonObject(JObject expected, JObject actual, ref string path, out string difference)
+        {
+            if (TryGetTomlTestTypedValue(expected, out var expectedType, out var expectedValue))
+            {
+                if (!TryGetTomlTestTypedValue(actual, out var actualType, out var actualValue))
+                {
+                    difference = "Expected a typed TOML value object.";
+                    return false;
+                }
+
+                if (!string.Equals(expectedType, actualType, StringComparison.Ordinal))
+                {
+                    difference = $"Expected type `{expectedType}` but was `{actualType}`.";
+                    return false;
+                }
+
+                return expectedType switch
+                {
+                    "string" => CompareString(expectedValue, actualValue, out difference),
+                    "bool" => CompareBool(expectedValue, actualValue, out difference),
+                    "integer" => CompareInteger(expectedValue, actualValue, out difference),
+                    "float" => CompareFloat(expectedValue, actualValue, out difference),
+                    "datetime" => CompareDateTime(expectedValue, actualValue, out difference),
+                    "array" => TryCompareTomlTestJsonCore(expectedValue, actualValue, ref path, out difference),
+                    _ => TryCompareTomlTestJsonCore(expectedValue, actualValue, ref path, out difference),
+                };
+            }
+
+            var expectedProperties = expected.Properties().ToList();
+            var actualProperties = actual.Properties().ToDictionary(p => p.Name, p => p.Value, StringComparer.Ordinal);
+
+            foreach (var expectedProperty in expectedProperties)
+            {
+                if (!actualProperties.TryGetValue(expectedProperty.Name, out var actualValue))
+                {
+                    difference = $"Missing property `{expectedProperty.Name}`.";
+                    return false;
+                }
+
+                var previous = path;
+                path = $"{path}.{expectedProperty.Name}";
+                if (!TryCompareTomlTestJsonCore(expectedProperty.Value, actualValue, ref path, out difference))
+                {
+                    return false;
+                }
+                path = previous;
+            }
+
+            if (actualProperties.Count != expectedProperties.Count)
+            {
+                var extra = actualProperties.Keys.Except(expectedProperties.Select(p => p.Name), StringComparer.Ordinal).FirstOrDefault();
+                difference = extra is null ? "Object size mismatch." : $"Unexpected property `{extra}`.";
+                return false;
+            }
+
+            difference = string.Empty;
+            return true;
+        }
+
+        private static bool TryGetTomlTestTypedValue(JObject obj, out string type, out JToken value)
+        {
+            type = string.Empty;
+            value = default!;
+
+            if (!obj.TryGetValue("type", out var typeToken) || !obj.TryGetValue("value", out var valueToken))
+            {
+                return false;
+            }
+
+            if (typeToken.Type != JTokenType.String)
+            {
+                return false;
+            }
+
+            type = typeToken.Value<string>() ?? string.Empty;
+            value = valueToken;
+            return type.Length > 0;
+        }
+
+        private static bool TryCompareTomlTestJsonArray(JArray expected, JArray actual, ref string path, out string difference)
+        {
+            if (expected.Count != actual.Count)
+            {
+                difference = $"Expected array length {expected.Count} but was {actual.Count}.";
+                return false;
+            }
+
+            for (var index = 0; index < expected.Count; index++)
+            {
+                var previous = path;
+                path = $"{path}[{index}]";
+                if (!TryCompareTomlTestJsonCore(expected[index], actual[index], ref path, out difference))
+                {
+                    return false;
+                }
+                path = previous;
+            }
+
+            difference = string.Empty;
+            return true;
+        }
+
+        private static bool CompareString(JToken expected, JToken actual, out string difference)
+        {
+            var expectedValue = expected.Value<string>();
+            var actualValue = actual.Value<string>();
+            if (string.Equals(expectedValue, actualValue, StringComparison.Ordinal))
+            {
+                difference = string.Empty;
+                return true;
+            }
+
+            difference = $"Expected string `{expectedValue}` but was `{actualValue}`.";
+            return false;
+        }
+
+        private static bool CompareBool(JToken expected, JToken actual, out string difference)
+        {
+            if (!TryParseBool(expected.Value<string>(), out var expectedValue) ||
+                !TryParseBool(actual.Value<string>(), out var actualValue))
+            {
+                difference = "Invalid boolean representation.";
+                return false;
+            }
+
+            if (expectedValue == actualValue)
+            {
+                difference = string.Empty;
+                return true;
+            }
+
+            difference = $"Expected bool `{expectedValue}` but was `{actualValue}`.";
+            return false;
+        }
+
+        private static bool CompareInteger(JToken expected, JToken actual, out string difference)
+        {
+            if (!long.TryParse(expected.Value<string>(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var expectedValue) ||
+                !long.TryParse(actual.Value<string>(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var actualValue))
+            {
+                difference = "Invalid integer representation.";
+                return false;
+            }
+
+            if (expectedValue == actualValue)
+            {
+                difference = string.Empty;
+                return true;
+            }
+
+            difference = $"Expected integer `{expectedValue}` but was `{actualValue}`.";
+            return false;
+        }
+
+        private static bool CompareFloat(JToken expected, JToken actual, out string difference)
+        {
+            if (!TryParseFloat(expected.Value<string>(), out var expectedValue) ||
+                !TryParseFloat(actual.Value<string>(), out var actualValue))
+            {
+                difference = "Invalid float representation.";
+                return false;
+            }
+
+            if (double.IsNaN(expectedValue) && double.IsNaN(actualValue))
+            {
+                difference = string.Empty;
+                return true;
+            }
+
+            if (expectedValue.Equals(actualValue))
+            {
+                difference = string.Empty;
+                return true;
+            }
+
+            difference = $"Expected float `{expected}` but was `{actual}`.";
+            return false;
+        }
+
+        private static bool CompareDateTime(JToken expected, JToken actual, out string difference)
+        {
+            var expectedText = expected.Value<string>();
+            var actualText = actual.Value<string>();
+
+            if (string.Equals(expectedText, actualText, StringComparison.Ordinal))
+            {
+                difference = string.Empty;
+                return true;
+            }
+
+            difference = $"Expected datetime `{expectedText}` but was `{actualText}`.";
+            return false;
+        }
+
+        private static bool TryParseBool(string? text, out bool value)
+        {
+            if (string.Equals(text, "true", StringComparison.OrdinalIgnoreCase))
+            {
+                value = true;
+                return true;
+            }
+
+            if (string.Equals(text, "false", StringComparison.OrdinalIgnoreCase))
+            {
+                value = false;
+                return true;
+            }
+
+            value = default;
+            return false;
+        }
+
+        private static bool TryParseFloat(string? text, out double value)
+        {
+            if (text is null)
+            {
+                value = default;
+                return false;
+            }
+
+            if (string.Equals(text, "nan", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(text, "+nan", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(text, "-nan", StringComparison.OrdinalIgnoreCase))
+            {
+                value = double.NaN;
+                return true;
+            }
+
+            if (string.Equals(text, "inf", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(text, "+inf", StringComparison.OrdinalIgnoreCase))
+            {
+                value = double.PositiveInfinity;
+                return true;
+            }
+
+            if (string.Equals(text, "-inf", StringComparison.OrdinalIgnoreCase))
+            {
+                value = double.NegativeInfinity;
+                return true;
+            }
+
+            // toml-test values are typically JSON numbers-as-strings, sometimes using normalized exponent forms.
+            // Double parsing already accepts both "1e06" and "1e+06".
+            return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
         }
 
         private static string BaseDirectory
