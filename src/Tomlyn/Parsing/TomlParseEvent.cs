@@ -1,6 +1,6 @@
 using System;
 using Tomlyn.Helpers;
-using Tomlyn.Syntax;
+using Tomlyn.Text;
 
 namespace Tomlyn.Parsing;
 
@@ -9,7 +9,7 @@ namespace Tomlyn.Parsing;
 /// </summary>
 public readonly struct TomlParseEvent
 {
-    internal TomlParseEvent(TomlParseEventKind kind, SourceSpan? span, string? propertyName, string? stringValue, ulong data)
+    internal TomlParseEvent(TomlParseEventKind kind, TomlSourceSpan? span, string? propertyName, string? stringValue, ulong data)
     {
         Kind = kind;
         Span = span;
@@ -29,7 +29,7 @@ public readonly struct TomlParseEvent
     /// <summary>
     /// Gets the source span associated with this event, when available.
     /// </summary>
-    public SourceSpan? Span { get; }
+    public TomlSourceSpan? Span { get; }
 
     /// <summary>
     /// Gets the property name when <see cref="Kind"/> is <see cref="TomlParseEventKind.PropertyName"/>.
@@ -46,7 +46,7 @@ public readonly struct TomlParseEvent
 
     /// <summary>
     /// Gets the raw scalar payload for numeric and boolean scalars.
-    /// When <see cref="Kind"/> is <see cref="TomlParseEventKind.String"/>, this contains the underlying <see cref="TokenKind"/> for the string literal.
+    /// When <see cref="Kind"/> is <see cref="TomlParseEventKind.String"/>, this contains the underlying <see cref="Tomlyn.Syntax.TokenKind"/> for the string literal.
     /// </summary>
     public ulong Data => _data;
 

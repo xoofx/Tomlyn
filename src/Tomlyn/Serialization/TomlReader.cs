@@ -3,6 +3,7 @@ using System.IO;
 using Tomlyn.Helpers;
 using Tomlyn.Parsing;
 using Tomlyn.Syntax;
+using Tomlyn.Text;
 
 namespace Tomlyn.Serialization;
 
@@ -19,7 +20,7 @@ public sealed class TomlReader
     private TokenKind _currentStringTokenKind;
     private TomlDateTime _currentDateTime;
     private bool _hasDateTime;
-    private SourceSpan? _currentSpan;
+    private TomlSourceSpan? _currentSpan;
     private TomlTokenType _tokenType;
 
     private TomlReader(TomlParser parser, TomlSerializerOptions options)
@@ -100,7 +101,7 @@ public sealed class TomlReader
     /// <summary>
     /// Gets the optional source span associated with the current token.
     /// </summary>
-    public SourceSpan? CurrentSpan => _currentSpan;
+    public TomlSourceSpan? CurrentSpan => _currentSpan;
 
     /// <summary>
     /// Advances the reader to the next token.

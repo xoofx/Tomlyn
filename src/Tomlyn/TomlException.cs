@@ -1,5 +1,6 @@
 using System;
 using Tomlyn.Syntax;
+using Tomlyn.Text;
 
 namespace Tomlyn;
 
@@ -37,18 +38,18 @@ public class TomlException : Exception
     /// <summary>
     /// Initializes a new instance of the <see cref="TomlException"/> class with a specific source location.
     /// </summary>
-    public TomlException(SourceSpan span, string message) : this(span, message, innerException: null)
+    public TomlException(TomlSourceSpan span, string message) : this(span, message, innerException: null)
     {
     }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TomlException"/> class with a specific source location.
     /// </summary>
-    public TomlException(SourceSpan span, string message, Exception? innerException) : base(Format(span, message), innerException)
+    public TomlException(TomlSourceSpan span, string message, Exception? innerException) : base(Format(span, message), innerException)
     {
         Span = span;
         Diagnostics = new DiagnosticsBag();
-        Diagnostics.Error(span, message);
+        Diagnostics.Error(ToLegacySpan(span), message);
     }
 
     /// <summary>
@@ -59,7 +60,7 @@ public class TomlException : Exception
     /// <summary>
     /// Gets the optional source span associated with this exception.
     /// </summary>
-    public SourceSpan? Span { get; }
+    public TomlSourceSpan? Span { get; }
 
     /// <summary>
     /// Gets the 1-based line number associated with this exception, or 0 when unknown.
@@ -71,18 +72,22 @@ public class TomlException : Exception
     /// </summary>
     public int Column => Span?.Start.Column + 1 ?? 0;
 
-    private static string Format(SourceSpan span, string message)
+    private static string Format(TomlSourceSpan span, string message)
     {
-        return new DiagnosticMessage(DiagnosticMessageKind.Error, span, message).ToString();
+        return $"{span.ToStringSimple()} : error : {message}";
     }
 
-    private static SourceSpan? GetFirstSpanOrNull(DiagnosticsBag diagnostics)
+    private static TomlSourceSpan? GetFirstSpanOrNull(DiagnosticsBag diagnostics)
     {
         if (diagnostics is null || diagnostics.Count == 0)
         {
             return null;
         }
 
-        return diagnostics[0].Span;
+        var span = diagnostics[0].Span;
+        return new TomlSourceSpan(span.FileName, new TomlTextPosition(span.Start.Offset, span.Start.Line, span.Start.Column), new TomlTextPosition(span.End.Offset, span.End.Line, span.End.Column));
     }
+
+    private static SourceSpan ToLegacySpan(TomlSourceSpan span)
+        => new SourceSpan(span.SourceName, new TextPosition(span.Start.Offset, span.Start.Line, span.Start.Column), new TextPosition(span.End.Offset, span.End.Line, span.End.Column));
 }
