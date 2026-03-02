@@ -221,7 +221,7 @@ namespace Tomlyn.Syntax
             }
 
             var name = GetStringFromBasic(key.Key!);
-            if (string.IsNullOrWhiteSpace(name)) return false;
+            if (name is null) return false;
 
             _currentPath.Add(name!);
 
@@ -230,7 +230,7 @@ namespace Tomlyn.Syntax
             {
                 AddObjectPath(key, kind, true, fromDottedKeys);
                 var dotItem = GetStringFromBasic(items.GetChild(i)!.Key!)!;
-                if (string.IsNullOrWhiteSpace(dotItem)) return false;
+                if (dotItem is null) return false;
                 _currentPath.Add(dotItem);
             }
 
@@ -249,6 +249,18 @@ namespace Tomlyn.Syntax
 
             if (_maps.TryGetValue(currentPath, out var existingValue))
             {
+                // TOML 1.1: if a super-table was created implicitly by a dotted table header (e.g. `[a.b]`),
+                // defining it later explicitly (`[a]`) is invalid (toml-test: super-twice.toml, append-with-dotted-keys-04.toml).
+                if (existingValue.Kind == ObjectKind.Table &&
+                    existingValue.IsImplicit &&
+                    !existingValue.FromDottedKeys &&
+                    kind == ObjectKind.Table &&
+                    !isImplicit)
+                {
+                    _diagnostics.Error(node.Span, $"The table `{currentPath}` was implicitly created by a dotted table header and cannot be defined explicitly.");
+                    return existingValue;
+                }
+
                 // The following tests are the trickiest to get right with the spec, as the behavior
                 // of TOML Table/TableArray with implicit/non implicit and dotted keys is quite complicated.
 
@@ -272,6 +284,16 @@ namespace Tomlyn.Syntax
                 else if (existingValue.Kind == ObjectKind.TableArray)
                 {
                     _currentPath.Add(existingValue.ArrayIndex);
+                }
+                else if (existingValue.IsImplicit && !isImplicit)
+                {
+                    // Upgrade an implicit table created by dotted keys to an explicit table so further redefinitions are rejected.
+                    var upgraded = new ObjectPathValue(node, existingValue.Kind, isImplicit: false, existingValue.FromDottedKeys)
+                    {
+                        ArrayIndex = existingValue.ArrayIndex,
+                    };
+                    _maps[currentPath] = upgraded;
+                    existingValue = upgraded;
                 }
             }
             else
