@@ -425,6 +425,17 @@ namespace Tomlyn.Parsing
                         var item = Open<InlineTableItemSyntax>();
                         item.KeyValue = ParseKeyValue(false);
 
+                        while (_token.Kind == TokenKind.NewLine)
+                        {
+                            _currentTrivias.Add(new SyntaxTrivia
+                            {
+                                Span = GetSpanForToken(_token),
+                                Kind = _token.Kind,
+                                Text = _token.GetText(_lexer.Source),
+                            });
+                            NextToken();
+                        }
+
                         if (_token.Kind == TokenKind.Comma)
                         {
                             item.Comma = EatToken();
