@@ -36,6 +36,10 @@ namespace Tomlyn.Tests
             @"\invalid\local-time\no-secs.toml",
             @"\invalid\string\basic-byte-escapes.toml",   // \xHH basic string escape
             @"\invalid\inline-table\trailing-comma.toml", // trailing commas in inline tables
+            @"\invalid\inline-table\linebreak-01.toml",   // TOML 1.1 allows newlines in inline tables
+            @"\invalid\inline-table\linebreak-02.toml",
+            @"\invalid\inline-table\linebreak-03.toml",
+            @"\invalid\inline-table\linebreak-04.toml",
         ];
 
         [TestCaseSource("ListTomlFiles", new object[] { ValidSpec }, Category = "toml-test")]
