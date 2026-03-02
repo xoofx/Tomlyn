@@ -37,6 +37,48 @@ public class NewApiReflectionPocoTests
         public int Value { get; } = 42;
     }
 
+    private sealed class JsonConstructorModel
+    {
+        public JsonConstructorModel(int value)
+        {
+            Value = value;
+        }
+
+        public int Value { get; }
+    }
+
+    private sealed class AnnotatedJsonConstructorModel
+    {
+        public AnnotatedJsonConstructorModel()
+        {
+            Value = -1;
+        }
+
+        [JsonConstructor]
+        public AnnotatedJsonConstructorModel(int value)
+        {
+            Value = value;
+        }
+
+        public int Value { get; }
+    }
+
+    private sealed class SingleCtorModel
+    {
+        public SingleCtorModel(string name)
+        {
+            Name = name;
+        }
+
+        public string Name { get; }
+    }
+
+    private sealed class RequiredModel
+    {
+        [JsonRequired]
+        public int Value { get; set; }
+    }
+
     [Test]
     public void SerializeDeserialize_Poco_UsesReflectionFallback()
     {
@@ -88,5 +130,35 @@ public class NewApiReflectionPocoTests
         var toml = TomlSerializer.Serialize(new ReadOnlyPropertyModel());
         Assert.That(toml, Does.Contain("Value"));
         Assert.That(toml, Does.Contain("42"));
+    }
+
+    [Test]
+    public void Deserialize_UsesSinglePublicConstructor_WhenNoParameterlessExists()
+    {
+        var model = TomlSerializer.Deserialize<SingleCtorModel>("Name = \"Ada\"\n");
+        Assert.That(model, Is.Not.Null);
+        Assert.That(model!.Name, Is.EqualTo("Ada"));
+    }
+
+    [Test]
+    public void Deserialize_BindsConstructorParameter_ByMemberName()
+    {
+        var model = TomlSerializer.Deserialize<JsonConstructorModel>("Value = 5\n");
+        Assert.That(model, Is.Not.Null);
+        Assert.That(model!.Value, Is.EqualTo(5));
+    }
+
+    [Test]
+    public void Deserialize_UsesJsonConstructor_WhenAnnotated()
+    {
+        var model = TomlSerializer.Deserialize<AnnotatedJsonConstructorModel>("Value = 6\n");
+        Assert.That(model, Is.Not.Null);
+        Assert.That(model!.Value, Is.EqualTo(6));
+    }
+
+    [Test]
+    public void Deserialize_ThrowsWhenRequiredMemberMissing()
+    {
+        Assert.Throws<TomlException>(() => TomlSerializer.Deserialize<RequiredModel>("Other = 1\n"));
     }
 }
