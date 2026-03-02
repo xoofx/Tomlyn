@@ -249,18 +249,6 @@ namespace Tomlyn.Syntax
 
             if (_maps.TryGetValue(currentPath, out var existingValue))
             {
-                // TOML 1.1: if a super-table was created implicitly by a dotted table header (e.g. `[a.b]`),
-                // defining it later explicitly (`[a]`) is invalid (toml-test: super-twice.toml, append-with-dotted-keys-04.toml).
-                if (existingValue.Kind == ObjectKind.Table &&
-                    existingValue.IsImplicit &&
-                    !existingValue.FromDottedKeys &&
-                    kind == ObjectKind.Table &&
-                    !isImplicit)
-                {
-                    _diagnostics.Error(node.Span, $"The table `{currentPath}` was implicitly created by a dotted table header and cannot be defined explicitly.");
-                    return existingValue;
-                }
-
                 // The following tests are the trickiest to get right with the spec, as the behavior
                 // of TOML Table/TableArray with implicit/non implicit and dotted keys is quite complicated.
 
