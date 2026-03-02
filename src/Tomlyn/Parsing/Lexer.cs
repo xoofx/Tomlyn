@@ -205,6 +205,8 @@ namespace Tomlyn.Parsing
                         NextChar();
                         break;
                     }
+
+                    AddError($"Invalid \\r not followed by \\n", start, start);
                     // case of \r
                     _token = new SyntaxTokenValue(TokenKind.NewLine, start, start);
                     break;
@@ -924,6 +926,11 @@ namespace Tomlyn.Parsing
             continue_parsing_string:
             while (_c != '\"' && _c != Eof)
             {
+                if (_c == '\r' && PeekChar() != '\n')
+                {
+                    AddError($"Invalid \\r not followed by \\n", _position, _position);
+                }
+
                 if (!TryReadEscapeChar(ref end))
                 {
                     if (!isMultiLine && CharHelper.IsNewLine(_c))
@@ -1005,10 +1012,15 @@ namespace Tomlyn.Parsing
             // Skip any white spaces until the next line
             if (_c == '\r')
             {
+                var start = _position;
                 NextChar();
                 if (_c == '\n')
                 {
                     NextChar();
+                }
+                else
+                {
+                    AddError($"Invalid \\r not followed by \\n", start, start);
                 }
             }
             else if (_c == '\n')
@@ -1188,6 +1200,11 @@ namespace Tomlyn.Parsing
             continue_parsing_string:
             while (_c != '\'' && _c != Eof)
             {
+                if (_c == '\r' && PeekChar() != '\n')
+                {
+                    AddError($"Invalid \\r not followed by \\n", _position, _position);
+                }
+
                 if (!isMultiLine && CharHelper.IsNewLine(_c))
                 {
                     AddError("Invalid newline in a string", _position, _position);
