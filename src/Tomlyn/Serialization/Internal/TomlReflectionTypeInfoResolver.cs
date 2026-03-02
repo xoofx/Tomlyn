@@ -97,23 +97,64 @@ internal static class TomlReflectionTypeInfoResolver
                 continue;
             }
 
-            if (property.SetMethod is null)
-            {
-                continue;
-            }
-
-            if (!property.SetMethod.IsPublic && !HasIncludeAttribute(property))
-            {
-                continue;
-            }
-
-            var name = GetSerializedName(property, options);
+            var name = GetSerializedName(property, property.Name, options);
             if (name is null)
             {
                 continue;
             }
 
-            members.Add(new MemberModel(property, name, GetOrder(property), ignore.WriteIgnoreCondition, GetDefaultValue(property.PropertyType)));
+            Action<object, object?>? setter = null;
+            if (property.SetMethod is not null && (property.SetMethod.IsPublic || HasIncludeAttribute(property)))
+            {
+                setter = (instance, value) => property.SetValue(instance, value);
+            }
+
+            members.Add(new MemberModel(
+                property,
+                name,
+                property.PropertyType,
+                instance => property.GetValue(instance),
+                setter,
+                GetOrder(property),
+                ignore.WriteIgnoreCondition,
+                GetDefaultValue(property.PropertyType)));
+        }
+
+        var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public);
+        foreach (var field in fields)
+        {
+            if (!HasIncludeAttribute(field))
+            {
+                continue;
+            }
+
+            var ignore = GetIgnoreBehavior(field);
+            if (ignore.IgnoreAlways)
+            {
+                continue;
+            }
+
+            var name = GetSerializedName(field, field.Name, options);
+            if (name is null)
+            {
+                continue;
+            }
+
+            Action<object, object?>? setter = null;
+            if (!field.IsInitOnly && !field.IsLiteral)
+            {
+                setter = (instance, value) => field.SetValue(instance, value);
+            }
+
+            members.Add(new MemberModel(
+                field,
+                name,
+                field.FieldType,
+                instance => field.GetValue(instance),
+                setter,
+                GetOrder(field),
+                ignore.WriteIgnoreCondition,
+                GetDefaultValue(field.FieldType)));
         }
 
         return OrderMembers(members, options);
@@ -179,15 +220,15 @@ internal static class TomlReflectionTypeInfoResolver
         }
     }
 
-    private static string? GetSerializedName(PropertyInfo property, TomlSerializerOptions options)
+    private static string? GetSerializedName(MemberInfo member, string defaultName, TomlSerializerOptions options)
     {
-        var tomlName = property.GetCustomAttribute<TomlPropertyNameAttribute>(inherit: true);
+        var tomlName = member.GetCustomAttribute<TomlPropertyNameAttribute>(inherit: true);
         if (tomlName is not null)
         {
             return tomlName.Name;
         }
 
-        var jsonName = property.GetCustomAttribute<JsonPropertyNameAttribute>(inherit: true);
+        var jsonName = member.GetCustomAttribute<JsonPropertyNameAttribute>(inherit: true);
         if (jsonName is not null)
         {
             return jsonName.Name;
@@ -196,10 +237,10 @@ internal static class TomlReflectionTypeInfoResolver
         var namingPolicy = options.PropertyNamingPolicy;
         if (namingPolicy is not null)
         {
-            return namingPolicy.ConvertName(property.Name);
+            return namingPolicy.ConvertName(defaultName);
         }
 
-        return property.Name;
+        return defaultName;
     }
 
     private static int GetOrder(MemberInfo member)
@@ -226,7 +267,7 @@ internal static class TomlReflectionTypeInfoResolver
         {
             try
             {
-                return m.Property.MetadataToken;
+                return m.Member.MetadataToken;
             }
             catch
             {
@@ -247,8 +288,11 @@ internal static class TomlReflectionTypeInfoResolver
     }
 
     private readonly record struct MemberModel(
-        PropertyInfo Property,
+        MemberInfo Member,
         string SerializedName,
+        Type MemberType,
+        Func<object, object?> Getter,
+        Action<object, object?>? Setter,
         int Order,
         TomlIgnoreCondition? WriteIgnoreCondition,
         object? DefaultValue);
@@ -299,7 +343,7 @@ internal static class TomlReflectionTypeInfoResolver
             for (var i = 0; i < _members.Count; i++)
             {
                 var member = _members[i];
-                var memberValue = member.Property.GetValue(value);
+                var memberValue = member.Getter(value);
 
                 var ignoreCondition = member.WriteIgnoreCondition ?? Options.DefaultIgnoreCondition;
                 if (ShouldIgnoreValue(memberValue, ignoreCondition, member.DefaultValue))
@@ -308,8 +352,7 @@ internal static class TomlReflectionTypeInfoResolver
                 }
 
                 writer.WritePropertyName(member.SerializedName);
-                var memberType = member.Property.PropertyType;
-                var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, memberType);
+                var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, member.MemberType);
                 typeInfo.Write(writer, memberValue);
             }
             writer.WriteEndTable();
@@ -353,10 +396,15 @@ internal static class TomlReflectionTypeInfoResolver
                     var member = _members[memberIndex];
                     reader.Read(); // value
 
-                    var memberType = member.Property.PropertyType;
-                    var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, memberType);
+                    if (member.Setter is null)
+                    {
+                        reader.Skip();
+                        continue;
+                    }
+
+                    var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, member.MemberType);
                     var memberValue = typeInfo.ReadAsObject(reader);
-                    member.Property.SetValue(instance, memberValue);
+                    member.Setter(instance, memberValue);
                     continue;
                 }
 

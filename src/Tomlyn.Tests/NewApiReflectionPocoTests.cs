@@ -20,6 +20,23 @@ public class NewApiReflectionPocoTests
         public long Age { get; set; }
     }
 
+    private sealed class PrivateSetterModel
+    {
+        [JsonInclude]
+        public int Value { get; private set; }
+    }
+
+    private sealed class IncludedFieldModel
+    {
+        [JsonInclude]
+        public int Value;
+    }
+
+    private sealed class ReadOnlyPropertyModel
+    {
+        public int Value { get; } = 42;
+    }
+
     [Test]
     public void SerializeDeserialize_Poco_UsesReflectionFallback()
     {
@@ -46,5 +63,30 @@ public class NewApiReflectionPocoTests
         Assert.That(person!.Name, Is.EqualTo("Ada"));
         Assert.That(person.Age, Is.EqualTo(37));
     }
-}
 
+    [Test]
+    public void Deserialize_PrivateSetter_WithJsonInclude_Works()
+    {
+        var model = TomlSerializer.Deserialize<PrivateSetterModel>("Value = 123\n");
+        Assert.That(model, Is.Not.Null);
+        Assert.That(model!.Value, Is.EqualTo(123));
+    }
+
+    [Test]
+    public void SerializeDeserialize_PublicField_WithJsonInclude_Works()
+    {
+        var original = new IncludedFieldModel { Value = 7 };
+        var toml = TomlSerializer.Serialize(original);
+        var roundtrip = TomlSerializer.Deserialize<IncludedFieldModel>(toml);
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.Value, Is.EqualTo(7));
+    }
+
+    [Test]
+    public void Serialize_ReadOnlyProperty_IsIncluded()
+    {
+        var toml = TomlSerializer.Serialize(new ReadOnlyPropertyModel());
+        Assert.That(toml, Does.Contain("Value"));
+        Assert.That(toml, Does.Contain("42"));
+    }
+}
