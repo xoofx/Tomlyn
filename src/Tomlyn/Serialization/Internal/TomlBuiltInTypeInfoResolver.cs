@@ -13,17 +13,43 @@ internal static class TomlBuiltInTypeInfoResolver
         ArgumentGuard.ThrowIfNull(type, nameof(type));
         ArgumentGuard.ThrowIfNull(options, nameof(options));
 
+        if (type == typeof(char)) return new BuiltInTomlTypeInfo<char>(options, TomlCharConverter.Instance);
         if (type == typeof(string)) return new BuiltInTomlTypeInfo<string>(options, TomlStringConverter.Instance);
         if (type == typeof(bool)) return new BuiltInTomlTypeInfo<bool>(options, TomlBooleanConverter.Instance);
+        if (type == typeof(sbyte)) return new BuiltInTomlTypeInfo<sbyte>(options, TomlSByteConverter.Instance);
+        if (type == typeof(byte)) return new BuiltInTomlTypeInfo<byte>(options, TomlByteConverter.Instance);
+        if (type == typeof(short)) return new BuiltInTomlTypeInfo<short>(options, TomlInt16Converter.Instance);
+        if (type == typeof(ushort)) return new BuiltInTomlTypeInfo<ushort>(options, TomlUInt16Converter.Instance);
+        if (type == typeof(int)) return new BuiltInTomlTypeInfo<int>(options, TomlInt32Converter.Instance);
+        if (type == typeof(uint)) return new BuiltInTomlTypeInfo<uint>(options, TomlUInt32Converter.Instance);
         if (type == typeof(long)) return new BuiltInTomlTypeInfo<long>(options, TomlInt64Converter.Instance);
+        if (type == typeof(ulong)) return new BuiltInTomlTypeInfo<ulong>(options, TomlUInt64Converter.Instance);
+        if (type == typeof(nint)) return new BuiltInTomlTypeInfo<nint>(options, TomlNIntConverter.Instance);
+        if (type == typeof(nuint)) return new BuiltInTomlTypeInfo<nuint>(options, TomlNUIntConverter.Instance);
+        if (type == typeof(float)) return new BuiltInTomlTypeInfo<float>(options, TomlSingleConverter.Instance);
         if (type == typeof(double)) return new BuiltInTomlTypeInfo<double>(options, TomlDoubleConverter.Instance);
+        if (type == typeof(decimal)) return new BuiltInTomlTypeInfo<decimal>(options, TomlDecimalConverter.Instance);
+
+        if (type == typeof(DateTime)) return new BuiltInTomlTypeInfo<DateTime>(options, TomlDateTimeConverter.Instance);
+        if (type == typeof(DateTimeOffset)) return new BuiltInTomlTypeInfo<DateTimeOffset>(options, TomlDateTimeOffsetConverter.Instance);
         if (type == typeof(TomlDateTime)) return new BuiltInTomlTypeInfo<TomlDateTime>(options, TomlTomlDateTimeConverter.Instance);
+
+        #if NET6_0_OR_GREATER
+        if (type == typeof(DateOnly)) return new BuiltInTomlTypeInfo<DateOnly>(options, TomlDateOnlyConverter.Instance);
+        if (type == typeof(TimeOnly)) return new BuiltInTomlTypeInfo<TimeOnly>(options, TomlTimeOnlyConverter.Instance);
+        #endif
+
+        if (type == typeof(Guid)) return new BuiltInTomlTypeInfo<Guid>(options, TomlGuidConverter.Instance);
+        if (type == typeof(TimeSpan)) return new BuiltInTomlTypeInfo<TimeSpan>(options, TomlTimeSpanConverter.Instance);
+        if (type == typeof(Uri)) return new BuiltInTomlTypeInfo<Uri>(options, TomlUriConverter.Instance);
+        if (type == typeof(Version)) return new BuiltInTomlTypeInfo<Version>(options, TomlVersionConverter.Instance);
 
         if (type == typeof(TomlTable)) return new BuiltInTomlTypeInfo<TomlTable>(options, TomlTomlTableConverter.Instance);
         if (type == typeof(TomlArray)) return new BuiltInTomlTypeInfo<TomlArray>(options, TomlTomlArrayConverter.Instance);
         if (type == typeof(TomlTableArray)) return new BuiltInTomlTypeInfo<TomlTableArray>(options, TomlTomlTableArrayConverter.Instance);
 
         if (type == typeof(object)) return new BuiltInUntypedTomlTypeInfo(type, options, TomlUntypedObjectConverter.Instance);
+        if (type.IsEnum) return new BuiltInUntypedTomlTypeInfo(type, options, TomlEnumConverter.Instance);
 
         var collection = TryCreateCollectionTypeInfo(type, options);
         if (collection is not null)

@@ -245,6 +245,23 @@ public sealed class TomlReader
     }
 
     /// <summary>
+    /// Gets the raw source text represented by the current token.
+    /// </summary>
+    /// <remarks>
+    /// This API is intended for custom converters that need to preserve the original literal (for example, to implement exact parsing).
+    /// </remarks>
+    /// <exception cref="TomlException">The current token does not have a source span.</exception>
+    public string GetRawText()
+    {
+        if (_currentSpan is not { } span)
+        {
+            throw CreateException("The current token does not have a source span.");
+        }
+
+        return _parser.GetText(span) ?? string.Empty;
+    }
+
+    /// <summary>
     /// Gets the current integer value.
     /// </summary>
     public long GetInt64()

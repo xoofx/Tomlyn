@@ -118,19 +118,19 @@ public record struct TomlDateTime(DateTimeOffset DateTime, int SecondPrecision, 
         switch (Kind)
         {
             case TomlDateTimeKind.LocalDateTime:
-                if (DateTime.Millisecond == 0)
+                if (SecondPrecision == 0)
                     return DateTime.ToString("yyyy-MM-dd'T'HH:mm:ss", provider);
                 return DateTime.ToString($"yyyy-MM-dd'T'HH:mm:ss.{GetFormatPrecision(SecondPrecision)}", provider);
             case TomlDateTimeKind.LocalDate:
                 return DateTime.ToString("yyyy-MM-dd", provider);
             case TomlDateTimeKind.LocalTime:
-                if (DateTime.Millisecond == 0)
+                if (SecondPrecision == 0)
                     return DateTime.ToString("HH:mm:ss", provider);
                 return DateTime.ToString($"HH:mm:ss.{GetFormatPrecision(SecondPrecision)}", provider);
             case TomlDateTimeKind.OffsetDateTimeByNumber:
             {
                 var time = DateTime;
-                if (time.Millisecond == 0)
+                if (SecondPrecision == 0)
                     return time.ToString("yyyy-MM-dd'T'HH:mm:sszzz", provider);
                 return time.ToString($"yyyy-MM-dd'T'HH:mm:ss.{GetFormatPrecision(SecondPrecision)}zzz", provider);
             }
@@ -138,7 +138,7 @@ public record struct TomlDateTime(DateTimeOffset DateTime, int SecondPrecision, 
             default:
             {
                 var time = DateTime.ToUniversalTime();
-                if (time.Millisecond == 0)
+                if (SecondPrecision == 0)
                     return time.ToString("yyyy-MM-dd'T'HH:mm:ssZ", provider);
                 return time.ToString($"yyyy-MM-dd'T'HH:mm:ss.{GetFormatPrecision(SecondPrecision)}Z", provider);
             }
