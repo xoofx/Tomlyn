@@ -32,18 +32,25 @@ internal static class TomlTypeInfoResolverPipeline
         var fromResolver = options.TypeInfoResolver?.GetTypeInfo(type, options);
         if (fromResolver is not null)
         {
-            return fromResolver;
+            return TomlPolymorphicTypeInfo.TryWrap(fromResolver);
         }
 
         var builtIn = TomlBuiltInTypeInfoResolver.GetTypeInfo(type, options);
         if (builtIn is not null)
         {
-            return builtIn;
+            return TomlPolymorphicTypeInfo.TryWrap(builtIn);
         }
 
         if (TomlSerializerFeatureSwitches.IsReflectionEnabledByDefaultCalculated)
         {
-            return ResolveFromReflection(options, type);
+            var typeInfo = ResolveFromReflection(options, type);
+            return TomlPolymorphicTypeInfo.TryWrap(typeInfo);
+        }
+
+        var polymorphicDispatch = TomlPolymorphicTypeInfo.TryCreate(type, options, baseTypeInfo: null);
+        if (polymorphicDispatch is not null)
+        {
+            return polymorphicDispatch;
         }
 
         throw new InvalidOperationException(
@@ -163,7 +170,18 @@ internal static class TomlTypeInfoResolverPipeline
         return cache.GetOrAdd(type, t =>
         {
             var typeInfo = TomlReflectionTypeInfoResolver.TryCreateTypeInfo(t, options);
-            return typeInfo ?? throw new InvalidOperationException(
+            if (typeInfo is not null)
+            {
+                return typeInfo;
+            }
+
+            var dispatch = TomlPolymorphicTypeInfo.TryCreate(t, options, baseTypeInfo: null);
+            if (dispatch is not null)
+            {
+                return dispatch;
+            }
+
+            throw new InvalidOperationException(
                 $"No TOML metadata is available for type '{t.FullName}'. " +
                 $"Reflection-based metadata could not be generated for this type. " +
                 $"Provide {nameof(TomlSerializerOptions)}.{nameof(TomlSerializerOptions.TypeInfoResolver)} (source generation) or a custom resolver.");

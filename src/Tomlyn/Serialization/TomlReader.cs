@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Tomlyn.Helpers;
 using Tomlyn.Parsing;
@@ -13,7 +14,11 @@ namespace Tomlyn.Serialization;
 public sealed class TomlReader
 {
     private readonly TomlSerializerOptions _options;
-    private readonly TomlParser _parser;
+    private readonly TomlParser? _parser;
+    private readonly TomlReaderToken[]? _buffer;
+    private readonly string? _filteredPropertyName;
+    private int _bufferIndex;
+    private int _bufferDepth;
     private string? _currentPropertyName;
     private string? _currentString;
     private ulong _currentData;
@@ -21,11 +26,27 @@ public sealed class TomlReader
     private TomlDateTime _currentDateTime;
     private bool _hasDateTime;
     private TomlSourceSpan? _currentSpan;
+    private string? _currentRawText;
     private TomlTokenType _tokenType;
 
     private TomlReader(TomlParser parser, TomlSerializerOptions options)
     {
         _parser = parser;
+        _buffer = null;
+        _filteredPropertyName = null;
+        _bufferIndex = 0;
+        _bufferDepth = 0;
+        _options = options ?? TomlSerializerOptions.Default;
+        _tokenType = TomlTokenType.None;
+    }
+
+    private TomlReader(TomlReaderToken[] buffer, TomlSerializerOptions options, string? filteredPropertyName)
+    {
+        _parser = null;
+        _buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
+        _filteredPropertyName = filteredPropertyName;
+        _bufferIndex = 0;
+        _bufferDepth = 0;
         _options = options ?? TomlSerializerOptions.Default;
         _tokenType = TomlTokenType.None;
     }
@@ -73,6 +94,12 @@ public sealed class TomlReader
         return new TomlReader(parser, effectiveOptions);
     }
 
+    internal static TomlReader Create(TomlReaderBuffer buffer, string? filteredPropertyName = null)
+    {
+        ArgumentGuard.ThrowIfNull(buffer, nameof(buffer));
+        return new TomlReader(buffer.Tokens, buffer.Options, filteredPropertyName);
+    }
+
     /// <summary>
     /// Gets the current token type.
     /// </summary>
@@ -115,8 +142,44 @@ public sealed class TomlReader
         _currentDateTime = default;
         _hasDateTime = false;
         _currentSpan = null;
+        _currentRawText = null;
 
-        if (!_parser.MoveNext())
+        if (_buffer is not null)
+        {
+            while (true)
+            {
+                if (_bufferIndex >= _buffer.Length)
+                {
+                    _tokenType = TomlTokenType.EndDocument;
+                    return false;
+                }
+
+                var token = _buffer[_bufferIndex++];
+
+                if (token.TokenType is TomlTokenType.StartTable or TomlTokenType.StartArray)
+                {
+                    _bufferDepth++;
+                }
+                else if (token.TokenType is TomlTokenType.EndTable or TomlTokenType.EndArray)
+                {
+                    _bufferDepth--;
+                }
+
+                if (_filteredPropertyName is not null &&
+                    token.TokenType == TomlTokenType.PropertyName &&
+                    _bufferDepth == 1 &&
+                    string.Equals(token.PropertyName, _filteredPropertyName, StringComparison.Ordinal))
+                {
+                    SkipBufferedValue();
+                    continue;
+                }
+
+                ApplyBufferedToken(token);
+                return true;
+            }
+        }
+
+        if (_parser is null || !_parser.MoveNext())
         {
             _tokenType = TomlTokenType.EndDocument;
             return false;
@@ -151,6 +214,7 @@ public sealed class TomlReader
             case TomlParseEventKind.String:
                 _tokenType = TomlTokenType.String;
                 _currentStringTokenKind = (TokenKind)parseEvent.Data;
+                _currentString = parseEvent.StringValue;
                 break;
             case TomlParseEventKind.Integer:
                 _tokenType = TomlTokenType.Integer;
@@ -174,6 +238,50 @@ public sealed class TomlReader
         }
 
         return true;
+    }
+
+    private void ApplyBufferedToken(TomlReaderToken token)
+    {
+        _tokenType = token.TokenType;
+        _currentSpan = token.Span;
+        _currentRawText = token.RawText;
+        _currentPropertyName = token.PropertyName;
+        _currentString = token.StringValue;
+        _currentData = token.Data;
+        _currentStringTokenKind = token.StringTokenKind;
+        _currentDateTime = token.DateTime;
+        _hasDateTime = token.HasDateTime;
+    }
+
+    private void SkipBufferedValue()
+    {
+        if (_buffer is null)
+        {
+            return;
+        }
+
+        if (_bufferIndex >= _buffer.Length)
+        {
+            return;
+        }
+
+        var valueToken = _buffer[_bufferIndex++];
+        if (valueToken.TokenType is TomlTokenType.StartTable or TomlTokenType.StartArray)
+        {
+            var depth = 1;
+            while (_bufferIndex < _buffer.Length && depth > 0)
+            {
+                var next = _buffer[_bufferIndex++];
+                if (next.TokenType is TomlTokenType.StartTable or TomlTokenType.StartArray)
+                {
+                    depth++;
+                }
+                else if (next.TokenType is TomlTokenType.EndTable or TomlTokenType.EndArray)
+                {
+                    depth--;
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -221,9 +329,21 @@ public sealed class TomlReader
             return _currentString;
         }
 
+        if (_buffer is not null)
+        {
+            _currentString = string.Empty;
+            return _currentString;
+        }
+
         if (_currentSpan is not { } span)
         {
             throw CreateException("The current token does not have a source span.");
+        }
+
+        if (_parser is null)
+        {
+            _currentString = string.Empty;
+            return _currentString;
         }
 
         var raw = _parser.GetText(span);
@@ -256,6 +376,16 @@ public sealed class TomlReader
         if (_currentSpan is not { } span)
         {
             throw CreateException("The current token does not have a source span.");
+        }
+
+        if (_buffer is not null)
+        {
+            return _currentRawText ?? string.Empty;
+        }
+
+        if (_parser is null)
+        {
+            return string.Empty;
         }
 
         return _parser.GetText(span) ?? string.Empty;
@@ -351,4 +481,118 @@ public sealed class TomlReader
 
         return new TomlException(message);
     }
+
+    internal TomlReaderBuffer CaptureCurrentValueToBuffer()
+    {
+        if (_buffer is not null)
+        {
+            throw new InvalidOperationException("Cannot capture a buffered reader.");
+        }
+
+        var tokens = new List<TomlReaderToken>();
+        tokens.Add(new TomlReaderToken(TomlTokenType.StartDocument, span: null, rawText: null, propertyName: null, stringValue: null, data: 0, stringTokenKind: default, dateTime: default, hasDateTime: false));
+
+        AddCurrentToken(tokens);
+
+        if (_tokenType is TomlTokenType.StartTable or TomlTokenType.StartArray)
+        {
+            var depth = 1;
+            while (depth > 0)
+            {
+                if (!Read())
+                {
+                    break;
+                }
+
+                AddCurrentToken(tokens);
+
+                if (_tokenType is TomlTokenType.StartTable or TomlTokenType.StartArray)
+                {
+                    depth++;
+                }
+                else if (_tokenType is TomlTokenType.EndTable or TomlTokenType.EndArray)
+                {
+                    depth--;
+                }
+            }
+
+            Read(); // advance past container end
+        }
+        else
+        {
+            Read();
+        }
+
+        tokens.Add(new TomlReaderToken(TomlTokenType.EndDocument, span: null, rawText: null, propertyName: null, stringValue: null, data: 0, stringTokenKind: default, dateTime: default, hasDateTime: false));
+
+        return new TomlReaderBuffer(tokens.ToArray(), _options);
+    }
+
+    private void AddCurrentToken(List<TomlReaderToken> tokens)
+    {
+        var rawText = _currentSpan is { } span && _parser is not null
+            ? _parser.GetText(span) ?? string.Empty
+            : null;
+
+        var stringValue = _tokenType == TomlTokenType.String ? GetString() : null;
+
+        tokens.Add(new TomlReaderToken(
+            _tokenType,
+            _currentSpan,
+            rawText,
+            _currentPropertyName,
+            stringValue,
+            _currentData,
+            _currentStringTokenKind,
+            _currentDateTime,
+            _hasDateTime));
+    }
+}
+
+internal readonly struct TomlReaderToken
+{
+    public TomlReaderToken(
+        TomlTokenType tokenType,
+        TomlSourceSpan? span,
+        string? rawText,
+        string? propertyName,
+        string? stringValue,
+        ulong data,
+        TokenKind stringTokenKind,
+        TomlDateTime dateTime,
+        bool hasDateTime)
+    {
+        TokenType = tokenType;
+        Span = span;
+        RawText = rawText;
+        PropertyName = propertyName;
+        StringValue = stringValue;
+        Data = data;
+        StringTokenKind = stringTokenKind;
+        DateTime = dateTime;
+        HasDateTime = hasDateTime;
+    }
+
+    public TomlTokenType TokenType { get; }
+    public TomlSourceSpan? Span { get; }
+    public string? RawText { get; }
+    public string? PropertyName { get; }
+    public string? StringValue { get; }
+    public ulong Data { get; }
+    public TokenKind StringTokenKind { get; }
+    public TomlDateTime DateTime { get; }
+    public bool HasDateTime { get; }
+}
+
+internal sealed class TomlReaderBuffer
+{
+    public TomlReaderBuffer(TomlReaderToken[] tokens, TomlSerializerOptions options)
+    {
+        Tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
+        Options = options ?? TomlSerializerOptions.Default;
+    }
+
+    public TomlReaderToken[] Tokens { get; }
+
+    public TomlSerializerOptions Options { get; }
 }

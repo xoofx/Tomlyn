@@ -130,7 +130,7 @@ public sealed class TomlConverterAttribute : TomlAttribute
 /// <summary>
 /// Marks a base type as polymorphic for TOML serialization.
 /// </summary>
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface, AllowMultiple = false)]
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface, AllowMultiple = false, Inherited = false)]
 public sealed class TomlPolymorphicAttribute : TomlAttribute
 {
     /// <summary>
@@ -142,7 +142,7 @@ public sealed class TomlPolymorphicAttribute : TomlAttribute
 /// <summary>
 /// Registers a derived type for polymorphic TOML serialization.
 /// </summary>
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface, AllowMultiple = true)]
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface, AllowMultiple = true, Inherited = false)]
 public sealed class TomlDerivedTypeAttribute : TomlAttribute
 {
     /// <summary>

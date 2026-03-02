@@ -31,6 +31,8 @@ public sealed class TomlWriter
 
     internal TextWriter Writer { get; }
 
+    internal object? RootValue => _root;
+
     /// <summary>
     /// Gets the options instance used by this writer.
     /// </summary>
