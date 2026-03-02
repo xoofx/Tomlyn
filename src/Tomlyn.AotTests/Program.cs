@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using Tomlyn;
 using Tomlyn.Model;
-using Tomlyn.Syntax;
+using Tomlyn.Serialization;
 
 namespace Tomlyn.AotTests;
 
@@ -109,10 +110,20 @@ enabled = true
 
     private static int Main()
     {
-        var options = new TomlModelOptions();
-        if (!Toml.TryToModel<RootConfig>(ConfigToml, out var model, out var diagnostics, options: options))
+        RootConfig? model;
+        try
         {
-            PrintDiagnostics(diagnostics);
+            model = TomlSerializer.Deserialize(ConfigToml, AotTomlSerializerContext.Default.RootConfig);
+        }
+        catch (TomlException ex)
+        {
+            PrintException(ex);
+            return 1;
+        }
+
+        if (model is null)
+        {
+            Console.Error.WriteLine("TOML deserialize returned null.");
             return 1;
         }
 
@@ -131,15 +142,14 @@ enabled = true
         return 0;
     }
 
-    private static void PrintDiagnostics(DiagnosticsBag? diagnostics)
+    private static void PrintException(TomlException exception)
     {
         Console.Error.WriteLine("TOML parse failed.");
-        if (diagnostics is null)
+        Console.Error.WriteLine(exception.Message);
+        if (exception.Line != 0 && exception.Column != 0)
         {
-            return;
+            Console.Error.WriteLine($"Location: line {exception.Line}, column {exception.Column}");
         }
-
-        Console.Error.WriteLine(diagnostics.ToString());
     }
 
     private static List<string> ValidateModel(RootConfig model)
@@ -214,7 +224,12 @@ enabled = true
         try
         {
             var tomlText = File.ReadAllText(twitterPath);
-            var table = Toml.ToModel(tomlText);
+            var table = TomlSerializer.Deserialize<TomlTable>(tomlText);
+            if (table is null)
+            {
+                errors.Add("twitter.toml parse returned null.");
+                return errors;
+            }
             if (!table.TryGetValue("statuses", out var statuses) || statuses is not TomlTableArray tableArray || tableArray.Count == 0)
             {
                 errors.Add("twitter.toml parse missing statuses table array.");
@@ -241,7 +256,6 @@ enabled = true
         return null;
     }
 
-    [TomlModel]
     internal sealed class RootConfig
     {
         public ServerConfig? Server { get; set; }
@@ -303,3 +317,12 @@ enabled = true
         public bool Enabled { get; set; }
     }
 }
+
+#pragma warning disable SYSLIB1224
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+[JsonSerializable(typeof(Program.RootConfig))]
+[JsonSerializable(typeof(TomlTable))]
+internal partial class AotTomlSerializerContext : TomlSerializerContext
+{
+}
+#pragma warning restore SYSLIB1224
