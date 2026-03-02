@@ -129,7 +129,7 @@ public record struct TomlDateTime(DateTimeOffset DateTime, int SecondPrecision, 
                 return DateTime.ToString($"HH:mm:ss.{GetFormatPrecision(SecondPrecision)}", provider);
             case TomlDateTimeKind.OffsetDateTimeByNumber:
             {
-                var time = DateTime.ToLocalTime();
+                var time = DateTime;
                 if (time.Millisecond == 0)
                     return time.ToString("yyyy-MM-dd'T'HH:mm:sszzz", provider);
                 return time.ToString($"yyyy-MM-dd'T'HH:mm:ss.{GetFormatPrecision(SecondPrecision)}zzz", provider);
