@@ -72,6 +72,14 @@ public class TomlException : Exception
     /// </summary>
     public int Column => Span?.Start.Column + 1 ?? 0;
 
+    /// <summary>
+    /// Gets the 0-based offset associated with this exception, or 0 when unknown.
+    /// </summary>
+    /// <remarks>
+    /// When parsing UTF-8 inputs, this offset represents a byte offset. When parsing string inputs, this offset represents a character offset.
+    /// </remarks>
+    public int Offset => Span?.Offset ?? 0;
+
     private static string Format(TomlSourceSpan span, string message)
     {
         return $"{span.ToStringSimple()} : error : {message}";
