@@ -117,10 +117,41 @@ namespace Tomlyn.Helpers
 
         public static bool TryParseOffsetDateTime(string str, out TomlDateTime time)
         {
-            if (!TryParseExactWithPrecision(str.ToUpperInvariant(), OffsetDateTimeFormatsByZ,
+            var upper = str.ToUpperInvariant();
+
+            // Enforce RFC 3339/TOML offset format: "Z" or ±HH:MM.
+            // DateTimeOffset parsing is permissive and may accept invalid forms like "+0900"/"+0909".
+            if (!upper.EndsWith("Z", StringComparison.Ordinal))
+            {
+                if (upper.Length < 6)
+                {
+                    time = default;
+                    return false;
+                }
+
+                var signIndex = upper.Length - 6;
+                var sign = upper[signIndex];
+                if (sign != '+' && sign != '-')
+                {
+                    time = default;
+                    return false;
+                }
+
+                if (upper[signIndex + 3] != ':' ||
+                    !char.IsDigit(upper[signIndex + 1]) ||
+                    !char.IsDigit(upper[signIndex + 2]) ||
+                    !char.IsDigit(upper[signIndex + 4]) ||
+                    !char.IsDigit(upper[signIndex + 5]))
+                {
+                    time = default;
+                    return false;
+                }
+            }
+
+            if (!TryParseExactWithPrecision(upper, OffsetDateTimeFormatsByZ,
                     TryParseDateTimeOffset, DateTimeStyles.None, TomlDateTimeKind.OffsetDateTimeByZ, out time))
             {
-                return TryParseExactWithPrecision(str.ToUpperInvariant(), OffsetDateTimeFormatsByNumber,
+                return TryParseExactWithPrecision(upper, OffsetDateTimeFormatsByNumber,
                     TryParseDateTimeOffset, DateTimeStyles.None, TomlDateTimeKind.OffsetDateTimeByNumber, out time);
             }
 
@@ -129,14 +160,15 @@ namespace Tomlyn.Helpers
 
         public static bool TryParseLocalDateTime(string str, out TomlDateTime time)
         {
-            return TryParseExactWithPrecision(str.ToUpperInvariant(), LocalDateTimeFormats, TryParseDateTime, DateTimeStyles.AssumeLocal, TomlDateTimeKind.LocalDateTime,  out time);
+            return TryParseExactWithPrecision(str.ToUpperInvariant(), LocalDateTimeFormats, TryParseDateTime, DateTimeStyles.None, TomlDateTimeKind.LocalDateTime,  out time);
         }
 
         public static bool TryParseLocalDate(string str, out TomlDateTime time)
         {
-            if (DateTime.TryParseExact(str.ToUpperInvariant(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var rawtime))
+            if (DateTime.TryParseExact(str.ToUpperInvariant(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var rawtime))
             {
-                time = new TomlDateTime(rawtime, 0, TomlDateTimeKind.LocalDate);
+                var unspecified = DateTime.SpecifyKind(rawtime, DateTimeKind.Unspecified);
+                time = new TomlDateTime(new DateTimeOffset(unspecified, TimeSpan.Zero), 0, TomlDateTimeKind.LocalDate);
                 return true;
             }
 
@@ -154,7 +186,10 @@ namespace Tomlyn.Helpers
             time = default;
             if (DateTime.TryParseExact(text, format, culture, style, out var rawTime))
             {
-                time = new DateTimeOffset(rawTime);
+                // Local TOML date/time values do not carry a timezone. Avoid applying the machine
+                // local timezone offset which can overflow for extreme values (e.g. year 0001).
+                var unspecified = DateTime.SpecifyKind(rawTime, DateTimeKind.Unspecified);
+                time = new DateTimeOffset(unspecified, TimeSpan.Zero);
                 return true;
             }
 
