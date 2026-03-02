@@ -398,6 +398,9 @@ namespace Tomlyn.Parsing
                 {
                     if (_token.Kind == TokenKind.CloseBrace)
                     {
+                        // Restore newline visibility before consuming the close brace so the outer parser
+                        // can see the end-of-line token for `key = { ... }` assignments.
+                        _hideNewLine = previousHideNewLine;
                         _lexer.State = previousState;
                         inlineTable.CloseBrace = EatToken();
                         break;
