@@ -191,6 +191,32 @@ public sealed class TomlParser
     public TomlParseEvent Current => _current;
 
     /// <summary>
+    /// Gets the current string scalar value by decoding it from the original TOML input.
+    /// </summary>
+    /// <returns>The decoded string value.</returns>
+    /// <exception cref="InvalidOperationException">The current event is not a string scalar.</exception>
+    public string GetString()
+    {
+        if (_current.Kind != TomlParseEventKind.String)
+        {
+            throw new InvalidOperationException($"Expected {TomlParseEventKind.String} but was {_current.Kind}.");
+        }
+
+        if (_current.Span is not { } span)
+        {
+            return string.Empty;
+        }
+
+        var raw = GetText(span);
+        if (raw is null)
+        {
+            return string.Empty;
+        }
+
+        return TomlStringDecoder.Decode(raw, (TokenKind)_current.Data);
+    }
+
+    /// <summary>
     /// Gets the parser options.
     /// </summary>
     public TomlParserOptions ParserOptions => _parserOptions;
@@ -241,9 +267,13 @@ public sealed class TomlParser
         return true;
     }
 
+    internal string? GetText(SourceSpan span) => _core.GetText(span);
+
     private interface IParserCore
     {
         bool MoveNext(out TomlParseEvent parseEvent);
+
+        string? GetText(SourceSpan span);
     }
 
     private sealed class ParserCore<TSourceView, TCharReader> : IParserCore
@@ -271,7 +301,11 @@ public sealed class TomlParser
         {
             _mode = mode;
             _diagnostics = diagnostics;
-            _lexer = new Lexer<TSourceView, TCharReader>(sourceView) { State = LexerState.Key };
+            _lexer = new Lexer<TSourceView, TCharReader>(sourceView)
+            {
+                State = LexerState.Key,
+                DecodeScalars = false,
+            };
             _token = default;
             _initialized = false;
             _terminatedDueToError = false;
@@ -286,6 +320,8 @@ public sealed class TomlParser
             _state = DocumentState.NotStarted;
             _valueSpanStart = default;
         }
+
+        public string? GetText(SourceSpan span) => _lexer.Source.GetString(span.Offset, span.Length);
 
         public bool MoveNext(out TomlParseEvent parseEvent)
         {
@@ -457,7 +493,7 @@ public sealed class TomlParser
                 throw CreateException(CurrentSpan(), "Missing value after `=`.");
             }
 
-            ProduceValueEvent(_valueSpanStart, nextStateAfterScalar: LexerState.Key);
+            ProduceValueEvent(_token.Start, nextStateAfterScalar: LexerState.Key);
             _state = DocumentState.AfterValue;
             return true;
         }
@@ -597,7 +633,7 @@ public sealed class TomlParser
                         throw CreateException(CurrentSpan(), "Missing value after `=` in inline table.");
                     }
 
-                    ProduceValueEvent(_valueSpanStart, nextStateAfterScalar: LexerState.Key);
+                    ProduceValueEvent(_token.Start, nextStateAfterScalar: LexerState.Key);
                     frame.InlineTableState = InlineTableState.AfterValue;
                     _containers[_containers.Count - 1] = frame;
                     return true;
@@ -844,8 +880,7 @@ public sealed class TomlParser
 
             if (_token.Kind.IsString())
             {
-                var text = _token.StringValue ?? string.Empty;
-                _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.String, span: eventSpan, propertyName: null, stringValue: text, data: 0));
+                _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.String, span: eventSpan, propertyName: null, stringValue: null, data: (ulong)_token.Kind));
                 Consume(_token.Kind, nextStateAfterScalar);
                 return;
             }
@@ -908,7 +943,13 @@ public sealed class TomlParser
 
             if (_token.Kind.IsString())
             {
-                var text = _token.StringValue ?? string.Empty;
+                var raw = _token.GetText(_lexer.Source);
+                if (string.IsNullOrEmpty(raw))
+                {
+                    throw CreateException(CurrentSpan(), "Invalid string key.");
+                }
+
+                var text = TomlStringDecoder.Decode(raw!, _token.Kind);
                 Consume(_token.Kind, LexerState.Key);
                 return text;
             }

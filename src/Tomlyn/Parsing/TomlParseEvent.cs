@@ -38,11 +38,13 @@ public readonly struct TomlParseEvent
 
     /// <summary>
     /// Gets the string scalar value when <see cref="Kind"/> is <see cref="TomlParseEventKind.String"/> or <see cref="TomlParseEventKind.DateTime"/>.
+    /// This value is only populated when the parser was configured to decode scalars eagerly.
     /// </summary>
     public string? StringValue => _stringValue;
 
     /// <summary>
     /// Gets the raw scalar payload for numeric and boolean scalars.
+    /// When <see cref="Kind"/> is <see cref="TomlParseEventKind.String"/>, this contains the underlying <see cref="TokenKind"/> for the string literal.
     /// </summary>
     public ulong Data => _data;
 
@@ -62,9 +64,14 @@ public readonly struct TomlParseEvent
     /// <exception cref="InvalidOperationException">The current event is not a string scalar.</exception>
     public string GetString()
     {
-        if (Kind != TomlParseEventKind.String || _stringValue is null)
+        if (Kind != TomlParseEventKind.String)
         {
             throw new InvalidOperationException($"Expected {TomlParseEventKind.String} but was {Kind}.");
+        }
+
+        if (_stringValue is null)
+        {
+            throw new InvalidOperationException("The current string scalar is not materialized. Use TomlParser.GetString() to decode it from the input.");
         }
 
         return _stringValue;

@@ -18,8 +18,8 @@ public class NewApiExceptionLocationTests
         Assert.That(ex, Is.Not.Null);
         Assert.That(ex!.Span.HasValue, Is.True);
         Assert.That(ex.Line, Is.EqualTo(1));
-        Assert.That(ex.Column, Is.EqualTo(1));
-        Assert.That(ex.Message, Does.Contain("test.toml(1,1)"));
+        Assert.That(ex.Column, Is.EqualTo(9));
+        Assert.That(ex.Message, Does.Contain("test.toml(1,9)"));
     }
 
     [Test]

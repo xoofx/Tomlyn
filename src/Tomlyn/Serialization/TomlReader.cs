@@ -16,6 +16,7 @@ public sealed class TomlReader
     private string? _currentPropertyName;
     private string? _currentString;
     private ulong _currentData;
+    private TokenKind _currentStringTokenKind;
     private TomlDateTime _currentDateTime;
     private bool _hasDateTime;
     private SourceSpan? _currentSpan;
@@ -98,6 +99,7 @@ public sealed class TomlReader
         _currentPropertyName = null;
         _currentString = null;
         _currentData = 0;
+        _currentStringTokenKind = default;
         _currentDateTime = default;
         _hasDateTime = false;
         _currentSpan = null;
@@ -136,7 +138,7 @@ public sealed class TomlReader
                 break;
             case TomlParseEventKind.String:
                 _tokenType = TomlTokenType.String;
-                _currentString = parseEvent.GetString();
+                _currentStringTokenKind = (TokenKind)parseEvent.Data;
                 break;
             case TomlParseEventKind.Integer:
                 _tokenType = TomlTokenType.Integer;
@@ -202,7 +204,32 @@ public sealed class TomlReader
             throw CreateException($"Expected token {TomlTokenType.String} but was {_tokenType}.");
         }
 
-        return _currentString!;
+        if (_currentString is not null)
+        {
+            return _currentString;
+        }
+
+        if (_currentSpan is not { } span)
+        {
+            throw CreateException("The current token does not have a source span.");
+        }
+
+        var raw = _parser.GetText(span);
+        if (raw is null)
+        {
+            _currentString = string.Empty;
+            return _currentString;
+        }
+
+        try
+        {
+            _currentString = TomlStringDecoder.Decode(raw, _currentStringTokenKind);
+            return _currentString;
+        }
+        catch (FormatException ex)
+        {
+            throw CreateException(ex.Message);
+        }
     }
 
     /// <summary>
