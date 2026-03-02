@@ -1,7 +1,9 @@
 using System;
 using System.IO;
+using System.Text;
 using Tomlyn.Helpers;
 using Tomlyn.Serialization;
+using Tomlyn.Serialization.Internal;
 
 namespace Tomlyn;
 
@@ -11,6 +13,7 @@ namespace Tomlyn;
 public static class TomlSerializer
 {
     private static readonly bool ReflectionEnabledByDefault = TomlSerializerFeatureSwitches.IsReflectionEnabledByDefaultCalculated;
+    private static readonly Encoding DefaultStreamEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
     /// <summary>
     /// Gets a value indicating whether reflection-based serialization is enabled by default.
@@ -38,9 +41,12 @@ public static class TomlSerializer
     public static string Serialize(object? value, Type inputType, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(inputType, nameof(inputType));
-        _ = value;
-        _ = options;
-        throw new NotImplementedException("TomlSerializer is scaffolded; implementation is added in subsequent commits.");
+        var effectiveOptions = options ?? TomlSerializerOptions.Default;
+        var typeInfo = ResolveTypeInfo(effectiveOptions, inputType);
+
+        using var writer = new StringWriter(new StringBuilder(), System.Globalization.CultureInfo.InvariantCulture);
+        Serialize(writer, value, typeInfo);
+        return writer.ToString();
     }
 
     /// <summary>
@@ -50,8 +56,11 @@ public static class TomlSerializer
     {
         ArgumentGuard.ThrowIfNull(inputType, nameof(inputType));
         ArgumentGuard.ThrowIfNull(context, nameof(context));
-        _ = value;
-        throw new NotImplementedException("TomlSerializer is scaffolded; implementation is added in subsequent commits.");
+
+        var typeInfo = ResolveTypeInfo(context, inputType);
+        using var writer = new StringWriter(new StringBuilder(), System.Globalization.CultureInfo.InvariantCulture);
+        Serialize(writer, value, typeInfo);
+        return writer.ToString();
     }
 
     /// <summary>
@@ -60,8 +69,31 @@ public static class TomlSerializer
     public static string Serialize<T>(T value, TomlTypeInfo<T> typeInfo)
     {
         ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
-        _ = value;
-        throw new NotImplementedException("TomlSerializer is scaffolded; implementation is added in subsequent commits.");
+        using var writer = new StringWriter(new StringBuilder(), System.Globalization.CultureInfo.InvariantCulture);
+        Serialize(writer, value, typeInfo);
+        return writer.ToString();
+    }
+
+    /// <summary>
+    /// Serializes a value to a writer using explicit metadata.
+    /// </summary>
+    public static void Serialize<T>(TextWriter writer, T value, TomlTypeInfo<T> typeInfo)
+    {
+        ArgumentGuard.ThrowIfNull(writer, nameof(writer));
+        ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
+        Serialize(writer, (object?)value, (TomlTypeInfo)typeInfo);
+    }
+
+    /// <summary>
+    /// Serializes a value to a stream using explicit metadata.
+    /// </summary>
+    public static void Serialize<T>(Stream utf8Stream, T value, TomlTypeInfo<T> typeInfo)
+    {
+        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
+        ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
+        using var writer = new StreamWriter(utf8Stream, DefaultStreamEncoding, bufferSize: 1024, leaveOpen: true);
+        Serialize(writer, value, typeInfo);
+        writer.Flush();
     }
 
     /// <summary>
@@ -70,8 +102,9 @@ public static class TomlSerializer
     public static string Serialize(object? value, TomlTypeInfo typeInfo)
     {
         ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
-        _ = value;
-        throw new NotImplementedException("TomlSerializer is scaffolded; implementation is added in subsequent commits.");
+        using var writer = new StringWriter(new StringBuilder(), System.Globalization.CultureInfo.InvariantCulture);
+        Serialize(writer, value, typeInfo);
+        return writer.ToString();
     }
 
     /// <summary>
@@ -80,9 +113,7 @@ public static class TomlSerializer
     public static void Serialize<T>(TextWriter writer, T value, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(writer, nameof(writer));
-        _ = value;
-        _ = options;
-        throw new NotImplementedException("TomlSerializer is scaffolded; implementation is added in subsequent commits.");
+        Serialize(writer, (object?)value, typeof(T), options);
     }
 
     /// <summary>
@@ -92,9 +123,9 @@ public static class TomlSerializer
     {
         ArgumentGuard.ThrowIfNull(writer, nameof(writer));
         ArgumentGuard.ThrowIfNull(inputType, nameof(inputType));
-        _ = value;
-        _ = options;
-        throw new NotImplementedException("TomlSerializer is scaffolded; implementation is added in subsequent commits.");
+        var effectiveOptions = options ?? TomlSerializerOptions.Default;
+        var typeInfo = ResolveTypeInfo(effectiveOptions, inputType);
+        Serialize(writer, value, typeInfo);
     }
 
     /// <summary>
@@ -103,9 +134,7 @@ public static class TomlSerializer
     public static void Serialize<T>(Stream utf8Stream, T value, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
-        _ = value;
-        _ = options;
-        throw new NotImplementedException("TomlSerializer is scaffolded; implementation is added in subsequent commits.");
+        Serialize(utf8Stream, (object?)value, typeof(T), options);
     }
 
     /// <summary>
@@ -115,9 +144,10 @@ public static class TomlSerializer
     {
         ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
         ArgumentGuard.ThrowIfNull(inputType, nameof(inputType));
-        _ = value;
-        _ = options;
-        throw new NotImplementedException("TomlSerializer is scaffolded; implementation is added in subsequent commits.");
+
+        using var writer = new StreamWriter(utf8Stream, DefaultStreamEncoding, bufferSize: 1024, leaveOpen: true);
+        Serialize(writer, value, inputType, options);
+        writer.Flush();
     }
 
     /// <summary>
@@ -126,8 +156,19 @@ public static class TomlSerializer
     public static T? Deserialize<T>(string toml, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(toml, nameof(toml));
-        _ = options;
-        throw new NotImplementedException("TomlSerializer is scaffolded; implementation is added in subsequent commits.");
+        var effectiveOptions = options ?? TomlSerializerOptions.Default;
+        var typeInfo = ResolveTypeInfo(effectiveOptions, typeof(T));
+        return (T?)Deserialize(toml, typeInfo);
+    }
+
+    /// <summary>
+    /// Deserializes a TOML payload from text using explicit metadata.
+    /// </summary>
+    public static T? Deserialize<T>(string toml, TomlTypeInfo<T> typeInfo)
+    {
+        ArgumentGuard.ThrowIfNull(toml, nameof(toml));
+        ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
+        return (T?)Deserialize(toml, (TomlTypeInfo)typeInfo);
     }
 
     /// <summary>
@@ -137,8 +178,71 @@ public static class TomlSerializer
     {
         ArgumentGuard.ThrowIfNull(toml, nameof(toml));
         ArgumentGuard.ThrowIfNull(returnType, nameof(returnType));
-        _ = options;
-        throw new NotImplementedException("TomlSerializer is scaffolded; implementation is added in subsequent commits.");
+
+        var effectiveOptions = options ?? TomlSerializerOptions.Default;
+        var typeInfo = ResolveTypeInfo(effectiveOptions, returnType);
+        return Deserialize(toml, typeInfo);
+    }
+
+    /// <summary>
+    /// Deserializes a TOML payload from a text reader.
+    /// </summary>
+    public static T? Deserialize<T>(TextReader reader, TomlSerializerOptions? options = null)
+    {
+        ArgumentGuard.ThrowIfNull(reader, nameof(reader));
+        return Deserialize<T>(reader.ReadToEnd(), options);
+    }
+
+    /// <summary>
+    /// Deserializes a TOML payload from a text reader using explicit metadata.
+    /// </summary>
+    public static T? Deserialize<T>(TextReader reader, TomlTypeInfo<T> typeInfo)
+    {
+        ArgumentGuard.ThrowIfNull(reader, nameof(reader));
+        ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
+        return Deserialize<T>(reader.ReadToEnd(), typeInfo);
+    }
+
+    /// <summary>
+    /// Deserializes a TOML payload from a text reader into an explicit destination type.
+    /// </summary>
+    public static object? Deserialize(TextReader reader, Type returnType, TomlSerializerOptions? options = null)
+    {
+        ArgumentGuard.ThrowIfNull(reader, nameof(reader));
+        ArgumentGuard.ThrowIfNull(returnType, nameof(returnType));
+        return Deserialize(reader.ReadToEnd(), returnType, options);
+    }
+
+    /// <summary>
+    /// Deserializes a TOML payload from a UTF-8 stream.
+    /// </summary>
+    public static T? Deserialize<T>(Stream utf8Stream, TomlSerializerOptions? options = null)
+    {
+        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
+        using var reader = new StreamReader(utf8Stream, DefaultStreamEncoding, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
+        return Deserialize<T>(reader, options);
+    }
+
+    /// <summary>
+    /// Deserializes a TOML payload from a UTF-8 stream using explicit metadata.
+    /// </summary>
+    public static T? Deserialize<T>(Stream utf8Stream, TomlTypeInfo<T> typeInfo)
+    {
+        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
+        ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
+        using var reader = new StreamReader(utf8Stream, DefaultStreamEncoding, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
+        return Deserialize<T>(reader, typeInfo);
+    }
+
+    /// <summary>
+    /// Deserializes a TOML payload from a UTF-8 stream into an explicit destination type.
+    /// </summary>
+    public static object? Deserialize(Stream utf8Stream, Type returnType, TomlSerializerOptions? options = null)
+    {
+        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
+        ArgumentGuard.ThrowIfNull(returnType, nameof(returnType));
+        using var reader = new StreamReader(utf8Stream, DefaultStreamEncoding, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
+        return Deserialize(reader, returnType, options);
     }
 
     /// <summary>
@@ -176,5 +280,92 @@ public static class TomlSerializer
             value = null;
             return false;
         }
+    }
+
+    /// <summary>
+    /// Deserializes a TOML payload from text using explicit metadata.
+    /// </summary>
+    public static object? Deserialize(string toml, TomlTypeInfo typeInfo)
+    {
+        ArgumentGuard.ThrowIfNull(toml, nameof(toml));
+        ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
+
+        var options = typeInfo.Options;
+        var reader = TomlReader.Create(toml, options);
+        reader.Read(); // StartDocument
+        reader.Read(); // value start
+
+        if (options.RootValueHandling == TomlRootValueHandling.WrapInRootKey)
+        {
+            if (reader.TokenType != TomlTokenType.StartTable)
+            {
+                throw reader.CreateException($"Expected a TOML table at the document root but was {reader.TokenType}.");
+            }
+
+            reader.Read();
+            while (reader.TokenType != TomlTokenType.EndTable)
+            {
+                if (reader.TokenType != TomlTokenType.PropertyName)
+                {
+                    throw reader.CreateException($"Expected {TomlTokenType.PropertyName} token but was {reader.TokenType}.");
+                }
+
+                var name = reader.PropertyName!;
+                reader.Read();
+                if (string.Equals(name, options.RootValueKeyName, StringComparison.Ordinal))
+                {
+                    return typeInfo.ReadAsObject(reader);
+                }
+
+                reader.Skip();
+            }
+
+            throw new TomlException($"The root value key '{options.RootValueKeyName}' was not found.");
+        }
+
+        return typeInfo.ReadAsObject(reader);
+    }
+
+    /// <summary>
+    /// Serializes a value to a writer using explicit metadata.
+    /// </summary>
+    public static void Serialize(TextWriter writer, object? value, TomlTypeInfo typeInfo)
+    {
+        ArgumentGuard.ThrowIfNull(writer, nameof(writer));
+        ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
+
+        var options = typeInfo.Options;
+        var tomlWriter = new TomlWriter(writer, options);
+        tomlWriter.WriteStartDocument();
+
+        if (options.RootValueHandling == TomlRootValueHandling.WrapInRootKey)
+        {
+            tomlWriter.WriteStartTable();
+            tomlWriter.WritePropertyName(options.RootValueKeyName);
+            typeInfo.Write(tomlWriter, value);
+            tomlWriter.WriteEndTable();
+        }
+        else
+        {
+            typeInfo.Write(tomlWriter, value);
+        }
+
+        tomlWriter.WriteEndDocument();
+    }
+
+    private static TomlTypeInfo ResolveTypeInfo(TomlSerializerOptions options, Type type)
+    {
+        return TomlTypeInfoResolverPipeline.Resolve(options, type);
+    }
+
+    private static TomlTypeInfo ResolveTypeInfo(TomlSerializerContext context, Type type)
+    {
+        var typeInfo = context.GetTypeInfo(type, context.Options);
+        if (typeInfo is null)
+        {
+            throw new InvalidOperationException($"No generated metadata is available for type '{type.FullName}' in the provided context.");
+        }
+
+        return typeInfo;
     }
 }

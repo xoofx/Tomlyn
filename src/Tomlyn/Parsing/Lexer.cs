@@ -2,6 +2,7 @@
 // Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -56,6 +57,11 @@ namespace Tomlyn.Parsing
         /// Gets error messages.
         /// </summary>
         public IEnumerable<DiagnosticMessage> Errors => _errors ?? Enumerable.Empty<DiagnosticMessage>();
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the lexer should decode scalar values (for example, string escape sequences).
+        /// </summary>
+        public bool DecodeScalars { get; set; } = true;
 
         public bool MoveNext()
         {
@@ -321,35 +327,35 @@ namespace Tomlyn.Parsing
 
             if (MatchCurrentIdentifier("true"))
             {
-                _token = new SyntaxTokenValue(TokenKind.True, start, end, BoxedValues.True);
+                _token = new SyntaxTokenValue(TokenKind.True, start, end, stringValue: null, data: 1);
             }
             else if (MatchCurrentIdentifier("false"))
             {
-                _token = new SyntaxTokenValue(TokenKind.False, start, end, BoxedValues.False);
+                _token = new SyntaxTokenValue(TokenKind.False, start, end, stringValue: null, data: 0);
             }
             else if (MatchCurrentIdentifier("inf"))
             {
-                _token = new SyntaxTokenValue(TokenKind.Infinite, start, end, BoxedValues.FloatPositiveInfinity);
+                _token = new SyntaxTokenValue(TokenKind.Infinite, start, end, stringValue: null, data: unchecked((ulong)BitConverter.DoubleToInt64Bits(double.PositiveInfinity)));
             }
             else if (MatchCurrentIdentifier("+inf"))
             {
-                _token = new SyntaxTokenValue(TokenKind.PositiveInfinite, start, end, BoxedValues.FloatPositiveInfinity);
+                _token = new SyntaxTokenValue(TokenKind.PositiveInfinite, start, end, stringValue: null, data: unchecked((ulong)BitConverter.DoubleToInt64Bits(double.PositiveInfinity)));
             }
             else if (MatchCurrentIdentifier("-inf"))
             {
-                _token = new SyntaxTokenValue(TokenKind.NegativeInfinite, start, end, BoxedValues.FloatNegativeInfinity);
+                _token = new SyntaxTokenValue(TokenKind.NegativeInfinite, start, end, stringValue: null, data: unchecked((ulong)BitConverter.DoubleToInt64Bits(double.NegativeInfinity)));
             }
             else if (MatchCurrentIdentifier("nan"))
             {
-                _token = new SyntaxTokenValue(TokenKind.Nan, start, end, BoxedValues.FloatNan);
+                _token = new SyntaxTokenValue(TokenKind.Nan, start, end, stringValue: null, data: unchecked((ulong)BitConverter.DoubleToInt64Bits(double.NaN)));
             }
             else if (MatchCurrentIdentifier("+nan"))
             {
-                _token = new SyntaxTokenValue(TokenKind.PositiveNan, start, end, BoxedValues.FloatPositiveNaN);
+                _token = new SyntaxTokenValue(TokenKind.PositiveNan, start, end, stringValue: null, data: unchecked((ulong)BitConverter.DoubleToInt64Bits(double.NaN)));
             }
             else if (MatchCurrentIdentifier("-nan"))
             {
-                _token = new SyntaxTokenValue(TokenKind.NegativeNan, start, end, BoxedValues.FloatNegativeNaN);
+                _token = new SyntaxTokenValue(TokenKind.NegativeNan, start, end, stringValue: null, data: unchecked((ulong)BitConverter.DoubleToInt64Bits(double.NaN)));
             }
             else
             {
@@ -499,7 +505,8 @@ namespace Tomlyn.Parsing
                     else
                     {
                         // toml-specs: 64 bit (signed long) range expected (−9,223,372,036,854,775,808 to 9,223,372,036,854,775,807).
-                        _token = new SyntaxTokenValue(tokenKind, start, end, (long)value);
+                        var signedValue = unchecked((long)value);
+                        _token = new SyntaxTokenValue(tokenKind, start, end, stringValue: null, data: unchecked((ulong)signedValue));
                     }
                     return;
                 }
@@ -601,19 +608,19 @@ namespace Tomlyn.Parsing
                     var tokenKind = datetime.Kind == TomlDateTimeKind.OffsetDateTimeByZ
                         ? TokenKind.OffsetDateTimeByZ
                         : TokenKind.OffsetDateTimeByNumber;
-                    _token = new SyntaxTokenValue(tokenKind, start, end, datetime);
+                    _token = new SyntaxTokenValue(tokenKind, start, end, stringValue: dateTimeAsString);
                 }
                 else if (DateTimeRFC3339.TryParseLocalDateTime(dateTimeAsString, out datetime))
                 {
-                    _token = new SyntaxTokenValue(TokenKind.LocalDateTime, start, end, datetime);
+                    _token = new SyntaxTokenValue(TokenKind.LocalDateTime, start, end, stringValue: dateTimeAsString);
                 }
                 else if (DateTimeRFC3339.TryParseLocalDate(dateTimeAsString, out datetime))
                 {
-                    _token = new SyntaxTokenValue(TokenKind.LocalDate, start, end, datetime);
+                    _token = new SyntaxTokenValue(TokenKind.LocalDate, start, end, stringValue: dateTimeAsString);
                 }
                 else if (DateTimeRFC3339.TryParseLocalTime(dateTimeAsString, out datetime))
                 {
-                    _token = new SyntaxTokenValue(TokenKind.LocalTime, start, end, datetime);
+                    _token = new SyntaxTokenValue(TokenKind.LocalTime, start, end, stringValue: dateTimeAsString);
                 }
                 else
                 {
@@ -621,7 +628,7 @@ namespace Tomlyn.Parsing
                     if (DateTime.TryParse(dateTimeAsString, CultureInfo.InvariantCulture, DateTimeStyles.AllowInnerWhite, out var rawTime))
                     {
                         datetime = new TomlDateTime(rawTime, 0, TomlDateTimeKind.LocalDateTime);
-                        _token = new SyntaxTokenValue(TokenKind.LocalDateTime, start, end, datetime);
+                        _token = new SyntaxTokenValue(TokenKind.LocalDateTime, start, end, stringValue: dateTimeAsString);
 
                         // But we produce an error anyway
                         AddError($"Invalid format of date time/offset `{dateTimeAsString}` not following RFC3339", start, end);
@@ -629,7 +636,7 @@ namespace Tomlyn.Parsing
                     else
                     {
                         datetime = new TomlDateTime(DateTimeOffset.MinValue, 0, TomlDateTimeKind.LocalDateTime);
-                        _token = new SyntaxTokenValue(TokenKind.LocalDateTime, start, end, datetime);
+                        _token = new SyntaxTokenValue(TokenKind.LocalDateTime, start, end, stringValue: dateTimeAsString);
                         // But we produce an error anyway
                         AddError($"Unable to parse the date time/offset `{dateTimeAsString}`", start, end);
                     }
@@ -686,48 +693,170 @@ namespace Tomlyn.Parsing
                 ReadDigits(ref end, false);
             }
 
-            var numberAsText = _textBuilder.ToString();
-            object resolvedValue;
             if (isFloat)
             {
-                if (!double.TryParse(numberAsText, NumberStyles.Float, CultureInfo.InvariantCulture, out var doubleValue))
+                if (!TryParseDecimalDouble(out var doubleValue))
                 {
+                    var numberAsText = _textBuilder.ToString();
                     AddError($"Unable to parse floating point `{numberAsText}`", start, end);
+                    doubleValue = 0.0;
                 }
 
-                int firstDigit = (int) doubleValue;
-                if (firstDigit != 0 && hasLeadingZero)
+                if (hasLeadingZero && HasMultipleDigitsInIntegerPart())
                 {
+                    var numberAsText = _textBuilder.ToString();
                     AddError($"Unexpected leading zero (`0`) for float `{numberAsText}`", positionFirstDigit, positionFirstDigit);
                 }
 
-                // If value is 0.0 or 1.0, use box cached otherwise box
-                resolvedValue = doubleValue == 0.0 ? BoxedValues.FloatZero : doubleValue == 1.0 ? BoxedValues.FloatOne : doubleValue;
+                var bits = unchecked((ulong)BitConverter.DoubleToInt64Bits(doubleValue));
+                _token = new SyntaxTokenValue(TokenKind.Float, start, end, stringValue: null, data: bits);
             }
             else
             {
-                if (!long.TryParse(numberAsText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var longValue))
+                if (!TryParseDecimalInt64(out var longValue))
                 {
-                    if (!ulong.TryParse(numberAsText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ulongValue))
-                    {
-                        AddError($"Unable to parse integer `{numberAsText}`", start, end);
-                    }
-                    else
-                    {
-                        longValue = unchecked((long)ulongValue);
-                    }
+                    var numberAsText = _textBuilder.ToString();
+                    AddError($"Unable to parse integer `{numberAsText}`", start, end);
+                    longValue = 0;
                 }
 
                 if (hasLeadingZero && longValue != 0)
                 {
+                    var numberAsText = _textBuilder.ToString();
                     AddError($"Unexpected leading zero (`0`) for integer `{numberAsText}`", positionFirstDigit, positionFirstDigit);
                 }
 
-                // If value is 0 or 1, use box cached otherwise box
-                resolvedValue = longValue == 0 ? BoxedValues.IntegerZero : longValue == 1 ? BoxedValues.IntegerOne : longValue;
+                _token = new SyntaxTokenValue(TokenKind.Integer, start, end, stringValue: null, data: unchecked((ulong)longValue));
+            }
+        }
+
+        private bool TryParseDecimalInt64(out long value)
+        {
+            value = 0;
+            var length = _textBuilder.Length;
+            if (length == 0)
+            {
+                return false;
             }
 
-            _token = new SyntaxTokenValue(isFloat ? TokenKind.Float : TokenKind.Integer, start, end, resolvedValue);
+            var index = 0;
+            var negative = false;
+            var first = _textBuilder[0];
+            if (first == '+' || first == '-')
+            {
+                negative = first == '-';
+                index = 1;
+                if (index >= length)
+                {
+                    return false;
+                }
+            }
+
+            ulong accumulator = 0;
+            for (; index < length; index++)
+            {
+                var digitChar = _textBuilder[index];
+                var digit = digitChar - '0';
+                if ((uint)digit > 9)
+                {
+                    return false;
+                }
+
+                var digitValue = (ulong)digit;
+                if (accumulator > (ulong.MaxValue - digitValue) / 10)
+                {
+                    return false;
+                }
+
+                accumulator = (accumulator * 10) + digitValue;
+            }
+
+            if (negative)
+            {
+                if (accumulator == 0x8000_0000_0000_0000UL)
+                {
+                    value = long.MinValue;
+                    return true;
+                }
+
+                if (accumulator > 0x8000_0000_0000_0000UL)
+                {
+                    return false;
+                }
+
+                value = unchecked(-(long)accumulator);
+                return true;
+            }
+
+            value = unchecked((long)accumulator);
+            return true;
+        }
+
+        private bool TryParseDecimalDouble(out double value)
+        {
+#if NETSTANDARD2_0
+            var numberAsText = _textBuilder.ToString();
+            return double.TryParse(numberAsText, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+#else
+            value = 0.0;
+            var length = _textBuilder.Length;
+            if (length == 0)
+            {
+                return false;
+            }
+
+            char[]? rented = null;
+            try
+            {
+                Span<char> buffer = length <= 128
+                    ? stackalloc char[length]
+                    : (rented = ArrayPool<char>.Shared.Rent(length)).AsSpan(0, length);
+
+                _textBuilder.CopyTo(0, buffer, length);
+                return double.TryParse(buffer, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+            }
+            finally
+            {
+                if (rented is not null)
+                {
+                    ArrayPool<char>.Shared.Return(rented);
+                }
+            }
+#endif
+        }
+
+        private bool HasMultipleDigitsInIntegerPart()
+        {
+            var length = _textBuilder.Length;
+            if (length <= 1)
+            {
+                return false;
+            }
+
+            var index = 0;
+            var first = _textBuilder[0];
+            if (first == '+' || first == '-')
+            {
+                index = 1;
+                if (index >= length)
+                {
+                    return false;
+                }
+            }
+
+            var end = index;
+            while (end < length)
+            {
+                var c = _textBuilder[end];
+                if (c == '.' || c == 'e' || c == 'E')
+                {
+                    break;
+                }
+
+                end++;
+            }
+
+            return (end - index) > 1;
         }
 
         private void ReadDigits(ref TextPosition end, bool isPreviousDigit)
@@ -780,7 +909,7 @@ namespace Tomlyn.Parsing
                 else
                 {
                     // Else this is an empty string
-                    _token = new SyntaxTokenValue(TokenKind.String, start, end, string.Empty);
+                    _token = new SyntaxTokenValue(TokenKind.String, start, end, DecodeScalars ? string.Empty : null);
                     return;
                 }
             }
@@ -802,7 +931,10 @@ namespace Tomlyn.Parsing
                         AddError($"Invalid control character found {((char)_c).ToPrintableString()}", start, start);
                     }
 
-                    _textBuilder.AppendUtf32(_c);
+                    if (DecodeScalars)
+                    {
+                        _textBuilder.AppendUtf32(_c);
+                    }
                     end = _position;
                     NextChar();
                 }
@@ -825,14 +957,20 @@ namespace Tomlyn.Parsing
                     {
                         for (int i = 0; i < count - 3; i++)
                         {
-                            _textBuilder.Append('"');
+                            if (DecodeScalars)
+                            {
+                                _textBuilder.Append('"');
+                            }
                         }
                     }
                     else
                     {
                         for (int i = 0; i < count; i++)
                         {
-                            _textBuilder.Append('"');
+                            if (DecodeScalars)
+                            {
+                                _textBuilder.Append('"');
+                            }
                         }
                         goto continue_parsing_string;
                     }
@@ -841,7 +979,7 @@ namespace Tomlyn.Parsing
                 {
                     AddError("Invalid End-Of-File found for multi-line string", end, end);
                 }
-                _token = new SyntaxTokenValue(TokenKind.StringMulti, start, end, _textBuilder.ToString());
+                _token = new SyntaxTokenValue(TokenKind.StringMulti, start, end, DecodeScalars ? _textBuilder.ToString() : null);
             }
             else
             {
@@ -854,7 +992,7 @@ namespace Tomlyn.Parsing
                 {
                     AddError("Invalid End-Of-File found on string literal", end, end);
                 }
-                _token = new SyntaxTokenValue(TokenKind.String, start, end, _textBuilder.ToString());
+                _token = new SyntaxTokenValue(TokenKind.String, start, end, DecodeScalars ? _textBuilder.ToString() : null);
             }
         }
 
@@ -885,40 +1023,74 @@ namespace Tomlyn.Parsing
                 switch (_c)
                 {
                     case 'b':
-                        _textBuilder.Append('\b');
+                        if (DecodeScalars) _textBuilder.Append('\b');
                         end = _position;
                         NextChar();
                         return true;
                     case 't':
-                        _textBuilder.Append('\t');
+                        if (DecodeScalars) _textBuilder.Append('\t');
                         end = _position;
                         NextChar();
                         return true;
                     case 'n':
-                        _textBuilder.Append('\n');
+                        if (DecodeScalars) _textBuilder.Append('\n');
                         end = _position;
                         NextChar();
                         return true;
                     case 'f':
-                        _textBuilder.Append('\f');
+                        if (DecodeScalars) _textBuilder.Append('\f');
                         end = _position;
                         NextChar();
                         return true;
                     case 'r':
-                        _textBuilder.Append('\r');
+                        if (DecodeScalars) _textBuilder.Append('\r');
                         end = _position;
                         NextChar();
                         return true;
                     case '"':
-                        _textBuilder.Append('"');
+                        if (DecodeScalars) _textBuilder.Append('"');
                         end = _position;
                         NextChar();
                         return true;
                     case '\\':
-                        _textBuilder.Append('\\');
+                        if (DecodeScalars) _textBuilder.Append('\\');
                         end = _position;
                         NextChar();
                         return true;
+                    case 'e':
+                        if (DecodeScalars) _textBuilder.Append('\u001B');
+                        end = _position;
+                        NextChar();
+                        return true;
+                    case 'x':
+                    {
+                        var start = _position;
+                        end = _position;
+                        NextChar();
+
+                        if (!CharHelper.IsHexFunc(_c))
+                        {
+                            AddError("Invalid escape `\\x`. Expected 2 hexadecimal digits.", start, start);
+                            return false;
+                        }
+
+                        var value = CharHelper.HexToDecimal(_c);
+                        end = _position;
+                        NextChar();
+
+                        if (!CharHelper.IsHexFunc(_c))
+                        {
+                            AddError("Invalid escape `\\x`. Expected 2 hexadecimal digits.", start, start);
+                            return false;
+                        }
+
+                        value = (value << 4) + CharHelper.HexToDecimal(_c);
+                        end = _position;
+                        NextChar();
+
+                        if (DecodeScalars) _textBuilder.Append((char)value);
+                        return true;
+                    }
 
                     // toml-specs:  When the last non-whitespace character on a line is a \,
                     // it will be trimmed along with all whitespace (including newlines)
@@ -966,14 +1138,14 @@ namespace Tomlyn.Parsing
                             {
                                 AddError($"Invalid Unicode scalar value [{value:X}]",start, start);
                             }
-                            _textBuilder.AppendUtf32((char32)value);
+                            if (DecodeScalars) _textBuilder.AppendUtf32((char32)value);
                             return true;
                         }
                     }
                         break;
                 }
 
-                AddError($"Unexpected escape character [{_c}] in string. Only b t n f r \\ \" u0000-uFFFF U00000000-UFFFFFFFF are allowed", _position, _position);
+                AddError($"Unexpected escape character [{_c}] in string. Only b t n f r e \\ \" xHH u0000-uFFFF U00000000-UFFFFFFFF are allowed", _position, _position);
                 return false;
             }
             return false;
@@ -1003,7 +1175,7 @@ namespace Tomlyn.Parsing
                 else
                 {
                     // Else this is an empty literal string
-                    _token = new SyntaxTokenValue(TokenKind.StringLiteral, start, end, string.Empty);
+                    _token = new SyntaxTokenValue(TokenKind.StringLiteral, start, end, DecodeScalars ? string.Empty : null);
                     return;
                 }
             }
@@ -1020,7 +1192,10 @@ namespace Tomlyn.Parsing
                 {
                     AddError($"Invalid control character found {((char)_c).ToPrintableString()}", start, start);
                 }
-                _textBuilder.AppendUtf32(_c);
+                if (DecodeScalars)
+                {
+                    _textBuilder.AppendUtf32(_c);
+                }
                 end = _position;
                 NextChar();
             }
@@ -1042,14 +1217,20 @@ namespace Tomlyn.Parsing
                     {
                         for (int i = 0; i < count - 3; i++)
                         {
-                            _textBuilder.Append('\'');
+                            if (DecodeScalars)
+                            {
+                                _textBuilder.Append('\'');
+                            }
                         }
                     }
                     else
                     {
                         for (int i = 0; i < count; i++)
                         {
-                            _textBuilder.Append('\'');
+                            if (DecodeScalars)
+                            {
+                                _textBuilder.Append('\'');
+                            }
                         }
                         goto continue_parsing_string;
                     }
@@ -1059,7 +1240,7 @@ namespace Tomlyn.Parsing
                 {
                     AddError("Invalid End-Of-File found for multi-line literal string", end, end);
                 }
-                _token = new SyntaxTokenValue(TokenKind.StringLiteralMulti, start, end, _textBuilder.ToString());
+                _token = new SyntaxTokenValue(TokenKind.StringLiteralMulti, start, end, DecodeScalars ? _textBuilder.ToString() : null);
             }
             else
             {
@@ -1072,7 +1253,7 @@ namespace Tomlyn.Parsing
                 {
                     AddError("Invalid End-Of-File found on string literal", end, end);
                 }
-                _token = new SyntaxTokenValue(TokenKind.StringLiteral, start, end, _textBuilder.ToString());
+                _token = new SyntaxTokenValue(TokenKind.StringLiteral, start, end, DecodeScalars ? _textBuilder.ToString() : null);
             }
         }
         
@@ -1213,21 +1394,6 @@ namespace Tomlyn.Parsing
         public char32 PreviousChar;
 
         public char32 CurrentChar;
-    }
-
-    internal static class BoxedValues
-    {
-        public static readonly object True = true;
-        public static readonly object False = false;
-        public static readonly object IntegerZero = (long)0;
-        public static readonly object IntegerOne = (long)1;
-        public static readonly object FloatZero = 0.0;
-        public static readonly object FloatOne = 1.0;
-        public static readonly object FloatPositiveInfinity = double.PositiveInfinity;
-        public static readonly object FloatNegativeInfinity = double.NegativeInfinity;
-        public static readonly object FloatNan = BitConverter.Int64BitsToDouble(unchecked((long)0xfff8000000000000U));
-        public static readonly object FloatPositiveNaN = BitConverter.Int64BitsToDouble(unchecked((long)0x7ff8000000000000U));
-        public static readonly object FloatNegativeNaN = FloatNan;
     }
 
 }

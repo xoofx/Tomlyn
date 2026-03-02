@@ -32,6 +32,7 @@ namespace Tomlyn.Helpers
         private static readonly string[] OffsetDateTimeFormatsByZ = new[]
         {
             "yyyy-MM-ddTHH:mm:ssZ",            // With Z postfix
+            "yyyy-MM-ddTHH:mmZ",
             "yyyy-MM-ddTHH:mm:ss.fZ",
             "yyyy-MM-ddTHH:mm:ss.ffZ",
             "yyyy-MM-ddTHH:mm:ss.fffZ",
@@ -42,6 +43,7 @@ namespace Tomlyn.Helpers
 
             // Specs says that T might be omitted
             "yyyy-MM-dd HH:mm:ssZ",            // With Z postfix
+            "yyyy-MM-dd HH:mmZ",
             "yyyy-MM-dd HH:mm:ss.fZ",
             "yyyy-MM-dd HH:mm:ss.ffZ",
             "yyyy-MM-dd HH:mm:ss.fffZ",
@@ -54,6 +56,7 @@ namespace Tomlyn.Helpers
         private static readonly string[] OffsetDateTimeFormatsByNumber = new[]
         {            
             "yyyy-MM-ddTHH:mm:sszzz",          // With time-numoffset
+            "yyyy-MM-ddTHH:mmzzz",
             "yyyy-MM-ddTHH:mm:ss.fzzz",
             "yyyy-MM-ddTHH:mm:ss.ffzzz",
             "yyyy-MM-ddTHH:mm:ss.fffzzz",
@@ -63,6 +66,7 @@ namespace Tomlyn.Helpers
             "yyyy-MM-ddTHH:mm:ss.fffffffzzz",
 
             "yyyy-MM-dd HH:mm:sszzz",          // With time-numoffset
+            "yyyy-MM-dd HH:mmzzz",
             "yyyy-MM-dd HH:mm:ss.fzzz",
             "yyyy-MM-dd HH:mm:ss.ffzzz",
             "yyyy-MM-dd HH:mm:ss.fffzzz",
@@ -76,6 +80,7 @@ namespace Tomlyn.Helpers
         private static readonly string[] LocalDateTimeFormats = new[]
         {
             "yyyy-MM-ddTHH:mm:ss",
+            "yyyy-MM-ddTHH:mm",
             "yyyy-MM-ddTHH:mm:ss.f",
             "yyyy-MM-ddTHH:mm:ss.ff",
             "yyyy-MM-ddTHH:mm:ss.fff",
@@ -86,6 +91,7 @@ namespace Tomlyn.Helpers
 
             // Specs says that T might be omitted
             "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm",
             "yyyy-MM-dd HH:mm:ss.f",
             "yyyy-MM-dd HH:mm:ss.ff",
             "yyyy-MM-dd HH:mm:ss.fff",
@@ -99,6 +105,7 @@ namespace Tomlyn.Helpers
         private static readonly string[] LocalTimeFormats = new[]
         {
             "HH:mm:ss",
+            "HH:mm",
             "HH:mm:ss.f",
             "HH:mm:ss.ff",
             "HH:mm:ss.fff",
@@ -165,12 +172,14 @@ namespace Tomlyn.Helpers
                 var format = formats[i];
                 if (parser(str, format, CultureInfo.InvariantCulture, style, out var rawTime))
                 {
-                    // 0
-                    // fffffff
-                    int precision = i;
-                    if (precision >= LocalTimeFormats.Length)
+                    var precision = 0;
+                    var dotIndex = format.IndexOf('.');
+                    if (dotIndex >= 0)
                     {
-                        precision -= LocalTimeFormats.Length;
+                        for (var j = dotIndex + 1; j < format.Length && format[j] == 'f'; j++)
+                        {
+                            precision++;
+                        }
                     }
 
                     time = new TomlDateTime(rawTime, precision, kind);

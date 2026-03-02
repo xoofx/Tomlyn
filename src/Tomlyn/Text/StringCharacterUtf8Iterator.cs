@@ -15,7 +15,7 @@ namespace Tomlyn.Text
             this._text = text;
             // Check if we have a BOM, if we have it, move right after
             // 0xEF,0xBB,0xBF
-            _start = (text.Length >= 3 && text[0] == (byte) 0xEF && text[1] == (byte) 0xBB && text[0] == (byte) 0xBF) ? 3 : 0;
+            _start = (text.Length >= 3 && text[0] == (byte)0xEF && text[1] == (byte)0xBB && text[2] == (byte)0xBF) ? 3 : 0;
         }
 
         public int Start => _start;

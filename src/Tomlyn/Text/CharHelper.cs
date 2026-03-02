@@ -220,54 +220,126 @@ namespace Tomlyn.Text
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static char32? ToUtf8(byte[] buffer, ref int position)
         {
-            if (position < buffer.Length)
+            if ((uint)position >= (uint)buffer.Length)
             {
-                // bytes   bits    UTF-8 representation
-                // -----   ----    -----------------------------------
-                // 1        7      0vvvvvvv
-                // 2       11      110vvvvv 10vvvvvv
-                // 3       16      1110vvvv 10vvvvvv 10vvvvvv
-                // 4       21      11110vvv 10vvvvvv 10vvvvvv 10vvvvvv
-                // -----   ----    -----------------------------------
-
-                //Surrogate:
-                //Real Unicode value = (HighSurrogate - 0xD800) * 0x400 + (LowSurrogate - 0xDC00) + 0x10000
-                var c1 = unchecked((sbyte)buffer[position++]);
-                return c1 >= 0 ? c1 : DecodeUTF8_24(buffer, ref position, c1);
-            }
-            position = buffer.Length;
-            return null;
-        }
-
-        private static char32 DecodeUTF8_24(byte[] buffer, ref int position, sbyte c1)
-        {
-            int nbByte = 0;
-            while (c1 < 0)
-            {
-                c1 = (sbyte)(c1 << 1);
-                nbByte++;
+                position = buffer.Length;
+                return null;
             }
 
-            if (nbByte > 4 || position + nbByte - 1 > buffer.Length)
+            // bytes   bits    UTF-8 representation
+            // -----   ----    -----------------------------------
+            // 1        7      0vvvvvvv
+            // 2       11      110vvvvv 10vvvvvv
+            // 3       16      1110vvvv 10vvvvvv 10vvvvvv
+            // 4       21      11110vvv 10vvvvvv 10vvvvvv 10vvvvvv
+            // -----   ----    -----------------------------------
+
+            var startOffset = position;
+            var b1 = buffer[position++];
+            if (b1 < 0x80)
             {
-                // TODO: Throw an exception or return something else?
-                throw new CharReaderException($"Invalid UTF8 character at position {position}");
+                return b1;
             }
 
-            int c = (c1 << (6 - nbByte)) | (buffer[position++] & 0x3f);
-            if (nbByte == 2)
+            // Reject invalid leading bytes:
+            // - 0x80..0xBF are continuation bytes
+            // - 0xC0..0xC1 would introduce overlong sequences
+            // - 0xF5..0xFF are outside Unicode scalar range
+            if (b1 < 0xC2 || b1 > 0xF4)
             {
-                return c;
+                throw new CharReaderException($"Invalid UTF-8 start byte 0x{b1:X2} at byte offset {startOffset}.");
             }
-            if (nbByte >= 3)
+
+            if (b1 < 0xE0)
             {
-                c = (c << 6) | (buffer[position++] & 0x3f);
+                if (position >= buffer.Length)
+                {
+                    throw new CharReaderException($"Unexpected end of data in UTF-8 sequence at byte offset {startOffset}.");
+                }
+
+                var b2 = buffer[position++];
+                if ((b2 & 0xC0) != 0x80)
+                {
+                    throw new CharReaderException($"Invalid UTF-8 continuation byte 0x{b2:X2} at byte offset {position - 1}.");
+                }
+
+                return ((b1 & 0x1F) << 6) | (b2 & 0x3F);
             }
-            if (nbByte == 4)
+
+            if (b1 < 0xF0)
             {
-                c = (c << 6) | (buffer[position++] & 0x3f);
+                if (position + 1 >= buffer.Length)
+                {
+                    throw new CharReaderException($"Unexpected end of data in UTF-8 sequence at byte offset {startOffset}.");
+                }
+
+                var b2 = buffer[position++];
+                var b3 = buffer[position++];
+                if ((b2 & 0xC0) != 0x80)
+                {
+                    throw new CharReaderException($"Invalid UTF-8 continuation byte 0x{b2:X2} at byte offset {position - 2}.");
+                }
+                if ((b3 & 0xC0) != 0x80)
+                {
+                    throw new CharReaderException($"Invalid UTF-8 continuation byte 0x{b3:X2} at byte offset {position - 1}.");
+                }
+
+                // Overlong sequences (U+0000..U+07FF) encoded in 3 bytes are invalid.
+                if (b1 == 0xE0 && b2 < 0xA0)
+                {
+                    throw new CharReaderException($"Overlong UTF-8 sequence at byte offset {startOffset}.");
+                }
+
+                // UTF-16 surrogate halves are not valid Unicode scalar values.
+                if (b1 == 0xED && b2 >= 0xA0)
+                {
+                    throw new CharReaderException($"Invalid UTF-8 surrogate code point at byte offset {startOffset}.");
+                }
+
+                return ((b1 & 0x0F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F);
             }
-            return c;
+
+            // 4-byte sequence (b1 is 0xF0..0xF4)
+            if (position + 2 >= buffer.Length)
+            {
+                throw new CharReaderException($"Unexpected end of data in UTF-8 sequence at byte offset {startOffset}.");
+            }
+
+            var b2_4 = buffer[position++];
+            var b3_4 = buffer[position++];
+            var b4_4 = buffer[position++];
+            if ((b2_4 & 0xC0) != 0x80)
+            {
+                throw new CharReaderException($"Invalid UTF-8 continuation byte 0x{b2_4:X2} at byte offset {position - 3}.");
+            }
+            if ((b3_4 & 0xC0) != 0x80)
+            {
+                throw new CharReaderException($"Invalid UTF-8 continuation byte 0x{b3_4:X2} at byte offset {position - 2}.");
+            }
+            if ((b4_4 & 0xC0) != 0x80)
+            {
+                throw new CharReaderException($"Invalid UTF-8 continuation byte 0x{b4_4:X2} at byte offset {position - 1}.");
+            }
+
+            // Overlong sequences (U+0000..U+FFFF) encoded in 4 bytes are invalid.
+            if (b1 == 0xF0 && b2_4 < 0x90)
+            {
+                throw new CharReaderException($"Overlong UTF-8 sequence at byte offset {startOffset}.");
+            }
+
+            // Outside max scalar value U+10FFFF.
+            if (b1 == 0xF4 && b2_4 > 0x8F)
+            {
+                throw new CharReaderException($"Invalid UTF-8 code point above U+10FFFF at byte offset {startOffset}.");
+            }
+
+            var codePoint = ((b1 & 0x07) << 18) | ((b2_4 & 0x3F) << 12) | ((b3_4 & 0x3F) << 6) | (b4_4 & 0x3F);
+            if (codePoint > 0x10FFFF)
+            {
+                throw new CharReaderException($"Invalid UTF-8 code point above U+10FFFF at byte offset {startOffset}.");
+            }
+
+            return codePoint;
         }
 
         public static int HexToDecimal(char32 c)

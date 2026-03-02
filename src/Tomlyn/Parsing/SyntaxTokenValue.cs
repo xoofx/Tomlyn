@@ -18,15 +18,17 @@ namespace Tomlyn.Parsing
         /// <param name="kind">The type.</param>
         /// <param name="start">The start.</param>
         /// <param name="end">The end.</param>
-        /// <param name="value">Optional parse value of the token</param>
+        /// <param name="stringValue">Optional string value (e.g. decoded string literal).</param>
+        /// <param name="data">Optional scalar payload (e.g. integer/float/boolean encoded as <see cref="ulong"/>).</param>
         /// <exception cref="System.ArgumentOutOfRangeException"></exception>
-        public SyntaxTokenValue(TokenKind kind, TextPosition start, TextPosition end, object? value = null)
+        public SyntaxTokenValue(TokenKind kind, TextPosition start, TextPosition end, string? stringValue = null, ulong data = 0)
         {
             if (start.Offset > end.Offset) throw new ArgumentOutOfRangeException(nameof(start), $"[{nameof(start)}] index must be <= to [{nameof(end)}]");
             Kind = kind;
             Start = start;
             End = end;
-            Value = value;
+            StringValue = stringValue;
+            Data = data;
         }
 
         /// <summary>
@@ -45,9 +47,14 @@ namespace Tomlyn.Parsing
         public readonly TextPosition End;
 
         /// <summary>
-        /// The parsed value
+        /// Optional decoded string value for tokens that carry a string payload.
         /// </summary>
-        public readonly object? Value;
+        public readonly string? StringValue;
+
+        /// <summary>
+        /// Optional scalar payload for tokens that carry a non-string value.
+        /// </summary>
+        public readonly ulong Data;
 
         /// <inheritdoc />
         public override string ToString()

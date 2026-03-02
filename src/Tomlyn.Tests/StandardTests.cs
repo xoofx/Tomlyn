@@ -28,6 +28,13 @@ namespace Tomlyn.Tests
 
         private const string RelativeTomlTestsDirectory = @"../../../../../ext/toml-test/tests";
 
+        private static readonly string[] Toml11ValidButTomlTestMarksInvalid =
+        [
+            // TOML v1.1.0 additions (toml-test suite still marks them invalid).
+            @"\invalid\datetime\no-secs.toml",            // minute-only times
+            @"\invalid\string\basic-byte-escapes.toml",   // \xHH basic string escape
+        ];
+
         [TestCaseSource("ListTomlFiles", new object[] { ValidSpec }, Category = "toml-test")]
         public static void SpecValid(string inputName, string toml, string json)
         {
@@ -210,6 +217,17 @@ namespace Tomlyn.Tests
             var tests = new List<TestCaseData>();
             foreach (var file in Directory.EnumerateFiles(directory, "*.toml", SearchOption.AllDirectories))
             {
+                if (type == InvalidSpec)
+                {
+                    for (var i = 0; i < Toml11ValidButTomlTestMarksInvalid.Length; i++)
+                    {
+                        if (file.EndsWith(Toml11ValidButTomlTestMarksInvalid[i], StringComparison.OrdinalIgnoreCase))
+                        {
+                            goto next_file;
+                        }
+                    }
+                }
+
                 var functionName = Path.GetFileName(file);
 
                 var input = Encoding.UTF8.GetString(File.ReadAllBytes(file));
@@ -222,6 +240,8 @@ namespace Tomlyn.Tests
                     json = File.ReadAllText(jsonFile, Encoding.UTF8);
                 }
                 tests.Add(new TestCaseData(functionName, input, json));
+
+                next_file: ;
             }
             return tests;
         }

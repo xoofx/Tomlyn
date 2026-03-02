@@ -3,6 +3,7 @@
 // See license.txt file in the project root for full license information.
 using System;
 using System.Collections.Generic;
+using Tomlyn.Helpers;
 using Tomlyn.Model;
 using Tomlyn.Syntax;
 using Tomlyn.Text;
@@ -260,7 +261,7 @@ namespace Tomlyn.Parsing
         private BooleanValueSyntax ParseBoolean()
         {
             var boolean = Open<BooleanValueSyntax>();
-            boolean.Value = (bool)(_token.Value ?? false);
+            boolean.Value = _token.Kind == TokenKind.True;
             boolean.Token = EatToken();            
             return Close(boolean);
         }
@@ -290,7 +291,19 @@ namespace Tomlyn.Parsing
                     throw new InvalidOperationException("The datetime kind `{_token.Kind}` is not supported");
             }
 
-            datetime.Value = (TomlDateTime)(_token.Value ?? (TomlDateTime)default);
+            var literal = _token.StringValue ?? _token.GetText(_lexer.Source) ?? string.Empty;
+            TomlDateTime parsed;
+            bool parsedOk = _token.Kind switch
+            {
+                TokenKind.OffsetDateTimeByZ => DateTimeRFC3339.TryParseOffsetDateTime(literal, out parsed),
+                TokenKind.OffsetDateTimeByNumber => DateTimeRFC3339.TryParseOffsetDateTime(literal, out parsed),
+                TokenKind.LocalDateTime => DateTimeRFC3339.TryParseLocalDateTime(literal, out parsed),
+                TokenKind.LocalDate => DateTimeRFC3339.TryParseLocalDate(literal, out parsed),
+                TokenKind.LocalTime => DateTimeRFC3339.TryParseLocalTime(literal, out parsed),
+                _ => DateTimeRFC3339.TryParseLocalDateTime(literal, out parsed),
+            };
+
+            datetime.Value = parsedOk ? parsed : default;
             datetime.Token = EatToken();
             return Close(datetime);
         }
@@ -298,7 +311,7 @@ namespace Tomlyn.Parsing
         private IntegerValueSyntax ParseInteger()
         {
             var i64 = Open<IntegerValueSyntax>();
-            i64.Value = (long)(_token.Value ?? 0L);
+            i64.Value = unchecked((long)_token.Data);
             i64.Token = EatToken();            
             return Close(i64);
         }
@@ -306,7 +319,7 @@ namespace Tomlyn.Parsing
         private FloatValueSyntax ParseFloat(TokenKind kind)
         {
             var f64 = Open<FloatValueSyntax>();
-            f64.Value = (double)(_token.Value ?? 0.0);
+            f64.Value = BitConverter.Int64BitsToDouble(unchecked((long)_token.Data));
             f64.Token = EatToken();
             return Close(f64);
         }
@@ -490,8 +503,8 @@ namespace Tomlyn.Parsing
         private StringValueSyntax ParseString()
         {
             var str = Open<StringValueSyntax>();
-            str.Value = _token.Value as string ?? string.Empty;
-            str.Token = EatToken();            
+            str.Value = _token.StringValue ?? string.Empty;
+            str.Token = EatToken();
             return Close(str);
         }
         private DottedKeyItemSyntax ParseDotKey()
