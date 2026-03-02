@@ -12,7 +12,7 @@ namespace Tomlyn.Parsing;
 public sealed class TomlLexer
 {
     private readonly ILexerAdapter _adapter;
-    private SyntaxTokenValue _current;
+    private TomlToken _current;
 
     private TomlLexer(ILexerAdapter adapter)
     {
@@ -197,7 +197,17 @@ public sealed class TomlLexer
     /// <summary>
     /// Gets the current token.
     /// </summary>
-    public SyntaxTokenValue Current => _current;
+    public TomlToken Current => _current;
+
+    /// <summary>
+    /// Gets the source name associated with this lexer.
+    /// </summary>
+    public string SourceName => _adapter.Source.SourcePath;
+
+    /// <summary>
+    /// Gets the source span associated with the current token.
+    /// </summary>
+    public TomlSourceSpan CurrentSpan => new TomlSourceSpan(SourceName, _current.Start, _current.End);
 
     /// <summary>
     /// Gets or sets the lexer mode.
@@ -229,9 +239,22 @@ public sealed class TomlLexer
             return false;
         }
 
-        _current = _adapter.Token;
+        var token = _adapter.Token;
+        _current = new TomlToken(
+            token.Kind,
+            new TomlTextPosition(token.Start.Offset, token.Start.Line, token.Start.Column),
+            new TomlTextPosition(token.End.Offset, token.End.Line, token.End.Column),
+            token.StringValue,
+            token.Data);
         return true;
     }
+
+    /// <summary>
+    /// Gets the raw source text represented by a token.
+    /// </summary>
+    /// <param name="token">The token.</param>
+    /// <returns>The token text, or <c>null</c> if out of range.</returns>
+    public string? GetText(in TomlToken token) => _adapter.Source.GetString(token.Start.Offset, token.Length);
 
     internal ITokenProvider<ISourceView> CreateTokenProvider() => new TokenProvider(_adapter);
 
