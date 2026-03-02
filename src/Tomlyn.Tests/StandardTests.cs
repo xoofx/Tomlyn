@@ -523,7 +523,7 @@ namespace Tomlyn.Tests
             if (fracEnd == dotIndex + 1)
             {
                 // Fraction becomes empty: remove the '.' as well.
-                return string.Concat(text.AsSpan(0, dotIndex), text.AsSpan(index));
+                return text.Substring(0, dotIndex) + text.Substring(index);
             }
 
             if (fracEnd == index)
@@ -531,7 +531,7 @@ namespace Tomlyn.Tests
                 return text;
             }
 
-            return string.Concat(text.AsSpan(0, fracEnd), text.AsSpan(index));
+            return text.Substring(0, fracEnd) + text.Substring(index);
         }
 
         private static bool TryParseBool(string? text, out bool value)
