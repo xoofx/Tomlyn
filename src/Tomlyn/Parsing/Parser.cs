@@ -396,6 +396,20 @@ namespace Tomlyn.Parsing
                 var previousSpan = inlineTable.OpenBrace.Span;
                 while (true)
                 {
+                    // Newlines are allowed between inline-table entries in TOML 1.1. They can leak as
+                    // non-hidden tokens because ParseKeyValue temporarily disables newline hiding.
+                    if (_token.Kind == TokenKind.NewLine)
+                    {
+                        _currentTrivias.Add(new SyntaxTrivia
+                        {
+                            Span = GetSpanForToken(_token),
+                            Kind = _token.Kind,
+                            Text = _token.GetText(_lexer.Source),
+                        });
+                        NextToken();
+                        continue;
+                    }
+
                     if (_token.Kind == TokenKind.CloseBrace)
                     {
                         // Restore newline visibility before consuming the close brace so the outer parser
