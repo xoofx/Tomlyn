@@ -53,7 +53,7 @@ public sealed class TomlParser
             diagnostics = new DiagnosticsBag();
         }
 
-        var core = new ParserCore<StringSourceView, StringCharacterIterator>(sourceView, parserOptions.Mode, diagnostics);
+        var core = new ParserCore<StringSourceView, StringCharacterIterator>(sourceView, parserOptions, diagnostics);
         return new TomlParser(core, effectiveOptions, parserOptions, diagnostics);
     }
 
@@ -87,7 +87,7 @@ public sealed class TomlParser
             diagnostics = new DiagnosticsBag();
         }
 
-        var core = new ParserCore<StringSourceView, StringCharacterIterator>(sourceView, parserOptions.Mode, diagnostics);
+        var core = new ParserCore<StringSourceView, StringCharacterIterator>(sourceView, parserOptions, diagnostics);
         return new TomlParser(core, effectiveOptions, parserOptions, diagnostics);
     }
 
@@ -152,7 +152,7 @@ public sealed class TomlParser
             diagnostics = new DiagnosticsBag();
         }
 
-        var core = new ParserCore<StringUtf8SourceView, StringCharacterUtf8Iterator>(sourceView, parserOptions.Mode, diagnostics);
+        var core = new ParserCore<StringUtf8SourceView, StringCharacterUtf8Iterator>(sourceView, parserOptions, diagnostics);
         return new TomlParser(core, effectiveOptions, parserOptions, diagnostics);
     }
 
@@ -181,7 +181,7 @@ public sealed class TomlParser
             diagnostics = new DiagnosticsBag();
         }
 
-        var core = new ParserCore<StringUtf8SourceView, StringCharacterUtf8Iterator>(sourceView, parserOptions.Mode, diagnostics);
+        var core = new ParserCore<StringUtf8SourceView, StringCharacterUtf8Iterator>(sourceView, parserOptions, diagnostics);
         return new TomlParser(core, effectiveOptions, parserOptions, diagnostics);
     }
 
@@ -281,6 +281,7 @@ public sealed class TomlParser
         where TCharReader : struct, CharacterIterator
     {
         private readonly TomlParserMode _mode;
+        private readonly bool _decodeScalars;
         private readonly DiagnosticsBag? _diagnostics;
         private readonly Lexer<TSourceView, TCharReader> _lexer;
         private SyntaxTokenValue _token;
@@ -297,14 +298,15 @@ public sealed class TomlParser
         private DocumentState _state;
         private TextPosition _valueSpanStart;
 
-        public ParserCore(TSourceView sourceView, TomlParserMode mode, DiagnosticsBag? diagnostics)
+        public ParserCore(TSourceView sourceView, TomlParserOptions parserOptions, DiagnosticsBag? diagnostics)
         {
-            _mode = mode;
+            _mode = parserOptions.Mode;
+            _decodeScalars = parserOptions.DecodeScalars;
             _diagnostics = diagnostics;
             _lexer = new Lexer<TSourceView, TCharReader>(sourceView)
             {
                 State = LexerState.Key,
-                DecodeScalars = false,
+                DecodeScalars = _decodeScalars,
             };
             _token = default;
             _initialized = false;
@@ -880,7 +882,8 @@ public sealed class TomlParser
 
             if (_token.Kind.IsString())
             {
-                _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.String, span: eventSpan, propertyName: null, stringValue: null, data: (ulong)_token.Kind));
+                var text = _decodeScalars ? (_token.StringValue ?? string.Empty) : null;
+                _pending.Enqueue(new TomlParseEvent(TomlParseEventKind.String, span: eventSpan, propertyName: null, stringValue: text, data: (ulong)_token.Kind));
                 Consume(_token.Kind, nextStateAfterScalar);
                 return;
             }
@@ -943,13 +946,22 @@ public sealed class TomlParser
 
             if (_token.Kind.IsString())
             {
-                var raw = _token.GetText(_lexer.Source);
-                if (string.IsNullOrEmpty(raw))
+                string text;
+                if (_decodeScalars)
                 {
-                    throw CreateException(CurrentSpan(), "Invalid string key.");
+                    text = _token.StringValue ?? string.Empty;
+                }
+                else
+                {
+                    var raw = _token.GetText(_lexer.Source);
+                    if (string.IsNullOrEmpty(raw))
+                    {
+                        throw CreateException(CurrentSpan(), "Invalid string key.");
+                    }
+
+                    text = TomlStringDecoder.Decode(raw!, _token.Kind);
                 }
 
-                var text = TomlStringDecoder.Decode(raw!, _token.Kind);
                 Consume(_token.Kind, LexerState.Key);
                 return text;
             }
