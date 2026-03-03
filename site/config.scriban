@@ -1,0 +1,61 @@
+# Tomlyn documentation site.
+# Build from this folder with:
+#   lunet build
+#   lunet serve
+#
+# This site uses the shared template published as a Lunet extension.
+extend "lunet-io/templates"
+
+template_theme_default_mode = "dark"
+
+# ---------------------------------------------------------------------------
+# SITE SECTION (project-specific values only)
+# ---------------------------------------------------------------------------
+
+# Canonical base URL used for `lunet build` (links, og:meta, sitemap...).
+site_project_baseurl = "https://xoofx.github.io"
+site_project_basepath = "/Tomlyn"
+site_project_name = "Tomlyn"
+site_project_description = "A high-performance TOML 1.1 parser and System.Text.Json-style serializer for .NET."
+site_project_logo_path = "/img/Tomlyn.png"
+site_project_social_banner_path = "/img/github-banner.png"
+site_project_package_id = "Tomlyn"
+site_project_github_user = "xoofx"
+site_project_github_repo = "Tomlyn"
+site_project_owner_name = "Alexandre Mutel"
+site_project_owner_alias = "xoofx"
+site_project_owner_url = "https://xoofx.github.io"
+
+site_project_init
+
+# ---------------------------------------------------------------------------
+# API reference (.NET)
+# ---------------------------------------------------------------------------
+with api.dotnet
+    title = "Tomlyn .NET API Reference"
+    path = "/api"
+    menu_name = "api"
+    menu_title = "API Reference"
+    # Tomlyn embeds its source generator via an analyzer project reference.
+    # For API docs, we only need to build Tomlyn itself; building project references
+    # can confuse Lunet's output selection when the generator is built multiple times.
+    properties = {
+        TargetFramework: "net10.0",
+        BuildProjectReferences: "false"
+    }
+    projects = [
+        {
+            name: "Tomlyn",
+            path: "../src/Tomlyn/Tomlyn.csproj"
+        }
+    ]
+end
+
+# ---------------------------------------------------------------------------
+# Search (exclude unpublished content)
+# ---------------------------------------------------------------------------
+
+with search
+    excludes.add ["/specs/**"]
+end
+
