@@ -92,13 +92,22 @@ internal static class TomlTypeInfoResolverPipeline
     {
         if (!typeof(TomlConverter).IsAssignableFrom(converterType))
         {
-            throw new InvalidOperationException($"Converter type '{converterType.FullName}' must derive from '{typeof(TomlConverter).FullName}'.");
+            throw new TomlException($"Converter type '{converterType.FullName}' must derive from '{typeof(TomlConverter).FullName}'.");
         }
 
-        var converter = (TomlConverter?)Activator.CreateInstance(converterType);
-        if (converter is null)
+        if (converterType.GetConstructor(Type.EmptyTypes) is null)
         {
-            throw new InvalidOperationException($"Failed to create converter '{converterType.FullName}'.");
+            throw new TomlException($"Converter type '{converterType.FullName}' must declare a public parameterless constructor.");
+        }
+
+        TomlConverter converter;
+        try
+        {
+            converter = (TomlConverter)Activator.CreateInstance(converterType)!;
+        }
+        catch (Exception ex)
+        {
+            throw new TomlException($"Failed to create converter '{converterType.FullName}'.", ex);
         }
 
         if (converter is TomlConverterFactory factory)
@@ -106,17 +115,17 @@ internal static class TomlTypeInfoResolverPipeline
             var created = factory.CreateConverter(typeToConvert, options);
             if (created is null)
             {
-                throw new InvalidOperationException($"The converter factory '{factory.GetType().FullName}' returned null.");
+                throw new TomlException($"The converter factory '{factory.GetType().FullName}' returned null.");
             }
 
             if (created is TomlConverterFactory)
             {
-                throw new InvalidOperationException($"The converter factory '{factory.GetType().FullName}' returned another {nameof(TomlConverterFactory)}.");
+                throw new TomlException($"The converter factory '{factory.GetType().FullName}' returned another {nameof(TomlConverterFactory)}.");
             }
 
             if (!created.CanConvert(typeToConvert))
             {
-                throw new InvalidOperationException(
+                throw new TomlException(
                     $"The converter factory '{factory.GetType().FullName}' returned a converter that cannot convert '{typeToConvert.FullName}'.");
             }
 
@@ -125,7 +134,7 @@ internal static class TomlTypeInfoResolverPipeline
 
         if (!converter.CanConvert(typeToConvert))
         {
-            throw new InvalidOperationException($"Converter '{converterType.FullName}' cannot convert '{typeToConvert.FullName}'.");
+            throw new TomlException($"Converter '{converterType.FullName}' cannot convert '{typeToConvert.FullName}'.");
         }
 
         return converter;
