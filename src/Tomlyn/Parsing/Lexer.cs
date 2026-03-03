@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using Tomlyn.Helpers;
 using Tomlyn.Model;
@@ -19,35 +20,34 @@ namespace Tomlyn.Parsing
     /// <summary>
     /// Lexer enumerator that generates <see cref="SyntaxTokenValue"/>, to be used from a foreach.
     /// </summary>
-    internal class Lexer<TSourceView, TCharReader> : ITokenProvider<TSourceView> where TSourceView : struct, ISourceView<TCharReader> where TCharReader : struct, CharacterIterator
+    internal sealed class Lexer
     {
-        private static readonly bool ReaderCanThrow = typeof(TCharReader) == typeof(StringCharacterUtf8Iterator);
-        private static readonly bool UseStringSpanFastPaths = typeof(TSourceView) == typeof(StringSourceView) && typeof(TCharReader) == typeof(StringCharacterIterator);
         private SyntaxTokenValue _token;
         private List<DiagnosticMessage>? _errors;
-        private TCharReader _reader;
         private const int Eof = -1;
-        private TSourceView _sourceView;
+        private readonly ReadOnlyMemory<char> _text;
+        private readonly int _textLength;
         private readonly StringBuilder _textBuilder;
-        private LexerInternalState _preview1;
-        private bool _hasPreview1;
         private LexerInternalState _current;
+        private readonly string _sourcePath;
 
         /// <summary>
-        /// Initialize a new instance of this <see cref="Lexer{TSourceView,TCharReader}" />.
+        /// Initialize a new instance of this <see cref="Lexer" />.
         /// </summary>
-        /// <param name="sourceView">The text to analyze</param>
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="System.ArgumentNullException">If text is null</exception>
-        public Lexer(TSourceView sourceView)
+        /// <param name="text">The TOML payload.</param>
+        /// <param name="sourcePath">An optional source name used in diagnostics.</param>
+        public Lexer(ReadOnlyMemory<char> text, string sourcePath)
         {
-            _sourceView = sourceView;
-            _reader = sourceView.GetIterator();
+            _text = text;
+            _textLength = text.Length;
+            _sourcePath = sourcePath ?? string.Empty;
             _textBuilder = new StringBuilder();
             Reset();
         }
 
-        public TSourceView Source => _sourceView;
+        internal ReadOnlyMemory<char> Text => _text;
+
+        internal string SourcePath => _sourcePath;
 
         /// <summary>
         /// Gets a boolean indicating whether this lexer has errors.
@@ -65,6 +65,12 @@ namespace Tomlyn.Parsing
         public bool DecodeScalars { get; set; } = true;
 
         /// <summary>
+        /// Gets or sets a value indicating whether the lexer should eagerly materialize simple string values
+        /// (single-line basic strings without escape sequences) even when <see cref="DecodeScalars"/> is <c>false</c>.
+        /// </summary>
+        public bool EagerStringValues { get; set; }
+
+        /// <summary>
         /// Gets or sets a value indicating whether the lexer should emit hidden tokens (whitespace and comments).
         /// </summary>
         public bool EmitHiddenTokens { get; set; } = true;
@@ -76,7 +82,6 @@ namespace Tomlyn.Parsing
             {
                 return false;
             }
-
             var emitHiddenTokens = EmitHiddenTokens;
             if (State == LexerState.Key)
             {
@@ -103,7 +108,8 @@ namespace Tomlyn.Parsing
             while (true)
             {
                 var start = _position;
-                switch (_c)
+                var c = _c;
+                switch (c)
                 {
                     case '\n':
                         _token = new SyntaxTokenValue(TokenKind.NewLine, start, start);
@@ -146,11 +152,11 @@ namespace Tomlyn.Parsing
                         NextChar();
                         return;
                     case '{':
-                        _token = new SyntaxTokenValue(TokenKind.OpenBrace, _position, _position);
+                        _token = new SyntaxTokenValue(TokenKind.OpenBrace, start, start);
                         NextChar();
                         return;
                     case '}':
-                        _token = new SyntaxTokenValue(TokenKind.CloseBrace, _position, _position);
+                        _token = new SyntaxTokenValue(TokenKind.CloseBrace, start, start);
                         NextChar();
                         return;
                     case '[':
@@ -176,13 +182,13 @@ namespace Tomlyn.Parsing
                         _token = new SyntaxTokenValue(TokenKind.CloseBracket, start, start);
                         return;
                     case '"':
-                        ReadString(start, false);
+                        ReadString(start, allowMultiline: false, materializeSimpleValue: false);
                         return;
                     case '\'':
                         ReadStringLiteral(start, false);
                         return;
                     case Eof:
-                        _token = new SyntaxTokenValue(TokenKind.Eof, _position, _position);
+                        _token = new SyntaxTokenValue(TokenKind.Eof, start, start);
                         return;
                     default:
                         // Eat any whitespace
@@ -197,14 +203,15 @@ namespace Tomlyn.Parsing
                             continue;
                         }
 
-                        if (CharHelper.IsKeyStart(_c))
+                        c = _c;
+                        if (CharHelper.IsKeyStart(c))
                         {
                             ReadKey();
                             return;
                         }
 
                         // invalid char
-                        _token = new SyntaxTokenValue(TokenKind.Invalid, _position, _position);
+                        _token = new SyntaxTokenValue(TokenKind.Invalid, start, start);
                         NextChar();
                         return;
                 }
@@ -216,7 +223,8 @@ namespace Tomlyn.Parsing
             while (true)
             {
                 var start = _position;
-                switch (_c)
+                var c = _c;
+                switch (c)
                 {
                     case '\n':
                         _token = new SyntaxTokenValue(TokenKind.NewLine, start, _position);
@@ -260,21 +268,21 @@ namespace Tomlyn.Parsing
                         _token = new SyntaxTokenValue(TokenKind.CloseBracket, start, start);
                         return;
                     case '{':
-                        _token = new SyntaxTokenValue(TokenKind.OpenBrace, _position, _position);
+                        _token = new SyntaxTokenValue(TokenKind.OpenBrace, start, start);
                         NextChar();
                         return;
                     case '}':
-                        _token = new SyntaxTokenValue(TokenKind.CloseBrace, _position, _position);
+                        _token = new SyntaxTokenValue(TokenKind.CloseBrace, start, start);
                         NextChar();
                         return;
                     case '"':
-                        ReadString(start, true);
+                        ReadString(start, allowMultiline: true, materializeSimpleValue: EagerStringValues);
                         return;
                     case '\'':
                         ReadStringLiteral(start, true);
                         return;
                     case Eof:
-                        _token = new SyntaxTokenValue(TokenKind.Eof, _position, _position);
+                        _token = new SyntaxTokenValue(TokenKind.Eof, start, start);
                         return;
                     default:
                         // Eat any whitespace
@@ -290,110 +298,124 @@ namespace Tomlyn.Parsing
                         }
 
                         // Handle inf, +inf, -inf, true, false
-                        if (_c == '+' || _c == '-' || CharHelper.IsIdentifierStart(_c))
+                        c = _c;
+                        if (c == '+' || c == '-' || CharHelper.IsIdentifierStart(c))
                         {
                             ReadSpecialToken();
                             return;
                         }
 
-                        if (CharHelper.IsDigit(_c))
+                        if (CharHelper.IsDigit(c))
                         {
                             ReadNumberOrDate();
                             return;
                         }
 
                         // invalid char
-                        _token = new SyntaxTokenValue(TokenKind.Invalid, _position, _position);
+                        _token = new SyntaxTokenValue(TokenKind.Invalid, start, start);
                         NextChar();
                         return;
                 }
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal ReadOnlySpan<char> GetSpanUnchecked(int offset, int length)
+        {
+            return _text.Span.Slice(offset, length);
+        }
+
+        internal ReadOnlySpan<char> GetSpan(int offset, int length)
+        {
+            if (offset < 0 || length < 0)
+            {
+                return default;
+            }
+
+            if ((uint)offset > (uint)_textLength || offset + length > _textLength)
+            {
+                return default;
+            }
+
+            return _text.Span.Slice(offset, length);
+        }
+
+        internal string? GetString(int offset, int length)
+        {
+            var span = GetSpan(offset, length);
+            return span.IsEmpty ? null : span.ToString();
+        }
+
         private bool ConsumeWhitespaceCore(out TextPosition end)
         {
-            if (UseStringSpanFastPaths && !_hasPreview1)
+            var text = _text.Span;
+            var startPosition = _position;
+            var offset = startPosition.Offset;
+            var remaining = _textLength - offset;
+            if (remaining <= 0)
             {
-                var startPosition = _position;
-                var offset = startPosition.Offset;
-                var remaining = _sourceView.Length - offset;
-                if (remaining <= 0)
-                {
-                    end = startPosition;
-                    return false;
-                }
-
-                var span = _sourceView.GetSpan(offset, remaining);
-                var i = 0;
-                while ((uint)i < (uint)span.Length)
-                {
-                    var c = span[i];
-                    if (c != ' ' && c != '\t')
-                    {
-                        break;
-                    }
-                    i++;
-                }
-
-                if (i == 0)
-                {
-                    end = startPosition;
-                    return false;
-                }
-
-                end = new TextPosition(offset + i - 1, startPosition.Line, startPosition.Column + i - 1);
-
-                var nextPosition = new TextPosition(offset + i, startPosition.Line, startPosition.Column + i);
-                _current.Position = nextPosition;
-                _current.NextPosition = nextPosition;
-                _current.CurrentChar = NextCharFromReader();
-                return true;
+                end = startPosition;
+                return false;
             }
 
-            end = _position;
-            var consumed = false;
-            while (CharHelper.IsWhiteSpace(_c))
+            var span = text.Slice(offset, remaining);
+            var i = 0;
+            while ((uint)i < (uint)span.Length)
             {
-                end = _position;
-                NextChar();
-                consumed = true;
+                var c = span[i];
+                if (c != ' ' && c != '\t')
+                {
+                    break;
+                }
+                i++;
             }
 
-            return consumed;
+            if (i == 0)
+            {
+                end = startPosition;
+                return false;
+            }
+
+            end = new TextPosition(offset + i - 1, startPosition.Line, startPosition.Column + i - 1);
+
+            var nextPosition = new TextPosition(offset + i, startPosition.Line, startPosition.Column + i);
+            _current.Position = nextPosition;
+            _current.NextPosition = nextPosition;
+            _current.CurrentChar = NextCharFromReader();
+            return true;
         }
 
         private void ReadKey()
         {
-            if (UseStringSpanFastPaths && !_hasPreview1)
+            var text = _text.Span;
+            static bool IsKeyContinueChar(char c)
+                => (c >= 'a' && c <= 'z') ||
+                   (c >= 'A' && c <= 'Z') ||
+                   c == '_' ||
+                   c == '-' ||
+                   (c >= '0' && c <= '9');
+
+            var start = _position;
+            var offset = start.Offset;
+            var remaining = _textLength - offset;
+            var span = remaining > 0 ? text.Slice(offset, remaining) : default;
+
+            var hash = 14695981039346656037UL;
+            var i = 0;
+            while ((uint)i < (uint)span.Length)
             {
-                static bool IsKeyContinueChar(char c)
-                    => (c >= 'a' && c <= 'z') ||
-                       (c >= 'A' && c <= 'Z') ||
-                       c == '_' ||
-                       c == '-' ||
-                       (c >= '0' && c <= '9');
-
-                var start = _position;
-                var offset = start.Offset;
-                var remaining = _sourceView.Length - offset;
-                var span = remaining > 0 ? _sourceView.GetSpan(offset, remaining) : default;
-
-                var hash = 14695981039346656037UL;
-                var i = 0;
-                while ((uint)i < (uint)span.Length)
+                var c = span[i];
+                if (!IsKeyContinueChar(c))
                 {
-                    var c = span[i];
-                    if (!IsKeyContinueChar(c))
-                    {
-                        break;
-                    }
-
-                    hash = HashAdd(hash, c);
-                    i++;
+                    break;
                 }
 
-                Debug.Assert(i > 0, "ReadKey fast-path must only run when positioned on a key start character.");
+                hash = HashAdd(hash, c);
+                i++;
+            }
 
+            if (i > 0)
+            {
                 var end = new TextPosition(offset + i - 1, start.Line, start.Column + i - 1);
                 _token = new SyntaxTokenValue(TokenKind.BasicKey, start, end, stringValue: null, data: hash);
 
@@ -404,19 +426,18 @@ namespace Tomlyn.Parsing
                 return;
             }
 
+            Debug.Assert(false, "ReadKey fast-path fallback should not run for valid key starts.");
+            var slowStart = _position;
+            var slowEnd = _position;
+            var slowHash = 14695981039346656037UL;
+            while (CharHelper.IsKeyContinue(_c))
             {
-                var start = _position;
-                var end = _position;
-                var hash = 14695981039346656037UL;
-                while (CharHelper.IsKeyContinue(_c))
-                {
-                    hash = HashAdd(hash, _c.Code);
-                    end = _position;
-                    NextChar();
-                }
-
-                _token = new SyntaxTokenValue(TokenKind.BasicKey, start, end, stringValue: null, data: hash);
+                slowHash = HashAdd(slowHash, _c.Code);
+                slowEnd = _position;
+                NextChar();
             }
+
+            _token = new SyntaxTokenValue(TokenKind.BasicKey, slowStart, slowEnd, stringValue: null, data: slowHash);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -442,6 +463,29 @@ namespace Tomlyn.Parsing
 
             if (firstChar == 't')
             {
+                var text = _text.Span;
+                // Fast-path for the common boolean literal `true`.
+                // We already consumed the initial 't' with NextChar(), so we only need to validate and skip "rue".
+                var offset = _position.Offset;
+                var remaining = _textLength - offset;
+                if (remaining >= 3)
+                {
+                    var span = text.Slice(offset, remaining);
+                    if (span.Length >= 3 && span[0] == 'r' && span[1] == 'u' && span[2] == 'e' &&
+                        (span.Length == 3 || !CharHelper.IsIdentifierContinue((char32)span[3])))
+                    {
+                        end = new TextPosition(start.Offset + 3, start.Line, start.Column + 3);
+
+                        var nextPosition = new TextPosition(start.Offset + 4, start.Line, start.Column + 4);
+                        _current.Position = nextPosition;
+                        _current.NextPosition = nextPosition;
+                        _current.CurrentChar = NextCharFromReader();
+
+                        _token = new SyntaxTokenValue(TokenKind.True, start, end, stringValue: null, data: 1);
+                        return;
+                    }
+                }
+
                 if (TryConsumeIdentifierChar('r', ref end) &&
                     TryConsumeIdentifierChar('u', ref end) &&
                     TryConsumeIdentifierChar('e', ref end) &&
@@ -458,6 +502,28 @@ namespace Tomlyn.Parsing
 
             if (firstChar == 'f')
             {
+                var text = _text.Span;
+                // Fast-path for the boolean literal `false`.
+                var offset = _position.Offset;
+                var remaining = _textLength - offset;
+                if (remaining >= 4)
+                {
+                    var span = text.Slice(offset, remaining);
+                    if (span.Length >= 4 && span[0] == 'a' && span[1] == 'l' && span[2] == 's' && span[3] == 'e' &&
+                        (span.Length == 4 || !CharHelper.IsIdentifierContinue((char32)span[4])))
+                    {
+                        end = new TextPosition(start.Offset + 4, start.Line, start.Column + 4);
+
+                        var nextPosition = new TextPosition(start.Offset + 5, start.Line, start.Column + 5);
+                        _current.Position = nextPosition;
+                        _current.NextPosition = nextPosition;
+                        _current.CurrentChar = NextCharFromReader();
+
+                        _token = new SyntaxTokenValue(TokenKind.False, start, end, stringValue: null, data: 0);
+                        return;
+                    }
+                }
+
                 if (TryConsumeIdentifierChar('a', ref end) &&
                     TryConsumeIdentifierChar('l', ref end) &&
                     TryConsumeIdentifierChar('s', ref end) &&
@@ -539,15 +605,7 @@ namespace Tomlyn.Parsing
                             data: unchecked((ulong)BitConverter.DoubleToInt64Bits(double.NaN)));
                         return;
                     }
-
-                    ConsumeIdentifierContinue(ref end);
-                    _token = new SyntaxTokenValue(TokenKind.Invalid, start, end);
-                    return;
                 }
-
-                ConsumeIdentifierContinue(ref end);
-                _token = new SyntaxTokenValue(TokenKind.Invalid, start, end);
-                return;
             }
 
             ConsumeIdentifierContinue(ref end);
@@ -569,8 +627,14 @@ namespace Tomlyn.Parsing
 
         private void ConsumeIdentifierContinue(ref TextPosition end)
         {
-            while (CharHelper.IsIdentifierContinue(_c))
+            while (true)
             {
+                var c = _c;
+                if (!CharHelper.IsIdentifierContinue(c))
+                {
+                    break;
+                }
+
                 end = _position;
                 NextChar();
             }
@@ -1062,12 +1126,18 @@ namespace Tomlyn.Parsing
 
         private void ReadDigits(ref TextPosition end, bool isPreviousDigit)
         {
-            bool isDigit;
-            while ((isDigit = CharHelper.IsDigit(_c)) || _c == '_')
+            while (true)
             {
+                var c = _c;
+                var isDigit = CharHelper.IsDigit(c);
+                if (!isDigit && c != '_')
+                {
+                    break;
+                }
+
                 if (isDigit)
                 {
-                    _textBuilder.AppendUtf32(_c);
+                    _textBuilder.AppendUtf32(c);
                     isPreviousDigit = true;
                 }
                 else if (!isPreviousDigit)
@@ -1088,18 +1158,21 @@ namespace Tomlyn.Parsing
             }
         }
 
-        private void ReadString(TextPosition start, bool allowMultiline)
+        private void ReadString(TextPosition start, bool allowMultiline, bool materializeSimpleValue)
         {
             var end = _position;
+            var decodeScalars = DecodeScalars;
             bool isMultiLine = false;
 
             NextChar(); // Skip "
-            if (allowMultiline && _c == '"')
+            var c = _c;
+            if (allowMultiline && c == '"')
             {
                 end = _position;
                 NextChar();
 
-                if (_c == '"')
+                c = _c;
+                if (c == '"')
                 {
                     end = _position;
                     NextChar();
@@ -1110,36 +1183,54 @@ namespace Tomlyn.Parsing
                 else
                 {
                     // Else this is an empty string
-                    _token = new SyntaxTokenValue(TokenKind.String, start, end, DecodeScalars ? string.Empty : null);
+                    _token = new SyntaxTokenValue(TokenKind.String, start, end, decodeScalars || materializeSimpleValue ? string.Empty : null);
                     return;
                 }
             }
 
-            // Reset the current string buffer
-            _textBuilder.Length = 0;
+            // Reset the current string buffer only when we might append to it.
+            if (decodeScalars)
+            {
+                _textBuilder.Length = 0;
+            }
+
+            if (!isMultiLine && TryReadStringFastPath(start, ref end, decodeScalars, materializeSimpleValue))
+            {
+                // The fast path only applies when we can jump directly to the closing quote,
+                // which means the string did not contain any escape sequences.
+                return;
+            }
 
             continue_parsing_string:
-            while (_c != '\"' && _c != Eof)
+            while (true)
             {
-                if (_c == '\r' && PeekChar() != '\n')
+                c = _c;
+                if (c == '"' || c == Eof)
+                {
+                    break;
+                }
+
+                c = _c;
+                if (c == '\r' && PeekChar() != '\n')
                 {
                     AddError($"Invalid \\r not followed by \\n", _position, _position);
                 }
 
-                if (!TryReadEscapeChar(ref end))
+                if (c != '\\' || !TryReadEscapeChar(ref end))
                 {
-                    if (!isMultiLine && CharHelper.IsNewLine(_c))
+                    c = _c;
+                    if (!isMultiLine && CharHelper.IsNewLine(c))
                     {
                         AddError("Invalid newline in a string", _position, _position);
                     }
-                    else if (CharHelper.IsControlCharacter(_c) && _c != '\t' && (!isMultiLine || !CharHelper.IsWhiteSpaceOrNewLine(_c)))
+                    else if (CharHelper.IsControlCharacter(c) && c != '\t' && (!isMultiLine || !CharHelper.IsWhiteSpaceOrNewLine(c)))
                     {
-                        AddError($"Invalid control character found {((char)_c).ToPrintableString()}", start, start);
+                        AddError($"Invalid control character found {((char)c).ToPrintableString()}", start, start);
                     }
 
-                    if (DecodeScalars)
+                    if (decodeScalars)
                     {
-                        _textBuilder.AppendUtf32(_c);
+                        _textBuilder.AppendUtf32(c);
                     }
                     end = _position;
                     NextChar();
@@ -1151,9 +1242,14 @@ namespace Tomlyn.Parsing
                 if (_c == '"')
                 {
                     int count = 0;
-                    while (_c == '"')
+                    while (true)
                     {
-                        if (count >= 5) break;
+                        c = _c;
+                        if (c != '"' || count >= 5)
+                        {
+                            break;
+                        }
+
                         count++;
                         end = _position;
                         NextChar();
@@ -1163,7 +1259,7 @@ namespace Tomlyn.Parsing
                     {
                         for (int i = 0; i < count - 3; i++)
                         {
-                            if (DecodeScalars)
+                            if (decodeScalars)
                             {
                                 _textBuilder.Append('"');
                             }
@@ -1173,7 +1269,7 @@ namespace Tomlyn.Parsing
                     {
                         for (int i = 0; i < count; i++)
                         {
-                            if (DecodeScalars)
+                            if (decodeScalars)
                             {
                                 _textBuilder.Append('"');
                             }
@@ -1185,7 +1281,7 @@ namespace Tomlyn.Parsing
                 {
                     AddError("Invalid End-Of-File found for multi-line string", end, end);
                 }
-                _token = new SyntaxTokenValue(TokenKind.StringMulti, start, end, DecodeScalars ? _textBuilder.ToString() : null);
+                _token = new SyntaxTokenValue(TokenKind.StringMulti, start, end, decodeScalars ? _textBuilder.ToString() : null);
             }
             else
             {
@@ -1198,8 +1294,95 @@ namespace Tomlyn.Parsing
                 {
                     AddError("Invalid End-Of-File found on string literal", end, end);
                 }
-                _token = new SyntaxTokenValue(TokenKind.String, start, end, DecodeScalars ? _textBuilder.ToString() : null);
+                _token = new SyntaxTokenValue(TokenKind.String, start, end, decodeScalars ? _textBuilder.ToString() : null);
             }
+        }
+
+        private bool TryReadStringFastPath(TextPosition start, ref TextPosition end, bool decodeScalars, bool materializeSimpleValue)
+        {
+            // Hot path: basic strings without escapes/newlines.
+            // We avoid per-character NextChar() updates by scanning the underlying text and jumping directly
+            // to the closing quote, then consuming it once.
+            //
+            // This method is intentionally conservative: it only applies when the substring does not contain:
+            // - escape sequences ('\\')
+            // - newlines
+            // - control characters (except '\t', to preserve existing behavior)
+            // - surrogate code units (to preserve column tracking based on scalar values)
+            // - U+FFFD (used internally as a signal for invalid UTF-8 sequences)
+            var contentStart = _position;
+            var startOffset = contentStart.Offset;
+            if ((uint)startOffset >= (uint)_textLength)
+            {
+                return false;
+            }
+
+            var text = _text.Span;
+            var remaining = text.Slice(startOffset, _textLength - startOffset);
+            if (remaining.IsEmpty)
+            {
+                return false;
+            }
+
+            // Scan once until the closing quote, validating that the string has no escapes/newlines/control chars.
+            ref var startRef = ref MemoryMarshal.GetReference(remaining);
+            var index = 0;
+            while ((uint)index < (uint)remaining.Length)
+            {
+                var ch = Unsafe.Add(ref startRef, index);
+                if (ch == '\"')
+                {
+                    break;
+                }
+
+                if (ch == '\\' || ch == '\n' || ch == '\r')
+                {
+                    return false;
+                }
+
+                if (ch == '\uFFFD')
+                {
+                    return false;
+                }
+
+                // Fast surrogate-range check: (0xD800..0xDFFF)
+                if ((uint)(ch - 0xD800) <= 0x7FFu)
+                {
+                    return false;
+                }
+
+                if ((ch < ' ' && ch != '\t') || ch == '\u007F')
+                {
+                    return false;
+                }
+
+                index++;
+            }
+
+            if ((uint)index >= (uint)remaining.Length)
+            {
+                return false;
+            }
+
+            var rawContent = remaining.Slice(0, index);
+
+            var quoteOffset = startOffset + index;
+            var quotePosition = new TextPosition(quoteOffset, contentStart.Line, contentStart.Column + index);
+            end = quotePosition;
+
+            // Jump to the closing quote and consume it (one NextChar()).
+            _current.Position = quotePosition;
+            _current.NextPosition = quotePosition;
+            _current.CurrentChar = NextCharFromReader();
+            if (_c != '\"')
+            {
+                return false;
+            }
+
+            NextChar();
+            var value = decodeScalars || materializeSimpleValue ? rawContent.ToString() : null;
+            _token = new SyntaxTokenValue(TokenKind.String, start, end, value);
+            return true;
         }
 
         private void SkipImmediateNextLine()
@@ -1226,155 +1409,172 @@ namespace Tomlyn.Parsing
 
         private bool TryReadEscapeChar(ref TextPosition end)
         {
-            if (_c == '\\')
+            var decodeScalars = DecodeScalars;
+            end = _position;
+            NextChar();
+            // 0 \ ' " a b f n r t v u0000-uFFFF x00-xFF
+            var c = _c;
+            switch (c)
             {
-                end = _position;
-                NextChar();
-                // 0 \ ' " a b f n r t v u0000-uFFFF x00-xFF
-                switch (_c)
+                case 'b':
+                    if (decodeScalars) _textBuilder.Append('\b');
+                    end = _position;
+                    NextChar();
+                    return true;
+                case 't':
+                    if (decodeScalars) _textBuilder.Append('\t');
+                    end = _position;
+                    NextChar();
+                    return true;
+                case 'n':
+                    if (decodeScalars) _textBuilder.Append('\n');
+                    end = _position;
+                    NextChar();
+                    return true;
+                case 'f':
+                    if (decodeScalars) _textBuilder.Append('\f');
+                    end = _position;
+                    NextChar();
+                    return true;
+                case 'r':
+                    if (decodeScalars) _textBuilder.Append('\r');
+                    end = _position;
+                    NextChar();
+                    return true;
+                case '"':
+                    if (decodeScalars) _textBuilder.Append('"');
+                    end = _position;
+                    NextChar();
+                    return true;
+                case '\\':
+                    if (decodeScalars) _textBuilder.Append('\\');
+                    end = _position;
+                    NextChar();
+                    return true;
+                case 'e':
+                    if (decodeScalars) _textBuilder.Append('\u001B');
+                    end = _position;
+                    NextChar();
+                    return true;
+                case 'x':
                 {
-                    case 'b':
-                        if (DecodeScalars) _textBuilder.Append('\b');
-                        end = _position;
-                        NextChar();
-                        return true;
-                    case 't':
-                        if (DecodeScalars) _textBuilder.Append('\t');
-                        end = _position;
-                        NextChar();
-                        return true;
-                    case 'n':
-                        if (DecodeScalars) _textBuilder.Append('\n');
-                        end = _position;
-                        NextChar();
-                        return true;
-                    case 'f':
-                        if (DecodeScalars) _textBuilder.Append('\f');
-                        end = _position;
-                        NextChar();
-                        return true;
-                    case 'r':
-                        if (DecodeScalars) _textBuilder.Append('\r');
-                        end = _position;
-                        NextChar();
-                        return true;
-                    case '"':
-                        if (DecodeScalars) _textBuilder.Append('"');
-                        end = _position;
-                        NextChar();
-                        return true;
-                    case '\\':
-                        if (DecodeScalars) _textBuilder.Append('\\');
-                        end = _position;
-                        NextChar();
-                        return true;
-                    case 'e':
-                        if (DecodeScalars) _textBuilder.Append('\u001B');
-                        end = _position;
-                        NextChar();
-                        return true;
-                    case 'x':
+                    var start = _position;
+                    end = _position;
+                    NextChar();
+
+                    c = _c;
+                    if (!CharHelper.IsHexFunc(c))
                     {
-                        var start = _position;
-                        end = _position;
-                        NextChar();
-
-                        if (!CharHelper.IsHexFunc(_c))
-                        {
-                            AddError("Invalid escape `\\x`. Expected 2 hexadecimal digits.", start, start);
-                            return false;
-                        }
-
-                        var value = CharHelper.HexToDecimal(_c);
-                        end = _position;
-                        NextChar();
-
-                        if (!CharHelper.IsHexFunc(_c))
-                        {
-                            AddError("Invalid escape `\\x`. Expected 2 hexadecimal digits.", start, start);
-                            return false;
-                        }
-
-                        value = (value << 4) + CharHelper.HexToDecimal(_c);
-                        end = _position;
-                        NextChar();
-
-                        if (DecodeScalars) _textBuilder.Append((char)value);
-                        return true;
+                        AddError("Invalid escape `\\x`. Expected 2 hexadecimal digits.", start, start);
+                        return false;
                     }
 
-                    // toml-specs:  When the last non-whitespace character on a line is a \,
-                    // it will be trimmed along with all whitespace (including newlines)
-                    // up to the next non-whitespace character or closing delimiter. 
-                    case ' ':
-                    case '\t':
-                    case '\r':
-                    case '\n':
-                        var startWithSpace = _c == ' ';
-                        var startPosition = _position;
-                        while (CharHelper.IsWhiteSpaceOrNewLine(_c))
-                        {
-                            end = _position;
-                            NextChar();
-                        }
+                    var value = CharHelper.HexToDecimal(c);
+                    end = _position;
+                    NextChar();
 
-                        if (startWithSpace && end.Line == startPosition.Line)
-                        {
-                            AddError("Invalid escape `\\`. It must skip at least one line.", startPosition, startPosition);
-                        }
-
-                        return true;
-
-                    case 'u':
-                    case 'U':
+                    c = _c;
+                    if (!CharHelper.IsHexFunc(c))
                     {
-                        var start = _position;
-                        end = _position;
-                        var maxCount = _c == 'u' ? 4 : 8;
-                        NextChar();
-
-                        // Must be followed 0 to 8 hex numbers (0-FFFFFFFF)
-                        int i = 0;
-                        int value = 0;
-                        for (; CharHelper.IsHexFunc(_c) && i < maxCount; i++)
-                        {
-                            value = (value << 4) + CharHelper.HexToDecimal(_c);
-                            end = _position;
-                            NextChar();
-                        }
-
-                        if (i == maxCount)
-                        {
-                            if (!CharHelper.IsValidUnicodeScalarValue(value))
-                            {
-                                AddError($"Invalid Unicode scalar value [{value:X}]",start, start);
-                            }
-                            if (DecodeScalars) _textBuilder.AppendUtf32((char32)value);
-                            return true;
-                        }
+                        AddError("Invalid escape `\\x`. Expected 2 hexadecimal digits.", start, start);
+                        return false;
                     }
-                        break;
+
+                    value = (value << 4) + CharHelper.HexToDecimal(c);
+                    end = _position;
+                    NextChar();
+
+                    if (decodeScalars) _textBuilder.Append((char)value);
+                    return true;
                 }
 
-                AddError($"Unexpected escape character [{_c}] in string. Only b t n f r e \\ \" xHH u0000-uFFFF U00000000-UFFFFFFFF are allowed", _position, _position);
-                return false;
+                // toml-specs:  When the last non-whitespace character on a line is a \,
+                // it will be trimmed along with all whitespace (including newlines)
+                // up to the next non-whitespace character or closing delimiter. 
+                case ' ':
+                case '\t':
+                case '\r':
+                case '\n':
+                    var startWithSpace = c == ' ';
+                    var startPosition = _position;
+                    while (true)
+                    {
+                        c = _c;
+                        if (!CharHelper.IsWhiteSpaceOrNewLine(c))
+                        {
+                            break;
+                        }
+
+                        end = _position;
+                        NextChar();
+                    }
+
+                    if (startWithSpace && end.Line == startPosition.Line)
+                    {
+                        AddError("Invalid escape `\\`. It must skip at least one line.", startPosition, startPosition);
+                    }
+
+                    return true;
+
+                case 'u':
+                case 'U':
+                {
+                    var start = _position;
+                    end = _position;
+                    var maxCount = c == 'u' ? 4 : 8;
+                    NextChar();
+
+                    // Must be followed 0 to 8 hex numbers (0-FFFFFFFF)
+                    int i = 0;
+                    int value = 0;
+                    while (i < maxCount)
+                    {
+                        c = _c;
+                        if (!CharHelper.IsHexFunc(c))
+                        {
+                            break;
+                        }
+
+                        value = (value << 4) + CharHelper.HexToDecimal(c);
+                        end = _position;
+                        NextChar();
+                        i++;
+                    }
+
+                    if (i == maxCount)
+                    {
+                        if (!CharHelper.IsValidUnicodeScalarValue(value))
+                        {
+                            AddError($"Invalid Unicode scalar value [{value:X}]",start, start);
+                        }
+                        if (decodeScalars) _textBuilder.AppendUtf32((char32)value);
+                        return true;
+                    }
+                }
+                    break;
             }
+
+            c = _c;
+            AddError($"Unexpected escape character [{c}] in string. Only b t n f r e \\ \" xHH u0000-uFFFF U00000000-UFFFFFFFF are allowed", _position, _position);
             return false;
         }
 
         private void ReadStringLiteral(TextPosition start, bool allowMultiline)
         {
             var end = _position;
+            var decodeScalars = DecodeScalars;
 
             bool isMultiLine = false;
 
             NextChar(); // Skip '
-            if (allowMultiline && _c == '\'')
+            var c = _c;
+            if (allowMultiline && c == '\'')
             {
                 end = _position;
                 NextChar();
 
-                if (_c == '\'')
+                c = _c;
+                if (c == '\'')
                 {
                     end = _position;
                     NextChar();
@@ -1386,31 +1586,37 @@ namespace Tomlyn.Parsing
                 else
                 {
                     // Else this is an empty literal string
-                    _token = new SyntaxTokenValue(TokenKind.StringLiteral, start, end, DecodeScalars ? string.Empty : null);
+                    _token = new SyntaxTokenValue(TokenKind.StringLiteral, start, end, decodeScalars ? string.Empty : null);
                     return;
                 }
             }
 
             _textBuilder.Length = 0;
             continue_parsing_string:
-            while (_c != '\'' && _c != Eof)
+            while (true)
             {
-                if (_c == '\r' && PeekChar() != '\n')
+                c = _c;
+                if (c == '\'' || c == Eof)
+                {
+                    break;
+                }
+
+                if (c == '\r' && PeekChar() != '\n')
                 {
                     AddError($"Invalid \\r not followed by \\n", _position, _position);
                 }
 
-                if (!isMultiLine && CharHelper.IsNewLine(_c))
+                if (!isMultiLine && CharHelper.IsNewLine(c))
                 {
                     AddError("Invalid newline in a string", _position, _position);
                 }
-                else if (CharHelper.IsControlCharacter(_c) && _c != '\t' && (!isMultiLine || !CharHelper.IsNewLine(_c)))
+                else if (CharHelper.IsControlCharacter(c) && c != '\t' && (!isMultiLine || !CharHelper.IsNewLine(c)))
                 {
-                    AddError($"Invalid control character found {((char)_c).ToPrintableString()}", start, start);
+                    AddError($"Invalid control character found {((char)c).ToPrintableString()}", start, start);
                 }
-                if (DecodeScalars)
+                if (decodeScalars)
                 {
-                    _textBuilder.AppendUtf32(_c);
+                    _textBuilder.AppendUtf32(c);
                 }
                 end = _position;
                 NextChar();
@@ -1421,9 +1627,14 @@ namespace Tomlyn.Parsing
                 if (_c == '\'')
                 {
                     int count = 0;
-                    while (_c == '\'')
+                    while (true)
                     {
-                        if (count >= 5) break;
+                        c = _c;
+                        if (c != '\'' || count >= 5)
+                        {
+                            break;
+                        }
+
                         count++;
                         end = _position;
                         NextChar();
@@ -1433,7 +1644,7 @@ namespace Tomlyn.Parsing
                     {
                         for (int i = 0; i < count - 3; i++)
                         {
-                            if (DecodeScalars)
+                            if (decodeScalars)
                             {
                                 _textBuilder.Append('\'');
                             }
@@ -1443,7 +1654,7 @@ namespace Tomlyn.Parsing
                     {
                         for (int i = 0; i < count; i++)
                         {
-                            if (DecodeScalars)
+                            if (decodeScalars)
                             {
                                 _textBuilder.Append('\'');
                             }
@@ -1456,7 +1667,7 @@ namespace Tomlyn.Parsing
                 {
                     AddError("Invalid End-Of-File found for multi-line literal string", end, end);
                 }
-                _token = new SyntaxTokenValue(TokenKind.StringLiteralMulti, start, end, DecodeScalars ? _textBuilder.ToString() : null);
+                _token = new SyntaxTokenValue(TokenKind.StringLiteralMulti, start, end, decodeScalars ? _textBuilder.ToString() : null);
             }
             else
             {
@@ -1469,7 +1680,7 @@ namespace Tomlyn.Parsing
                 {
                     AddError("Invalid End-Of-File found on string literal", end, end);
                 }
-                _token = new SyntaxTokenValue(TokenKind.StringLiteral, start, end, DecodeScalars ? _textBuilder.ToString() : null);
+                _token = new SyntaxTokenValue(TokenKind.StringLiteral, start, end, decodeScalars ? _textBuilder.ToString() : null);
             }
         }
         
@@ -1478,13 +1689,19 @@ namespace Tomlyn.Parsing
         {
             var end = start;
             // Read until the end of the line/file
-            while (_c != Eof && _c != '\r' && _c != '\n')
+            while (true)
             {
+                var c = _c;
+                if (c == Eof || c == '\r' || c == '\n')
+                {
+                    break;
+                }
+
                 // Invalid characters for comment
                 // U+0000 to U+0008, U+000A to U+001F, U+007F
-                if (_c >= 0 && _c <= 8 || _c >= 0xa && _c <= 0x1f || _c == 0x7f)
+                if (c >= 0 && c <= 8 || c >= 0xa && c <= 0x1f || c == 0x7f)
                 {
-                    AddError($"Invalid control character U+{_c.Code:X4} in comment", _position, _position);
+                    AddError($"Invalid control character U+{c.Code:X4} in comment", _position, _position);
                 }
                 // _position.Offset points at the start of the current UTF-32 scalar; use the lexer
                 // internal next offset so end spans include the full UTF-8/UTF-16 sequence.
@@ -1503,55 +1720,89 @@ namespace Tomlyn.Parsing
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void NextChar()
         {
-            // If we have a character in preview
-            if (_hasPreview1)
-            {
-                _current = _preview1;
-                _hasPreview1 = false;
-                return;
-            }
-
-            // Else move to the next position
             _current.Position = _current.NextPosition;
-            _current.PreviousChar = _current.CurrentChar; // save the previous character
             _current.CurrentChar = NextCharFromReader();
         }
 
-        // Peek one char ahead
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private char32 PeekChar()
         {
-            if (!_hasPreview1)
+            int position = _current.NextPosition.Offset;
+            if ((uint)position >= (uint)_textLength)
             {
-                var saved = _current;
-                NextChar();
-                _preview1 = _current;
-                _hasPreview1 = true;
-                _current = saved;
+                return Eof;
             }
 
-            return _preview1.CurrentChar;
+            var nextChar = ReadChar32(ref position);
+            if (nextChar == 0xFFFD)
+            {
+                AddError($"The character `{nextChar}` is an invalid UTF8 character", _current.Position, _current.Position);
+            }
+
+            return nextChar;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private char32 ReadChar32(ref int position)
+        {
+            var span = _text.Span;
+            ref var start = ref MemoryMarshal.GetReference(span);
+            var c1 = Unsafe.Add(ref start, position);
+            position++;
+
+            // Fast surrogate checks (avoid char.IsHighSurrogate/IsLowSurrogate)
+            if (((uint)c1 & 0xFC00u) == 0xD800u)
+            {
+                if ((uint)position < (uint)_textLength)
+                {
+                    var c2 = Unsafe.Add(ref start, position++);
+                    if (((uint)c2 & 0xFC00u) == 0xDC00u)
+                    {
+                        return char.ConvertToUtf32(c1, c2);
+                    }
+
+                    return 0xFFFD;
+                }
+
+                position = _textLength;
+                return 0xFFFD;
+            }
+
+            if (((uint)c1 & 0xFC00u) == 0xDC00u)
+            {
+                return 0xFFFD;
+            }
+
+            return c1;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private char32 NextCharFromReaderCore()
         {
-            int position = _position.Offset;
-            if (!_reader.TryGetNext(ref position, out var nextChar))
+            ref readonly var currentPosition = ref _current.Position;
+            ref var nextPosition = ref _current.NextPosition;
+
+            int position = currentPosition.Offset;
+            if ((uint)position >= (uint)_textLength)
             {
-                _current.NextPosition.Offset = position;
+                nextPosition.Offset = _textLength;
                 return Eof;
             }
-            _current.NextPosition.Offset = position;
+
+            var nextChar = ReadChar32(ref position);
+            nextPosition.Offset = position;
 
             var nextc = nextChar;
+            nextPosition.Line = currentPosition.Line;
+            nextPosition.Column = currentPosition.Column;
             if (nextc == '\n')
             {
-                _current.NextPosition.Column = 0;
-                _current.NextPosition.Line += 1;
+                nextPosition.Column = 0;
+                nextPosition.Line++;
             }
             else
             {
-                _current.NextPosition.Column++;
+                nextPosition.Column++;
             }
 
             // U+FFFD is the Unicode replacement character. If it shows up in the input, it is typically a sign
@@ -1565,23 +1816,7 @@ namespace Tomlyn.Parsing
             return nextc;
         }
 
-        private char32 NextCharFromReader()
-        {
-            if (!ReaderCanThrow)
-            {
-                return NextCharFromReaderCore();
-            }
-
-            try
-            {
-                return NextCharFromReaderCore();
-            }
-            catch (CharReaderException ex)
-            {
-                AddError(ex.Message, _position, _position);
-                return Eof;
-            }
-        }
+        private char32 NextCharFromReader() => NextCharFromReaderCore();
 
         private void AddError(string message, TextPosition start, TextPosition end)
         {
@@ -1589,14 +1824,13 @@ namespace Tomlyn.Parsing
             {
                 _errors = new List<DiagnosticMessage>();
             }
-            _errors.Add(new DiagnosticMessage(DiagnosticMessageKind.Error, new SourceSpan(_sourceView.SourcePath, start, end), message));
+            _errors.Add(new DiagnosticMessage(DiagnosticMessageKind.Error, new SourceSpan(_sourcePath, start, end), message));
         }
 
         private void Reset()
         {
             // Initialize the position at -1 when starting
-            _hasPreview1 = false;
-            _current = new LexerInternalState {Position = new TextPosition(_reader.Start, 0, 0)};
+            _current = new LexerInternalState {Position = new TextPosition(0, 0, 0)};
             // It is important to initialize this separately from the previous line
             _current.CurrentChar = NextCharFromReader();
             _token = new SyntaxTokenValue();
@@ -1607,11 +1841,10 @@ namespace Tomlyn.Parsing
     [DebuggerDisplay("{Position} {Character}")]
     internal struct LexerInternalState
     {
-        public LexerInternalState(TextPosition nextPosition, TextPosition position, char32 previousChar, char32 c)
+        public LexerInternalState(TextPosition nextPosition, TextPosition position, char32 c)
         {
             NextPosition = nextPosition;
             Position = position;
-            PreviousChar = previousChar;
             CurrentChar = c;
         }
 
@@ -1619,10 +1852,10 @@ namespace Tomlyn.Parsing
 
         public TextPosition Position;
 
-        public char32 PreviousChar;
-
         public char32 CurrentChar;
     }
 
 }
+
+
 

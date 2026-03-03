@@ -24,7 +24,7 @@ public static class SyntaxParser
             throw new ArgumentNullException(nameof(lexer));
         }
 
-        var parser = new Parser<ISourceView>(lexer.CreateTokenProvider());
+        var parser = new Parser(lexer.InternalLexer);
         var doc = parser.Run();
         if (validate && !doc.HasErrors)
         {

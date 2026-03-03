@@ -3,7 +3,6 @@
 // See license.txt file in the project root for full license information.
 using System;
 using Tomlyn.Syntax;
-using Tomlyn.Text;
 
 namespace Tomlyn.Parsing
 {
@@ -76,13 +75,26 @@ namespace Tomlyn.Parsing
             return End.Offset < text.Length ? text.Substring(Start.Offset, End.Offset - Start.Offset + 1) : null;
         }
 
-        internal string? GetText<TTextView>(TTextView text) where TTextView : IStringView
+        internal string? GetText(ReadOnlySpan<char> text)
         {
             if (Kind == TokenKind.Eof)
             {
                 return "<eof>";
             }
-            return text.GetString(Start.Offset, End.Offset - Start.Offset + 1);
+
+            var start = Start.Offset;
+            var length = End.Offset - start + 1;
+            if (start < 0 || length < 0)
+            {
+                return null;
+            }
+
+            if ((uint)start > (uint)text.Length || start + length > text.Length)
+            {
+                return null;
+            }
+
+            return text.Slice(start, length).ToString();
         }
 
         /// <inheritdoc />

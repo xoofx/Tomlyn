@@ -38,7 +38,7 @@ public sealed class Utf8InputValidationTests
         Assert.That(ex!.Span.HasValue, Is.True);
         Assert.That(ex.Span!.Value.Offset, Is.EqualTo(prefix.Length));
         Assert.That(ex.Diagnostics.Count, Is.GreaterThan(0));
-        Assert.That(ex.Diagnostics[0].Message, Does.Contain("byte offset"));
+        Assert.That(ex.Diagnostics[0].Message, Does.Contain("invalid UTF8"));
     }
 
     [Test]

@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Text;
 using Tomlyn.Syntax;
 using Tomlyn.Text;
@@ -55,69 +56,79 @@ internal static class TomlStringDecoder
             return content.ToString();
         }
 
-        var builder = new StringBuilder(content.Length);
-        for (var index = 0; index < content.Length; index++)
+        // Upper bound: escape sequences always reduce (or keep) the number of UTF-16 code units compared to the raw text.
+        // Rent a buffer once and write the decoded output directly.
+        var rented = ArrayPool<char>.Shared.Rent(content.Length);
+        try
         {
-            var c = content[index];
-            if (c != '\\')
+            var written = 0;
+            for (var index = 0; index < content.Length; index++)
             {
-                builder.Append(c);
-                continue;
+                var c = content[index];
+                if (c != '\\')
+                {
+                    rented[written++] = c;
+                    continue;
+                }
+
+                if (index + 1 >= content.Length)
+                {
+                    throw new FormatException("Invalid escape sequence at end of string.");
+                }
+
+                var escape = content[++index];
+                switch (escape)
+                {
+                    case 'b':
+                        rented[written++] = '\b';
+                        break;
+                    case 't':
+                        rented[written++] = '\t';
+                        break;
+                    case 'n':
+                        rented[written++] = '\n';
+                        break;
+                    case 'f':
+                        rented[written++] = '\f';
+                        break;
+                    case 'r':
+                        rented[written++] = '\r';
+                        break;
+                    case '"':
+                        rented[written++] = '"';
+                        break;
+                    case '\\':
+                        rented[written++] = '\\';
+                        break;
+                    case 'e':
+                        rented[written++] = '\u001B';
+                        break;
+                    case 'x':
+                        rented[written++] = (char)ReadHexScalar(content, ref index, digits: 2);
+                        break;
+                    case 'u':
+                        AppendUnicodeScalar(rented, ref written, ReadHexScalar(content, ref index, digits: 4));
+                        break;
+                    case 'U':
+                        AppendUnicodeScalar(rented, ref written, ReadHexScalar(content, ref index, digits: 8));
+                        break;
+                    case ' ':
+                    case '\t':
+                    case '\r':
+                    case '\n':
+                        SkipEscapedWhitespaceAndNewlines(content, ref index);
+                        break;
+                    default:
+                        throw new FormatException($"Unexpected escape character `{escape}` in string.");
+                }
             }
 
-            if (index + 1 >= content.Length)
-            {
-                throw new FormatException("Invalid escape sequence at end of string.");
-            }
-
-            var escape = content[++index];
-            switch (escape)
-            {
-                case 'b':
-                    builder.Append('\b');
-                    break;
-                case 't':
-                    builder.Append('\t');
-                    break;
-                case 'n':
-                    builder.Append('\n');
-                    break;
-                case 'f':
-                    builder.Append('\f');
-                    break;
-                case 'r':
-                    builder.Append('\r');
-                    break;
-                case '"':
-                    builder.Append('"');
-                    break;
-                case '\\':
-                    builder.Append('\\');
-                    break;
-                case 'e':
-                    builder.Append('\u001B');
-                    break;
-                case 'x':
-                    builder.Append((char)ReadHexScalar(content, ref index, digits: 2));
-                    break;
-                case 'u':
-                    AppendUnicodeScalar(builder, ReadHexScalar(content, ref index, digits: 4));
-                    break;
-                case 'U':
-                    AppendUnicodeScalar(builder, ReadHexScalar(content, ref index, digits: 8));
-                    break;
-                case ' ':
-                case '\t':
-                case '\r':
-                case '\n':
-                    SkipEscapedWhitespaceAndNewlines(content, ref index);
-                    break;
-                default:
-                    throw new FormatException($"Unexpected escape character `{escape}` in string.");
-            }
+            return new string(rented, 0, written);
         }
-
-        return builder.ToString();
+        finally
+        {
+            ArrayPool<char>.Shared.Return(rented);
+        }
     }
 
     private static ReadOnlySpan<char> SkipImmediateNewLine(ReadOnlySpan<char> content)
@@ -163,14 +174,22 @@ internal static class TomlStringDecoder
         return value;
     }
 
-    private static void AppendUnicodeScalar(StringBuilder builder, int value)
+    private static void AppendUnicodeScalar(char[] buffer, ref int written, int value)
     {
         if (!CharHelper.IsValidUnicodeScalarValue(value))
         {
             throw new FormatException($"Invalid Unicode scalar value [{value:X}].");
         }
 
-        builder.AppendUtf32((char32)value);
+        if ((uint)value <= 0xFFFFu)
+        {
+            buffer[written++] = (char)value;
+            return;
+        }
+
+        value -= 0x10000;
+        buffer[written++] = (char)(0xD800 | (value >> 10));
+        buffer[written++] = (char)(0xDC00 | (value & 0x3FF));
     }
 
     private static void SkipEscapedWhitespaceAndNewlines(ReadOnlySpan<char> content, ref int index)

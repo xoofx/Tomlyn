@@ -25,7 +25,7 @@ public sealed class NewApiUtf8StreamExceptionLocationTests
         Assert.NotNull(ex);
         Assert.NotNull(ex!.Span);
 
-        Assert.AreEqual(5, ex.Offset, "Offset must be the byte position of the invalid sequence.");
+        Assert.AreEqual(5, ex.Offset, "Offset must be the character position of the invalid sequence.");
         Assert.AreEqual(1, ex.Line);
         Assert.AreEqual(6, ex.Column);
     }

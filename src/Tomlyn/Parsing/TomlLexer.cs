@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using Tomlyn.Syntax;
 using Tomlyn.Text;
 
@@ -11,14 +12,16 @@ namespace Tomlyn.Parsing;
 /// </summary>
 public sealed class TomlLexer
 {
-    private readonly ILexerAdapter _adapter;
+    private readonly Lexer _lexer;
     private TomlToken _current;
 
-    private TomlLexer(ILexerAdapter adapter)
+    private TomlLexer(Lexer lexer)
     {
-        _adapter = adapter;
+        _lexer = lexer;
         _current = default;
     }
+
+    internal Lexer InternalLexer => _lexer;
 
     /// <summary>
     /// Creates a lexer over TOML text.
@@ -34,12 +37,11 @@ public sealed class TomlLexer
             throw new ArgumentNullException(nameof(toml));
         }
 
-        var sourceView = new StringSourceView(toml, sourceName ?? string.Empty);
-        var lexer = new Lexer<StringSourceView, StringCharacterIterator>(sourceView)
+        var lexer = new Lexer(toml.AsMemory(), sourceName ?? string.Empty)
         {
             DecodeScalars = false,
         };
-        return new TomlLexer(new LexerAdapter<StringSourceView, StringCharacterIterator>(lexer));
+        return new TomlLexer(lexer);
     }
 
     /// <summary>
@@ -63,12 +65,11 @@ public sealed class TomlLexer
             throw new ArgumentNullException(nameof(lexerOptions));
         }
 
-        var sourceView = new StringSourceView(toml, sourceName ?? string.Empty);
-        var lexer = new Lexer<StringSourceView, StringCharacterIterator>(sourceView)
+        var lexer = new Lexer(toml.AsMemory(), sourceName ?? string.Empty)
         {
             DecodeScalars = lexerOptions.DecodeScalars,
         };
-        return new TomlLexer(new LexerAdapter<StringSourceView, StringCharacterIterator>(lexer));
+        return new TomlLexer(lexer);
     }
 
     /// <summary>
@@ -126,12 +127,18 @@ public sealed class TomlLexer
             throw new ArgumentNullException(nameof(utf8Toml));
         }
 
-        var sourceView = new StringUtf8SourceView(utf8Toml, sourceName ?? string.Empty);
-        var lexer = new Lexer<StringUtf8SourceView, StringCharacterUtf8Iterator>(sourceView)
+        var toml = Encoding.UTF8.GetString(utf8Toml);
+        var memory = toml.AsMemory();
+        if (!memory.IsEmpty && memory.Span[0] == '\uFEFF')
+        {
+            memory = memory.Slice(1);
+        }
+
+        var lexer = new Lexer(memory, sourceName ?? string.Empty)
         {
             DecodeScalars = false,
         };
-        return new TomlLexer(new LexerAdapter<StringUtf8SourceView, StringCharacterUtf8Iterator>(lexer));
+        return new TomlLexer(lexer);
     }
 
     /// <summary>
@@ -155,12 +162,18 @@ public sealed class TomlLexer
             throw new ArgumentNullException(nameof(lexerOptions));
         }
 
-        var sourceView = new StringUtf8SourceView(utf8Toml, sourceName ?? string.Empty);
-        var lexer = new Lexer<StringUtf8SourceView, StringCharacterUtf8Iterator>(sourceView)
+        var toml = Encoding.UTF8.GetString(utf8Toml);
+        var memory = toml.AsMemory();
+        if (!memory.IsEmpty && memory.Span[0] == '\uFEFF')
+        {
+            memory = memory.Slice(1);
+        }
+
+        var lexer = new Lexer(memory, sourceName ?? string.Empty)
         {
             DecodeScalars = lexerOptions.DecodeScalars,
         };
-        return new TomlLexer(new LexerAdapter<StringUtf8SourceView, StringCharacterUtf8Iterator>(lexer));
+        return new TomlLexer(lexer);
     }
 
     /// <summary>
@@ -171,7 +184,7 @@ public sealed class TomlLexer
     /// <summary>
     /// Gets the source name associated with this lexer.
     /// </summary>
-    public string SourceName => _adapter.Source.SourcePath;
+    public string SourceName => _lexer.SourcePath;
 
     /// <summary>
     /// Gets the source span associated with the current token.
@@ -183,19 +196,19 @@ public sealed class TomlLexer
     /// </summary>
     public TomlLexerMode Mode
     {
-        get => _adapter.State == LexerState.Key ? TomlLexerMode.Key : TomlLexerMode.Value;
-        set => _adapter.State = value == TomlLexerMode.Key ? LexerState.Key : LexerState.Value;
+        get => _lexer.State == LexerState.Key ? TomlLexerMode.Key : TomlLexerMode.Value;
+        set => _lexer.State = value == TomlLexerMode.Key ? LexerState.Key : LexerState.Value;
     }
 
     /// <summary>
     /// Gets a value indicating whether lexer diagnostics include errors.
     /// </summary>
-    public bool HasErrors => _adapter.HasErrors;
+    public bool HasErrors => _lexer.HasErrors;
 
     /// <summary>
     /// Gets diagnostics produced by the lexer.
     /// </summary>
-    public IEnumerable<DiagnosticMessage> Errors => _adapter.Errors;
+    public IEnumerable<DiagnosticMessage> Errors => _lexer.Errors;
 
     /// <summary>
     /// Advances to the next token.
@@ -203,12 +216,12 @@ public sealed class TomlLexer
     /// <returns><c>true</c> when a token is available; otherwise <c>false</c>.</returns>
     public bool MoveNext()
     {
-        if (!_adapter.MoveNext())
+        if (!_lexer.MoveNext())
         {
             return false;
         }
 
-        ref readonly var token = ref _adapter.Token;
+        ref readonly var token = ref _lexer.Token;
         var data = token.Kind.IsInteger() || token.Kind.IsFloat() || token.Kind is TokenKind.True or TokenKind.False
             ? token.Data
             : 0;
@@ -226,78 +239,7 @@ public sealed class TomlLexer
     /// </summary>
     /// <param name="token">The token.</param>
     /// <returns>The token text, or <c>null</c> if out of range.</returns>
-    public string? GetText(in TomlToken token) => _adapter.Source.GetString(token.Start.Offset, token.Length);
+    public string? GetText(in TomlToken token) => _lexer.GetString(token.Start.Offset, token.Length);
 
-    internal ITokenProvider<ISourceView> CreateTokenProvider() => new TokenProvider(_adapter);
-
-    private interface ILexerAdapter
-    {
-        bool HasErrors { get; }
-
-        IEnumerable<DiagnosticMessage> Errors { get; }
-
-        ISourceView Source { get; }
-
-        LexerState State { get; set; }
-
-        ref readonly SyntaxTokenValue Token { get; }
-
-        bool MoveNext();
-    }
-
-    private sealed class LexerAdapter<TSourceView, TCharReader> : ILexerAdapter
-        where TSourceView : struct, ISourceView<TCharReader>
-        where TCharReader : struct, CharacterIterator
-    {
-        private readonly Lexer<TSourceView, TCharReader> _lexer;
-        private readonly ISourceView _source;
-
-        public LexerAdapter(Lexer<TSourceView, TCharReader> lexer)
-        {
-            _lexer = lexer;
-            _source = lexer.Source;
-        }
-
-        public bool HasErrors => _lexer.HasErrors;
-
-        public IEnumerable<DiagnosticMessage> Errors => _lexer.Errors;
-
-        public ISourceView Source => _source;
-
-        public LexerState State
-        {
-            get => _lexer.State;
-            set => _lexer.State = value;
-        }
-
-        public ref readonly SyntaxTokenValue Token => ref _lexer.Token;
-
-        public bool MoveNext() => _lexer.MoveNext();
-    }
-
-    private sealed class TokenProvider : ITokenProvider<ISourceView>
-    {
-        private readonly ILexerAdapter _adapter;
-
-        public TokenProvider(ILexerAdapter adapter)
-        {
-            _adapter = adapter;
-        }
-
-        public bool HasErrors => _adapter.HasErrors;
-
-        public ISourceView Source => _adapter.Source;
-
-        public LexerState State
-        {
-            get => _adapter.State;
-            set => _adapter.State = value;
-        }
-
-        public bool MoveNext() => _adapter.MoveNext();
-
-        public ref readonly SyntaxTokenValue Token => ref _adapter.Token;
-
-        public IEnumerable<DiagnosticMessage> Errors => _adapter.Errors;
-    }
+    // Legacy syntax tree parser uses the internal lexer directly.
 }

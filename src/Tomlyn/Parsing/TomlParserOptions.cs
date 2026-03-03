@@ -17,6 +17,17 @@ public sealed record TomlParserOptions
     public bool DecodeScalars { get; init; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the parser should eagerly materialize simple string values
+    /// (single-line basic strings without escape sequences) even when <see cref="DecodeScalars"/> is <c>false</c>.
+    /// </summary>
+    /// <remarks>
+    /// This option can improve performance for deserialization scenarios that always consume string values
+    /// (for example, via <see cref="Tomlyn.Serialization.TomlReader.GetString"/>), while still avoiding eager
+    /// decoding for complex strings that contain escape sequences.
+    /// </remarks>
+    public bool EagerStringValues { get; init; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether the parser captures comment trivia.
     /// </summary>
     /// <remarks>

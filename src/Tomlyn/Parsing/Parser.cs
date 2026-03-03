@@ -13,9 +13,9 @@ namespace Tomlyn.Parsing
     /// <summary>
     /// The parser.
     /// </summary>
-    internal partial class Parser<TSourceView> where TSourceView : ISourceView
+    internal partial class Parser
     {
-        private readonly ITokenProvider<TSourceView> _lexer;
+        private readonly Lexer _lexer;
         private SyntaxTokenValue _previousToken;
         private SyntaxTokenValue _token;
         private bool _hideNewLine;
@@ -24,13 +24,13 @@ namespace Tomlyn.Parsing
         private DiagnosticsBag? _diagnostics;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="Parser{TSourceView}"/> class.
+        /// Initializes a new instance of the <see cref="Parser"/> class.
         /// </summary>
         /// <param name="lexer">The lexer.</param>
         /// <exception cref="System.ArgumentNullException"></exception>
-        public Parser(ITokenProvider<TSourceView> lexer)
+        public Parser(Lexer lexer)
         {
-            this._lexer = lexer;
+            _lexer = lexer;
             _currentTrivias = new List<SyntaxTrivia>();
         }
 
@@ -293,7 +293,7 @@ namespace Tomlyn.Parsing
                     break;
             }
 
-            var literal = _token.StringValue ?? _token.GetText(_lexer.Source) ?? string.Empty;
+            var literal = _token.StringValue ?? _token.GetText(_lexer.Text.Span) ?? string.Empty;
             TomlDateTime parsed;
             bool parsedOk = _token.Kind switch
             {
@@ -406,7 +406,7 @@ namespace Tomlyn.Parsing
                         {
                             Span = GetSpanForToken(_token),
                             Kind = _token.Kind,
-                            Text = _token.GetText(_lexer.Source),
+                            Text = _token.GetText(_lexer.Text.Span),
                         });
                         NextToken();
                         continue;
@@ -433,7 +433,7 @@ namespace Tomlyn.Parsing
                             {
                                 Span = GetSpanForToken(_token),
                                 Kind = _token.Kind,
-                                Text = _token.GetText(_lexer.Source),
+                                Text = _token.GetText(_lexer.Text.Span),
                             });
                             NextToken();
                         }
@@ -576,7 +576,7 @@ namespace Tomlyn.Parsing
                 }
             }
             syntax.TokenKind = tokenKind;
-            syntax.Text = _token.Kind.ToText() ?? _token.GetText(_lexer.Source);
+            syntax.Text = _token.Kind.ToText() ?? _token.GetText(_lexer.Text.Span);
             if (tokenKind == TokenKind.NewLine)
             {
                 // Once we have found a new line, we let all the other NewLines as trivias
@@ -590,7 +590,7 @@ namespace Tomlyn.Parsing
         {
             var syntax = Open<SyntaxToken>();
             syntax.TokenKind = _token.Kind;
-            syntax.Text = _token.Kind.ToText() ?? _token.GetText(_lexer.Source);
+            syntax.Text = _token.Kind.ToText() ?? _token.GetText(_lexer.Text.Span);
             NextToken();            
             return Close(syntax);
         }
@@ -624,7 +624,7 @@ namespace Tomlyn.Parsing
 
         private T Open<T>(T syntax, SyntaxTokenValue startToken) where T : SyntaxNode
         {
-            syntax.Span = new SourceSpan(_lexer.Source.SourcePath, startToken.Start, new TextPosition());
+            syntax.Span = new SourceSpan(_lexer.SourcePath, startToken.Start, new TextPosition());
 
             if (_currentTrivias.Count > 0)
             {
@@ -658,12 +658,12 @@ namespace Tomlyn.Parsing
 
         private string? ToText(SyntaxTokenValue localToken)
         {
-            return localToken.GetText(_lexer.Source);
+            return localToken.GetText(_lexer.Text.Span);
         }
 
         private string? ToPrintable(SourceSpan span)
         {
-            return _lexer.Source.GetString(span.Offset, span.Length).ToPrintableString();
+            return _lexer.GetString(span.Offset, span.Length).ToPrintableString();
         }
 
         private void NextToken()
@@ -690,9 +690,9 @@ namespace Tomlyn.Parsing
 
                 _currentTrivias.Add(new SyntaxTrivia
                 {
-                    Span = new SourceSpan(_lexer.Source.SourcePath, token.Start, token.End),
+                    Span = new SourceSpan(_lexer.SourcePath, token.Start, token.End),
                     Kind = token.Kind,
-                    Text = token.GetText(_lexer.Source),
+                    Text = token.GetText(_lexer.Text.Span),
                 });
             }
         }
@@ -714,7 +714,7 @@ namespace Tomlyn.Parsing
 
         private SourceSpan GetSpanForToken(SyntaxTokenValue tokenArg)
         {
-            return new SourceSpan(_lexer.Source.SourcePath, tokenArg.Start, tokenArg.End);
+            return new SourceSpan(_lexer.SourcePath, tokenArg.Start, tokenArg.End);
         }
 
         private void LogError(SourceSpan span, string text)

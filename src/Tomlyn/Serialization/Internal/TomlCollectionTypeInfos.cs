@@ -40,15 +40,22 @@ internal sealed class TomlArrayTypeInfo<TElement> : TomlTypeInfo<TElement[]>
             throw reader.CreateException($"Expected {TomlTokenType.StartArray} token but was {reader.TokenType}.");
         }
 
-        var items = new List<TElement>();
-        reader.Read();
-        while (reader.TokenType != TomlTokenType.EndArray)
+        var items = new PooledArrayBuilder<TElement>(initialCapacity: 16);
+        try
         {
-            items.Add(ReadElement(reader));
-        }
+            reader.Read();
+            while (reader.TokenType != TomlTokenType.EndArray)
+            {
+                items.Add(ReadElement(reader));
+            }
 
-        reader.Read();
-        return items.ToArray();
+            reader.Read();
+            return items.ToArrayAndReturn();
+        }
+        finally
+        {
+            items.Dispose();
+        }
     }
 
     private void EnsureElementTypeInfo()

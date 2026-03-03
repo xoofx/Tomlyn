@@ -81,7 +81,7 @@ public sealed class TomlException : Exception
     /// Gets the 0-based offset associated with this exception, or <see langword="null"/> when unknown.
     /// </summary>
     /// <remarks>
-    /// When parsing UTF-8 inputs, this offset represents a byte offset. When parsing string inputs, this offset represents a character offset.
+    /// This offset represents a character offset in the decoded TOML payload. When parsing UTF-8 inputs, the offset is computed after decoding.
     /// </remarks>
     public int? Offset => Span?.Offset;
 

@@ -65,6 +65,7 @@ public sealed class TomlReader
         var parserOptions = new Tomlyn.Parsing.TomlParserOptions
         {
             CaptureTrivia = effectiveOptions.MetadataStore is not null,
+            EagerStringValues = true,
         };
         var parser = TomlParser.Create(toml, parserOptions, effectiveOptions);
         return new TomlReader(parser, effectiveOptions);
@@ -80,6 +81,7 @@ public sealed class TomlReader
         var parserOptions = new Tomlyn.Parsing.TomlParserOptions
         {
             CaptureTrivia = effectiveOptions.MetadataStore is not null,
+            EagerStringValues = true,
         };
         var parser = TomlParser.Create(reader, parserOptions, effectiveOptions);
         return new TomlReader(parser, effectiveOptions);
@@ -96,6 +98,7 @@ public sealed class TomlReader
         var parserOptions = new Tomlyn.Parsing.TomlParserOptions
         {
             CaptureTrivia = effectiveOptions.MetadataStore is not null,
+            EagerStringValues = true,
         };
         var parser = TomlParser.Create(utf8Toml, parserOptions, effectiveOptions);
         return new TomlReader(parser, effectiveOptions);
@@ -175,18 +178,6 @@ public sealed class TomlReader
     /// </summary>
     public bool Read()
     {
-        _currentPropertyName = null;
-        _currentString = null;
-        _currentData = 0;
-        _currentPropertyNameTokenKind = default;
-        _currentStringTokenKind = default;
-        _currentDateTime = default;
-        _hasDateTime = false;
-        _currentSpan = null;
-        _currentRawText = null;
-        _currentLeadingTrivia = null;
-        _currentTrailingTrivia = null;
-
         if (_buffer is not null)
         {
             while (true)
@@ -194,6 +185,9 @@ public sealed class TomlReader
                 if (_bufferIndex >= _buffer.Length)
                 {
                     _tokenType = TomlTokenType.EndDocument;
+                    _currentSpan = null;
+                    _currentLeadingTrivia = null;
+                    _currentTrailingTrivia = null;
                     return false;
                 }
 
@@ -225,6 +219,9 @@ public sealed class TomlReader
         if (_parser is null || !_parser.MoveNext())
         {
             _tokenType = TomlTokenType.EndDocument;
+            _currentSpan = null;
+            _currentLeadingTrivia = null;
+            _currentTrailingTrivia = null;
             return false;
         }
 

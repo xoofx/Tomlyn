@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Text;
 using Tomlyn.Model;
 using Tomlyn.Serialization;
 using Tomlyn.Syntax;
@@ -46,7 +49,8 @@ public sealed class TomlParser
         }
 
         var effectiveOptions = options ?? TomlSerializerOptions.Default;
-        var sourceView = new StringSourceView(toml, effectiveOptions.SourceName ?? string.Empty);
+        var text = toml.AsMemory();
+        var sourcePath = effectiveOptions.SourceName ?? string.Empty;
         var parserOptions = new TomlParserOptions();
         DiagnosticsBag? diagnostics = null;
         if (parserOptions.Mode == TomlParserMode.Tolerant)
@@ -54,7 +58,7 @@ public sealed class TomlParser
             diagnostics = new DiagnosticsBag();
         }
 
-        var core = new ParserCore<StringSourceView, StringCharacterIterator>(sourceView, parserOptions, diagnostics);
+        var core = new ParserCore(text, sourcePath, parserOptions, diagnostics);
         return new TomlParser(core, effectiveOptions, parserOptions, diagnostics);
     }
 
@@ -81,14 +85,15 @@ public sealed class TomlParser
         }
 
         var effectiveOptions = options ?? TomlSerializerOptions.Default;
-        var sourceView = new StringSourceView(toml, effectiveOptions.SourceName ?? string.Empty);
+        var text = toml.AsMemory();
+        var sourcePath = effectiveOptions.SourceName ?? string.Empty;
         DiagnosticsBag? diagnostics = null;
         if (parserOptions.Mode == TomlParserMode.Tolerant)
         {
             diagnostics = new DiagnosticsBag();
         }
 
-        var core = new ParserCore<StringSourceView, StringCharacterIterator>(sourceView, parserOptions, diagnostics);
+        var core = new ParserCore(text, sourcePath, parserOptions, diagnostics);
         return new TomlParser(core, effectiveOptions, parserOptions, diagnostics);
     }
 
@@ -150,7 +155,14 @@ public sealed class TomlParser
         }
 
         var effectiveOptions = options ?? TomlSerializerOptions.Default;
-        var sourceView = new StringUtf8SourceView(utf8Toml, effectiveOptions.SourceName ?? string.Empty);
+        var toml = Encoding.UTF8.GetString(utf8Toml);
+        var memory = toml.AsMemory();
+        if (!memory.IsEmpty && memory.Span[0] == '\uFEFF')
+        {
+            memory = memory.Slice(1);
+        }
+
+        var sourcePath = effectiveOptions.SourceName ?? string.Empty;
         var parserOptions = new TomlParserOptions();
         DiagnosticsBag? diagnostics = null;
         if (parserOptions.Mode == TomlParserMode.Tolerant)
@@ -158,7 +170,7 @@ public sealed class TomlParser
             diagnostics = new DiagnosticsBag();
         }
 
-        var core = new ParserCore<StringUtf8SourceView, StringCharacterUtf8Iterator>(sourceView, parserOptions, diagnostics);
+        var core = new ParserCore(memory, sourcePath, parserOptions, diagnostics);
         return new TomlParser(core, effectiveOptions, parserOptions, diagnostics);
     }
 
@@ -185,14 +197,21 @@ public sealed class TomlParser
         }
 
         var effectiveOptions = options ?? TomlSerializerOptions.Default;
-        var sourceView = new StringUtf8SourceView(utf8Toml, effectiveOptions.SourceName ?? string.Empty);
+        var toml = Encoding.UTF8.GetString(utf8Toml);
+        var memory = toml.AsMemory();
+        if (!memory.IsEmpty && memory.Span[0] == '\uFEFF')
+        {
+            memory = memory.Slice(1);
+        }
+
+        var sourcePath = effectiveOptions.SourceName ?? string.Empty;
         DiagnosticsBag? diagnostics = null;
         if (parserOptions.Mode == TomlParserMode.Tolerant)
         {
             diagnostics = new DiagnosticsBag();
         }
 
-        var core = new ParserCore<StringUtf8SourceView, StringCharacterUtf8Iterator>(sourceView, parserOptions, diagnostics);
+        var core = new ParserCore(memory, sourcePath, parserOptions, diagnostics);
         return new TomlParser(core, effectiveOptions, parserOptions, diagnostics);
     }
 
@@ -350,15 +369,14 @@ public sealed class TomlParser
         TomlSyntaxTriviaMetadata[]? TrailingTrivia { get; }
     }
 
-    private sealed class ParserCore<TSourceView, TCharReader> : IParserCore
-        where TSourceView : struct, ISourceView<TCharReader>
-        where TCharReader : struct, CharacterIterator
+    private sealed class ParserCore : IParserCore
     {
         private readonly TomlParserMode _mode;
         private readonly bool _decodeScalars;
+        private readonly bool _eagerStringValues;
         private readonly bool _captureTrivia;
         private readonly DiagnosticsBag? _diagnostics;
-        private readonly Lexer<TSourceView, TCharReader> _lexer;
+        private readonly Lexer _lexer;
         private SyntaxTokenValue _token;
         private bool _initialized;
         private bool _terminatedDueToError;
@@ -383,6 +401,8 @@ public sealed class TomlParser
         private bool _pendingKeyValueOpenEmitPropertyName;
         private bool _pendingKeyValueLeafEmitted;
         private bool _pendingKeyValueClosingsCompleted;
+        private KeySegment _pendingKeyValueLeafSegment;
+        private bool _pendingKeyValueHasLeafSegment;
 
         // Pending table-header emission (Close implicit frames, transition explicit frames).
         private int _pendingTableHeaderExplicitPrefixLength;
@@ -406,17 +426,19 @@ public sealed class TomlParser
 
         private DocumentState _state;
 
-        public ParserCore(TSourceView sourceView, TomlParserOptions parserOptions, DiagnosticsBag? diagnostics)
+        public ParserCore(ReadOnlyMemory<char> text, string sourcePath, TomlParserOptions parserOptions, DiagnosticsBag? diagnostics)
         {
             _mode = parserOptions.Mode;
             _decodeScalars = parserOptions.DecodeScalars;
+            _eagerStringValues = parserOptions.EagerStringValues;
             _captureTrivia = parserOptions.CaptureTrivia;
             _diagnostics = diagnostics;
-            _lexer = new Lexer<TSourceView, TCharReader>(sourceView)
+            _lexer = new Lexer(text, sourcePath)
             {
                 State = LexerState.Key,
                 DecodeScalars = _decodeScalars,
                 EmitHiddenTokens = _captureTrivia,
+                EagerStringValues = _eagerStringValues,
             };
             _token = default;
             _initialized = false;
@@ -437,6 +459,8 @@ public sealed class TomlParser
             _pendingKeyValueOpenEmitPropertyName = true;
             _pendingKeyValueLeafEmitted = false;
             _pendingKeyValueClosingsCompleted = false;
+            _pendingKeyValueLeafSegment = default;
+            _pendingKeyValueHasLeafSegment = false;
             _pendingTableHeaderExplicitPrefixLength = 0;
             _pendingTableHeaderOpenIndex = 0;
             _pendingTableHeaderOpenEmitPropertyName = true;
@@ -457,9 +481,9 @@ public sealed class TomlParser
             _state = DocumentState.NotStarted;
         }
 
-        public string? GetText(TomlSourceSpan span) => _lexer.Source.GetString(span.Offset, span.Length);
+        public string? GetText(TomlSourceSpan span) => _lexer.GetString(span.Offset, span.Length);
 
-        public ReadOnlySpan<char> GetSpan(TomlSourceSpan span) => _lexer.Source.GetSpan(span.Offset, span.Length);
+        public ReadOnlySpan<char> GetSpan(TomlSourceSpan span) => _lexer.GetSpanUnchecked(span.Offset, span.Length);
 
         public TomlSyntaxTriviaMetadata[]? LeadingTrivia => _leadingTrivia;
 
@@ -610,7 +634,7 @@ public sealed class TomlParser
 
                 if (token.Kind == TokenKind.Whitespaces)
                 {
-                    var text = token.GetText(_lexer.Source) ?? string.Empty;
+                    var text = _lexer.GetString(token.Start.Offset, token.End.Offset - token.Start.Offset + 1) ?? string.Empty;
                     _pendingWhitespace = _pendingWhitespace is null ? text : string.Concat(_pendingWhitespace, text);
                     continue;
                 }
@@ -623,7 +647,7 @@ public sealed class TomlParser
                         _pendingWhitespace = null;
                     }
 
-                    _pendingTrivia.Add(new TomlSyntaxTriviaMetadata(TokenKind.Comment, token.GetText(_lexer.Source) ?? string.Empty));
+                    _pendingTrivia.Add(new TomlSyntaxTriviaMetadata(TokenKind.Comment, _lexer.GetString(token.Start.Offset, token.End.Offset - token.Start.Offset + 1) ?? string.Empty));
                     continue;
                 }
 
@@ -654,7 +678,7 @@ public sealed class TomlParser
                 var last = _pendingTrivia[_pendingTrivia.Count - 1];
                 if (last.Kind == TokenKind.Comment)
                 {
-                    _pendingTrivia.Add(new TomlSyntaxTriviaMetadata(TokenKind.NewLine, _token.GetText(_lexer.Source) ?? "\n"));
+                    _pendingTrivia.Add(new TomlSyntaxTriviaMetadata(TokenKind.NewLine, _lexer.GetString(_token.Start.Offset, _token.End.Offset - _token.Start.Offset + 1) ?? "\n"));
                 }
             }
 
@@ -929,7 +953,7 @@ public sealed class TomlParser
             if (!_pendingKeyValueLeafEmitted)
             {
                 _pendingKeyValueLeafEmitted = true;
-                var leaf = _pathSegments[_pathSegments.Count - 1];
+                var leaf = _pendingKeyValueHasLeafSegment ? _pendingKeyValueLeafSegment : _pathSegments[_pathSegments.Count - 1];
                 var leadingTrivia = ExtractPendingTrivia();
                 SetPendingEvent(new TomlParseEvent(
                     TomlParseEventKind.PropertyName,
@@ -943,6 +967,7 @@ public sealed class TomlParser
 
             Consume(TokenKind.Equal, LexerState.Value);
             _pendingOperation = PendingOperationKind.None;
+            _pendingKeyValueHasLeafSegment = false;
             return false;
         }
 
@@ -1217,8 +1242,64 @@ public sealed class TomlParser
 
         private void BeginKeyValueEntry(int implicitBaseIndex)
         {
+            _pendingKeyValueHasLeafSegment = false;
+
+            // Parse the first key segment without going through the list-based path (fast-path for non-dotted keys).
+            ParseKeySegment(out var firstSegment);
+            if (_token.Kind != TokenKind.Dot)
+            {
+                if (_token.Kind != TokenKind.Equal)
+                {
+                    throw CreateException(CurrentSpan(), $"Expected `=` after key but was `{ToPrintable(_token)}`.");
+                }
+
+                // Common case: a single-segment key/value entry at the current implicit frame depth.
+                if (_implicitFrames.Count == implicitBaseIndex)
+                {
+                    _pendingKeyValueImplicitBaseIndex = implicitBaseIndex;
+                    _pendingKeyValuePrefixLength = 0;
+                    _pendingKeyValueCommonPrefixLength = 0;
+                    _pendingKeyValueOpenIndex = 0;
+                    _pendingKeyValueOpenEmitPropertyName = false;
+                    _pendingKeyValueLeafEmitted = true;
+                    _pendingKeyValueClosingsCompleted = true;
+                    _pendingKeyValueLeafSegment = firstSegment;
+                    _pendingKeyValueHasLeafSegment = true;
+                    _pendingOperation = PendingOperationKind.KeyValueEntry;
+
+                    var leadingTrivia = ExtractPendingTrivia();
+                    SetPendingEvent(new TomlParseEvent(
+                        TomlParseEventKind.PropertyName,
+                        span: firstSegment.Span,
+                        propertyName: _decodeScalars ? firstSegment.Value : null,
+                        stringValue: null,
+                        data: TomlParseEventData.PackPropertyName(firstSegment.TokenKind, firstSegment.Hash)),
+                        leadingTrivia: leadingTrivia);
+                    return;
+                }
+
+                _pendingKeyValueImplicitBaseIndex = implicitBaseIndex;
+                _pendingKeyValuePrefixLength = 0;
+                _pendingKeyValueCommonPrefixLength = 0;
+                _pendingKeyValueOpenIndex = 0;
+                _pendingKeyValueOpenEmitPropertyName = true;
+                _pendingKeyValueLeafEmitted = false;
+                _pendingKeyValueClosingsCompleted = false;
+                _pendingKeyValueLeafSegment = firstSegment;
+                _pendingKeyValueHasLeafSegment = true;
+                _pendingOperation = PendingOperationKind.KeyValueEntry;
+                return;
+            }
+
             _pathSegments.Clear();
-            ParseKeyPath(_pathSegments, out _);
+            _pathSegments.Add(firstSegment);
+            while (_token.Kind == TokenKind.Dot)
+            {
+                Consume(TokenKind.Dot, LexerState.Key);
+                ParseKeySegment(out var segment);
+                _pathSegments.Add(segment);
+            }
+
             if (_pathSegments.Count == 0)
             {
                 throw CreateException(CurrentSpan(), "Invalid key/value entry.");
@@ -1372,7 +1453,7 @@ public sealed class TomlParser
         {
             if (_token.Kind == TokenKind.OpenBracket)
             {
-                var span = new TomlSourceSpan(_lexer.Source.SourcePath,
+                var span = new TomlSourceSpan(_lexer.SourcePath,
                     new TomlTextPosition(spanStart.Offset, spanStart.Line, spanStart.Column),
                     new TomlTextPosition(_token.End.Offset, _token.End.Line, _token.End.Column));
                 SetPendingEvent(new TomlParseEvent(TomlParseEventKind.StartArray, span: span, propertyName: null, stringValue: null, data: 0));
@@ -1383,7 +1464,7 @@ public sealed class TomlParser
 
             if (_token.Kind == TokenKind.OpenBrace)
             {
-                var span = new TomlSourceSpan(_lexer.Source.SourcePath,
+                var span = new TomlSourceSpan(_lexer.SourcePath,
                     new TomlTextPosition(spanStart.Offset, spanStart.Line, spanStart.Column),
                     new TomlTextPosition(_token.End.Offset, _token.End.Line, _token.End.Column));
                 SetPendingEvent(new TomlParseEvent(TomlParseEventKind.StartTable, span: span, propertyName: null, stringValue: null, data: 0));
@@ -1392,14 +1473,14 @@ public sealed class TomlParser
                 return;
             }
 
-            var eventSpan = new TomlSourceSpan(_lexer.Source.SourcePath,
+            var eventSpan = new TomlSourceSpan(_lexer.SourcePath,
                 new TomlTextPosition(spanStart.Offset, spanStart.Line, spanStart.Column),
                 new TomlTextPosition(_token.End.Offset, _token.End.Line, _token.End.Column));
 
             if (_token.Kind.IsString())
             {
                 var tokenKind = _token.Kind;
-                var text = _decodeScalars ? (_token.StringValue ?? string.Empty) : null;
+                var text = _token.StringValue;
                 var parseEvent = new TomlParseEvent(TomlParseEventKind.String, span: eventSpan, propertyName: null, stringValue: text, data: (ulong)tokenKind);
                 Consume(tokenKind, nextStateAfterScalar);
                 var trailingTrivia = ExtractPendingTrivia();
@@ -1440,7 +1521,7 @@ public sealed class TomlParser
             if (_token.Kind.IsDateTime())
             {
                 var tokenKind = _token.Kind;
-                var literal = _token.StringValue ?? _token.GetText(_lexer.Source) ?? string.Empty;
+                var literal = _token.StringValue ?? _lexer.GetString(_token.Start.Offset, _token.End.Offset - _token.Start.Offset + 1) ?? string.Empty;
                 var parseEvent = new TomlParseEvent(TomlParseEventKind.DateTime, span: eventSpan, propertyName: null, stringValue: literal, data: 0);
                 Consume(tokenKind, nextStateAfterScalar);
                 var trailingTrivia = ExtractPendingTrivia();
@@ -1469,7 +1550,7 @@ public sealed class TomlParser
             {
                 var span = CurrentSpan();
                 var hash = _token.Data;
-                var text = _decodeScalars ? _token.GetText(_lexer.Source) : null;
+                var text = _decodeScalars ? _lexer.GetString(_token.Start.Offset, _token.End.Offset - _token.Start.Offset + 1) : null;
                 Consume(TokenKind.BasicKey, LexerState.Key);
                 segment = new KeySegment(TokenKind.BasicKey, span, hash, text);
                 return span;
@@ -1491,77 +1572,112 @@ public sealed class TomlParser
 
         private ulong ComputeKeySegmentHash(TokenKind tokenKind, TextPosition start, TextPosition end)
         {
-            var iterator = _lexer.Source.GetIterator();
             var startOffset = start.Offset;
             var endExclusive = end.Offset + 1;
 
             if (tokenKind == TokenKind.BasicKey)
             {
-                return HashRaw(ref iterator, startOffset, endExclusive);
+                return HashRaw(_lexer.GetSpanUnchecked(startOffset, endExclusive - startOffset));
             }
 
             if (tokenKind == TokenKind.StringLiteral)
             {
                 // Skip the surrounding apostrophes.
-                return HashRaw(ref iterator, startOffset + 1, end.Offset);
+                return HashRaw(_lexer.GetSpanUnchecked(startOffset + 1, end.Offset - (startOffset + 1)));
             }
 
             if (tokenKind == TokenKind.String)
             {
                 // Skip the surrounding quotation marks and decode escapes.
-                return HashBasicString(ref iterator, startOffset + 1, end.Offset);
+                return HashBasicString(_lexer.GetSpanUnchecked(startOffset + 1, end.Offset - (startOffset + 1)));
             }
 
             throw CreateException(CurrentSpan(), $"Unexpected key token kind `{tokenKind}`.");
         }
 
-        private static ulong HashRaw(ref TCharReader iterator, int startOffset, int endExclusive)
+        private static bool TryReadNextCodePoint(ReadOnlySpan<char> span, ref int position, out int codePoint)
         {
-            var position = startOffset;
-            var hash = 14695981039346656037UL;
-            while (position < endExclusive)
+            if ((uint)position >= (uint)span.Length)
             {
-                if (!iterator.TryGetNext(ref position, out var next))
+                codePoint = 0;
+                return false;
+            }
+
+            ref var start = ref MemoryMarshal.GetReference(span);
+            var c1 = Unsafe.Add(ref start, position++);
+
+            // Fast surrogate checks (avoid char.IsHighSurrogate/IsLowSurrogate)
+            if (((uint)c1 & 0xFC00u) == 0xD800u)
+            {
+                // High surrogate; requires a following low surrogate.
+                if ((uint)position < (uint)span.Length)
                 {
-                    break;
+                    var c2 = Unsafe.Add(ref start, position++);
+                    if (((uint)c2 & 0xFC00u) == 0xDC00u)
+                    {
+                        codePoint = char.ConvertToUtf32(c1, c2);
+                        return true;
+                    }
+
+                    // Invalid pair; keep consuming and return U+FFFD.
+                    codePoint = 0xFFFD;
+                    return true;
                 }
 
-                hash = HashAdd(hash, next.Code);
+                // Unexpected EOF after a high surrogate.
+                position = span.Length;
+                codePoint = 0xFFFD;
+                return true;
+            }
+
+            // Lone low surrogate is invalid.
+            if (((uint)c1 & 0xFC00u) == 0xDC00u)
+            {
+                codePoint = 0xFFFD;
+                return true;
+            }
+
+            codePoint = c1;
+            return true;
+        }
+
+        private static ulong HashRaw(ReadOnlySpan<char> span)
+        {
+            var hash = 14695981039346656037UL;
+            var position = 0;
+            while (TryReadNextCodePoint(span, ref position, out var codePoint))
+            {
+                hash = HashAdd(hash, codePoint);
             }
 
             return hash;
         }
 
-        private ulong HashBasicString(ref TCharReader iterator, int startOffset, int endExclusive)
+        private ulong HashBasicString(ReadOnlySpan<char> span)
         {
-            var position = startOffset;
             var hash = 14695981039346656037UL;
-            while (position < endExclusive)
+            var position = 0;
+            while (TryReadNextCodePoint(span, ref position, out var codePoint))
             {
-                if (!iterator.TryGetNext(ref position, out var next))
+                if (codePoint != '\\')
                 {
-                    break;
-                }
-
-                var c = next.Code;
-                if (c != '\\')
-                {
-                    hash = HashAdd(hash, c);
+                    hash = HashAdd(hash, codePoint);
                     continue;
                 }
 
-                if (!iterator.TryGetNext(ref position, out var escape))
+                if ((uint)position >= (uint)span.Length)
                 {
                     throw CreateException(CurrentSpan(), "Invalid escape sequence in key.");
                 }
 
-                hash = HashAdd(hash, DecodeEscape(ref iterator, ref position, endExclusive, escape.Code));
+                var escapeCode = span[position++];
+                hash = HashAdd(hash, DecodeEscape(span, ref position, escapeCode));
             }
 
             return hash;
         }
 
-        private int DecodeEscape(ref TCharReader iterator, ref int position, int endExclusive, int escapeCode)
+        private int DecodeEscape(ReadOnlySpan<char> span, ref int position, int escapeCode)
         {
             switch (escapeCode)
             {
@@ -1574,32 +1690,27 @@ public sealed class TomlParser
                 case 'r': return '\r';
                 case 't': return '\t';
                 case 'x':
-                    return ReadHex(ref iterator, ref position, endExclusive, digits: 2);
+                    return ReadHex(span, ref position, digits: 2);
                 case 'u':
-                    return ReadHex(ref iterator, ref position, endExclusive, digits: 4);
+                    return ReadHex(span, ref position, digits: 4);
                 case 'U':
-                    return ReadHex(ref iterator, ref position, endExclusive, digits: 8);
+                    return ReadHex(span, ref position, digits: 8);
                 default:
                     throw CreateException(CurrentSpan(), $"Unexpected escape character `{(char)escapeCode}` in key.");
             }
         }
 
-        private int ReadHex(ref TCharReader iterator, ref int position, int endExclusive, int digits)
+        private int ReadHex(ReadOnlySpan<char> span, ref int position, int digits)
         {
             var value = 0;
             for (var i = 0; i < digits; i++)
             {
-                if (position >= endExclusive)
+                if ((uint)position >= (uint)span.Length)
                 {
                     throw CreateException(CurrentSpan(), "Incomplete hexadecimal escape sequence in key.");
                 }
 
-                if (!iterator.TryGetNext(ref position, out var next))
-                {
-                    throw CreateException(CurrentSpan(), "Incomplete hexadecimal escape sequence in key.");
-                }
-
-                var c = next.Code;
+                var c = span[position++];
                 var digit = c switch
                 {
                     >= '0' and <= '9' => c - '0',
@@ -1628,16 +1739,16 @@ public sealed class TomlParser
         private TomlException CreateException(TomlSourceSpan span, string message) => new TomlException(span, message);
 
         private TomlSourceSpan CurrentSpan()
-            => new TomlSourceSpan(_lexer.Source.SourcePath,
+            => new TomlSourceSpan(_lexer.SourcePath,
                 new TomlTextPosition(_token.Start.Offset, _token.Start.Line, _token.Start.Column),
                 new TomlTextPosition(_token.End.Offset, _token.End.Line, _token.End.Column));
 
         private string ToPrintable(SyntaxTokenValue token)
         {
-            var span = new TomlSourceSpan(_lexer.Source.SourcePath,
+            var span = new TomlSourceSpan(_lexer.SourcePath,
                 new TomlTextPosition(token.Start.Offset, token.Start.Line, token.Start.Column),
                 new TomlTextPosition(token.End.Offset, token.End.Line, token.End.Column));
-            return _lexer.Source.GetString(span.Offset, span.Length).ToPrintableString() ?? token.Kind.ToString();
+            return _lexer.GetString(span.Offset, span.Length).ToPrintableString() ?? token.Kind.ToString();
         }
 
         private void RecordDiagnostics(TomlException exception)

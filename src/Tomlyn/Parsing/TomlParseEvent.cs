@@ -42,6 +42,8 @@ public readonly struct TomlParseEvent
     /// Gets the string scalar value when <see cref="Kind"/> is <see cref="TomlParseEventKind.String"/> or <see cref="TomlParseEventKind.DateTime"/>.
     /// For <see cref="TomlParseEventKind.String"/>, this value is only populated when the parser was configured to decode scalars eagerly;
     /// otherwise use <see cref="TomlParser.GetString"/>.
+    /// When <see cref="TomlParserOptions.EagerStringValues"/> is enabled, this value may also be populated for simple basic strings
+    /// (single-line, no escape sequences) even when <see cref="TomlParserOptions.DecodeScalars"/> is <c>false</c>.
     /// For <see cref="TomlParseEventKind.DateTime"/>, this value contains the raw literal text so that consumers can parse it without
     /// requiring <see cref="TomlParserOptions.DecodeScalars"/>.
     /// </summary>
