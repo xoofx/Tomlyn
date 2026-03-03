@@ -2,11 +2,11 @@
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <LangVersion>latest</LangVersion>
-    <Description>Tomlyn is a TOML parser, validator and authoring library for .NET.</Description>
+    <Description>Tomlyn is a high-performance TOML 1.1 parser and a System.Text.Json-style serializer for .NET.</Description>
     <Copyright>Alexandre Mutel</Copyright>
     <Authors>Alexandre Mutel</Authors>
     <NeutralLanguage>en-US</NeutralLanguage>
-    <PackageTags>toml;parser</PackageTags>
+    <PackageTags>toml;parser;serialization;deserialization;nativeaot</PackageTags>
     <!-- Setup by dotnet-releaser -->
     <!--<PackageReleaseNotes></PackageReleaseNotes>-->
     <PackageReadmeFile>readme.md</PackageReadmeFile>
@@ -24,7 +24,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="../../img/logo.png" Pack="true" PackagePath="" />
+    <None Include="../../img/logo.png" Pack="true" PackagePath="/" />
     <None Include="../../readme.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
@@ -43,7 +43,6 @@
 
   <Target Name="PatchVersion" AfterTargets="MinVer">
     <PropertyGroup>
-      <!--The minor version is like a major version because Major is 0, need to remove this when will be >= 1.0-->
       <AssemblyVersion>$(MinVerMajor).$(MinVerMinor).0.0</AssemblyVersion>
     </PropertyGroup>
   </Target>

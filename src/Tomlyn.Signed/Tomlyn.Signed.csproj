@@ -4,8 +4,25 @@
     <PackageId>Tomlyn.Signed</PackageId>
     <AssemblyOriginatorKeyFile>key.snk</AssemblyOriginatorKeyFile>
     <SignAssembly>true</SignAssembly>
-    <TargetFrameworks>netstandard2.0;net6.0;net8.0</TargetFrameworks>
+    <TargetFrameworks>net10.0;net8.0;netstandard2.0</TargetFrameworks>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0' Or '$(TargetFramework)' == 'net8.0'">
+    <!-- Enable AOT analyzers (not supported on netstandard2.0) -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <IsTrimmable>true</IsTrimmable>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <TomlynSourceGenAssembly>$(MSBuildThisFileDirectory)..\Tomlyn.SourceGeneration\bin\$(Configuration)\netstandard2.0\Tomlyn.SourceGeneration.dll</TomlynSourceGenAssembly>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\Tomlyn\Tomlyn.targets" Pack="true" PackagePath="buildTransitive/Tomlyn.targets" />
+    <!-- Ship the source generator with the signed package as well (no separate generator NuGet package). -->
+    <None Include="$(TomlynSourceGenAssembly)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Include="$(TomlynSourceGenAssembly).pdb" Condition="Exists('$(TomlynSourceGenAssembly).pdb')" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+  </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Tomlyn\**\*.cs" Exclude="..\Tomlyn\obj\**;..\Tomlyn\bin\**">
       <Link>%(RecursiveDir)%(Filename)%(Extension)</Link>
