@@ -75,7 +75,7 @@ public sealed class NewApiBuiltInConvertersTests
         var ex = Assert.Throws<TomlException>(() => TomlSerializer.Deserialize<DateTimeOffsetModel>("Value = 1979-05-27T07:32:00\n"));
         Assert.That(ex, Is.Not.Null);
         Assert.That(ex!.Line, Is.EqualTo(1));
-        Assert.That(ex.Column, Is.GreaterThan(0));
+        Assert.That(ex.Column, Is.Not.Null.And.GreaterThan(0));
     }
 
 #if NET6_0_OR_GREATER
@@ -108,4 +108,3 @@ public sealed class NewApiBuiltInConvertersTests
     }
 #endif
 }
-

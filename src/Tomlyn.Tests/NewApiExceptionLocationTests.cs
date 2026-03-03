@@ -36,8 +36,8 @@ public class NewApiExceptionLocationTests
         var ex = Assert.Throws<TomlException>(() => reader.Read()); // missing value
         Assert.That(ex, Is.Not.Null);
         Assert.That(ex!.Span.HasValue, Is.True);
-        Assert.That(ex.Line, Is.GreaterThan(0));
-        Assert.That(ex.Column, Is.GreaterThan(0));
+        Assert.That(ex.Line, Is.Not.Null.And.GreaterThan(0));
+        Assert.That(ex.Column, Is.Not.Null.And.GreaterThan(0));
         Assert.That(ex.Message, Does.Contain("test.toml("));
     }
 
@@ -77,8 +77,8 @@ public class NewApiExceptionLocationTests
         var ex = Assert.Throws<TomlException>(() => TomlSerializer.Deserialize<long>("other = 1\n", options));
         Assert.That(ex, Is.Not.Null);
         Assert.That(ex!.Span.HasValue, Is.True);
-        Assert.That(ex.Line, Is.GreaterThan(0));
-        Assert.That(ex.Column, Is.GreaterThan(0));
+        Assert.That(ex.Line, Is.Not.Null.And.GreaterThan(0));
+        Assert.That(ex.Column, Is.Not.Null.And.GreaterThan(0));
         Assert.That(ex.Message, Does.Contain("root.toml("));
     }
 
@@ -96,8 +96,8 @@ public class NewApiExceptionLocationTests
         var ex = Assert.Throws<TomlException>(() => TomlSerializer.Deserialize<MissingRequiredModel>("other = 1\n", options));
         Assert.That(ex, Is.Not.Null);
         Assert.That(ex!.Span.HasValue, Is.True);
-        Assert.That(ex.Line, Is.GreaterThan(0));
-        Assert.That(ex.Column, Is.GreaterThan(0));
+        Assert.That(ex.Line, Is.Not.Null.And.GreaterThan(0));
+        Assert.That(ex.Column, Is.Not.Null.And.GreaterThan(0));
         Assert.That(ex.Message, Does.Contain("required.toml("));
     }
 }

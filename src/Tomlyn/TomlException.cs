@@ -7,7 +7,7 @@ namespace Tomlyn;
 /// <summary>
 /// Exception thrown when parsing or serializing TOML fails.
 /// </summary>
-public class TomlException : Exception
+public sealed class TomlException : Exception
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="TomlException"/> class.
@@ -63,22 +63,27 @@ public class TomlException : Exception
     public TomlSourceSpan? Span { get; }
 
     /// <summary>
-    /// Gets the 1-based line number associated with this exception, or 0 when unknown.
+    /// Gets the optional source name associated with this exception (for example, a file path).
     /// </summary>
-    public int Line => Span?.Start.Line + 1 ?? 0;
+    public string? SourceName => Span?.SourceName;
 
     /// <summary>
-    /// Gets the 1-based column number associated with this exception, or 0 when unknown.
+    /// Gets the 1-based line number associated with this exception, or <see langword="null"/> when unknown.
     /// </summary>
-    public int Column => Span?.Start.Column + 1 ?? 0;
+    public int? Line => Span?.Start.Line + 1;
 
     /// <summary>
-    /// Gets the 0-based offset associated with this exception, or 0 when unknown.
+    /// Gets the 1-based column number associated with this exception, or <see langword="null"/> when unknown.
+    /// </summary>
+    public int? Column => Span?.Start.Column + 1;
+
+    /// <summary>
+    /// Gets the 0-based offset associated with this exception, or <see langword="null"/> when unknown.
     /// </summary>
     /// <remarks>
     /// When parsing UTF-8 inputs, this offset represents a byte offset. When parsing string inputs, this offset represents a character offset.
     /// </remarks>
-    public int Offset => Span?.Offset ?? 0;
+    public int? Offset => Span?.Offset;
 
     private static string Format(TomlSourceSpan span, string message)
     {

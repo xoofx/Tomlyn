@@ -49,4 +49,3 @@ public sealed class NewApiUtf8StreamExceptionLocationTests
         Assert.AreEqual(1L, (long)table!["a"]);
     }
 }
-
