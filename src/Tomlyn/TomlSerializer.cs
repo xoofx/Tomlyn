@@ -398,7 +398,7 @@ public static class TomlSerializer
         var typeInfo = context.GetTypeInfo(type, context.Options);
         if (typeInfo is null)
         {
-            throw new InvalidOperationException($"No generated metadata is available for type '{type.FullName}' in the provided context.");
+            throw new TomlException($"No generated metadata is available for type '{type.FullName}' in the provided context.");
         }
 
         return typeInfo;

@@ -60,7 +60,7 @@ internal static class TomlTypeInfoResolverPipeline
             return polymorphicDispatch;
         }
 
-        throw new InvalidOperationException(
+        throw new TomlException(
             $"No TOML metadata is available for type '{type.FullName}'. " +
             $"Provide {nameof(TomlSerializerOptions)}.{nameof(TomlSerializerOptions.TypeInfoResolver)} (source generation) or a custom resolver.");
     }
