@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Tomlyn</title>
+  <desc id="desc">A stylized letter T above the word TOML on a cool gradient plate.</desc>
+  <defs>
+    <style>
+      :root {
+        --tl-bg-0: #0B1220;
+        --tl-bg-1: #140E1F;
+        --tl-outline: #FFFFFF;
+        --tl-outline-opacity: 0.14;
+        --tl-shadow: #000000;
+        --tl-shadow-opacity: 0.40;
+
+        --tl-accent-0: #38BDF8;
+        --tl-accent-1: #818CF8;
+        --tl-accent-2: #A78BFA;
+        --tl-accentb-0: #7DD3FC;
+        --tl-accentb-1: #C4B5FD;
+        --tl-accentb-2: #DDD6FE;
+
+        --tl-warm-0: #F59E0B;
+        --tl-warm-1: #F97316;
+
+        --tl-plate-stroke-opacity: 0.55;
+        --tl-plate-ring-opacity: 0.60;
+        --tl-shine-0-opacity: 0.18;
+        --tl-shine-1-opacity: 0.06;
+        --tl-toml-opacity: 0.82;
+      }
+    </style>
+
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="var(--tl-bg-0)"/>
+      <stop offset="1" stop-color="var(--tl-bg-1)"/>
+    </linearGradient>
+
+    <radialGradient id="shine" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(190 110) rotate(54) scale(350 270)">
+      <stop offset="0" stop-color="var(--tl-outline)" stop-opacity="var(--tl-shine-0-opacity)"/>
+      <stop offset="0.55" stop-color="var(--tl-outline)" stop-opacity="var(--tl-shine-1-opacity)"/>
+      <stop offset="1" stop-color="var(--tl-outline)" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="accent" x1="130" y1="60" x2="400" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="var(--tl-accent-0)"/>
+      <stop offset="0.55" stop-color="var(--tl-accent-1)"/>
+      <stop offset="1" stop-color="var(--tl-accent-2)"/>
+    </linearGradient>
+
+    <linearGradient id="accentBright" x1="120" y1="50" x2="420" y2="380" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="var(--tl-accentb-0)"/>
+      <stop offset="0.55" stop-color="var(--tl-accentb-1)"/>
+      <stop offset="1" stop-color="var(--tl-accentb-2)"/>
+    </linearGradient>
+
+    <linearGradient id="warm" x1="120" y1="370" x2="400" y2="440" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="var(--tl-warm-0)"/>
+      <stop offset="1" stop-color="var(--tl-warm-1)"/>
+    </linearGradient>
+
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="var(--tl-shadow)" flood-opacity="var(--tl-shadow-opacity)"/>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="512" height="512" rx="128" fill="url(#bg)"/>
+  <rect x="0" y="0" width="512" height="512" rx="128" fill="url(#shine)"/>
+
+  <rect x="7" y="7" width="498" height="498" rx="121" fill="none" stroke="url(#accent)" stroke-opacity="var(--tl-plate-stroke-opacity)" stroke-width="14"/>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="none" stroke="url(#accentBright)" stroke-opacity="var(--tl-plate-ring-opacity)" stroke-width="4"/>
+
+  <g filter="url(#shadow)">
+    <!-- Stylized T glyph -->
+    <g stroke="url(#accent)" stroke-width="36" stroke-linecap="round" fill="none">
+      <line x1="256" y1="98" x2="256" y2="308"/>
+      <line x1="172" y1="118" x2="340" y2="118"/>
+    </g>
+    <g stroke="var(--tl-outline)" stroke-opacity="var(--tl-outline-opacity)" stroke-width="7" stroke-linecap="round" fill="none">
+      <line x1="256" y1="98" x2="256" y2="308"/>
+      <line x1="172" y1="118" x2="340" y2="118"/>
+    </g>
+
+    <!-- TOML text (geometric letterforms, no font dependency) -->
+    <g fill="url(#warm)" fill-opacity="var(--tl-toml-opacity)">
+      <!-- T -->
+      <polygon points="80,358 150,358 150,374 123,374 123,434 107,434 107,374 80,374"/>
+
+      <!-- O (donut) -->
+      <path fill-rule="evenodd" d="
+        M200,358
+        a36,36 0 1 0 0,72
+        a36,36 0 1 0 0,-72
+        M200,376
+        a18,18 0 1 1 0,36
+        a18,18 0 1 1 0,-36
+      "/>
+
+      <!-- M -->
+      <polygon points="250,434 250,358 270,358 292,394 314,358 334,358 334,434 318,434 318,388 300,418 284,418 266,388 266,434"/>
+
+      <!-- L -->
+      <polygon points="360,358 376,358 376,420 430,420 430,434 360,434"/>
+    </g>
+  </g>
+</svg>
+
