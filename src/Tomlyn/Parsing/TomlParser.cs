@@ -259,7 +259,14 @@ public sealed class TomlParser
             return string.Empty;
         }
 
-        return TomlStringDecoder.Decode(raw, (TokenKind)_current.Data);
+        try
+        {
+            return TomlStringDecoder.Decode(raw, (TokenKind)_current.Data);
+        }
+        catch (FormatException ex)
+        {
+            throw new TomlException(span, ex.Message, ex);
+        }
     }
 
     /// <summary>
@@ -291,7 +298,19 @@ public sealed class TomlParser
         }
 
         var tokenKind = (TokenKind)_current.Data;
-        return tokenKind == TokenKind.BasicKey ? raw : TomlStringDecoder.Decode(raw, tokenKind);
+        if (tokenKind == TokenKind.BasicKey)
+        {
+            return raw;
+        }
+
+        try
+        {
+            return TomlStringDecoder.Decode(raw, tokenKind);
+        }
+        catch (FormatException ex)
+        {
+            throw new TomlException(span, ex.Message, ex);
+        }
     }
 
     /// <summary>
