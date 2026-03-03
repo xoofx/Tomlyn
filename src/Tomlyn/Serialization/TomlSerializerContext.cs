@@ -105,7 +105,7 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
         if (type == typeof(object)) return (TomlTypeInfo<T>)(object)new TomlUntypedConverterTypeInfo<object>(options, TomlUntypedObjectConverter.Instance);
         if (type.IsEnum) return new TomlUntypedConverterTypeInfo<T>(options, TomlEnumConverter.Instance);
 
-        throw new InvalidOperationException($"No built-in TOML metadata is available for type '{type.FullName}'.");
+        throw new TomlException($"No built-in TOML metadata is available for type '{type.FullName}'.");
     }
 
     /// <summary>
