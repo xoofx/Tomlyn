@@ -21,10 +21,10 @@ namespace Tomlyn.Text
         public int Start => _start;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public char32? TryGetNext(ref int position)
+        public bool TryGetNext(ref int position, out char32 element)
         {
             var text = _text;
-            return CharHelper.ToUtf8(text, ref position);
+            return CharHelper.ToUtf8(text, ref position, out element);
         }
     }
 }

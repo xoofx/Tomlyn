@@ -223,12 +223,13 @@ namespace Tomlyn.Text
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static char32? ToUtf8(byte[] buffer, ref int position)
+        public static bool ToUtf8(byte[] buffer, ref int position, out char32 element)
         {
             if ((uint)position >= (uint)buffer.Length)
             {
                 position = buffer.Length;
-                return null;
+                element = default;
+                return false;
             }
 
             // bytes   bits    UTF-8 representation
@@ -243,7 +244,8 @@ namespace Tomlyn.Text
             var b1 = buffer[position++];
             if (b1 < 0x80)
             {
-                return b1;
+                element = b1;
+                return true;
             }
 
             // Reject invalid leading bytes:
@@ -268,7 +270,8 @@ namespace Tomlyn.Text
                     throw new CharReaderException($"Invalid UTF-8 continuation byte 0x{b2:X2} at byte offset {position - 1}.");
                 }
 
-                return ((b1 & 0x1F) << 6) | (b2 & 0x3F);
+                element = ((b1 & 0x1F) << 6) | (b2 & 0x3F);
+                return true;
             }
 
             if (b1 < 0xF0)
@@ -301,7 +304,8 @@ namespace Tomlyn.Text
                     throw new CharReaderException($"Invalid UTF-8 surrogate code point at byte offset {startOffset}.");
                 }
 
-                return ((b1 & 0x0F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F);
+                element = ((b1 & 0x0F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F);
+                return true;
             }
 
             // 4-byte sequence (b1 is 0xF0..0xF4)
@@ -344,7 +348,8 @@ namespace Tomlyn.Text
                 throw new CharReaderException($"Invalid UTF-8 code point above U+10FFFF at byte offset {startOffset}.");
             }
 
-            return codePoint;
+            element = codePoint;
+            return true;
         }
 
         public static int HexToDecimal(char32 c)

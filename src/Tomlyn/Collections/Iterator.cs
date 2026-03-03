@@ -21,7 +21,8 @@ namespace Tomlyn.Collections
         /// Tries to get the next element in the iteration.
         /// </summary>
         /// <param name="state">The state.</param>
-        /// <returns>none if no element, or an element</returns>
-        TElement? TryGetNext(ref TState state);
+        /// <param name="element">The next element.</param>
+        /// <returns><c>true</c> if an element was produced; otherwise <c>false</c>.</returns>
+        bool TryGetNext(ref TState state, out TElement element);
     }
 }

@@ -17,7 +17,7 @@ namespace Tomlyn.Text
         public int Start => 0;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public char32? TryGetNext(ref int position)
+        public bool TryGetNext(ref int position, out char32 element)
         {
             var text = _text;
             if (position < text.Length)
@@ -33,29 +33,35 @@ namespace Tomlyn.Text
                         var c2 = text[position++];
                         if (((uint)c2 & 0xFC00u) == 0xDC00u)
                         {
-                            return char.ConvertToUtf32(c1, c2);
+                            element = char.ConvertToUtf32(c1, c2);
+                            return true;
                         }
 
                         // Invalid pair; keep consuming and return U+FFFD.
-                        return 0xFFFD;
+                        element = 0xFFFD;
+                        return true;
                     }
 
                     // Unexpected EOF after a high surrogate.
                     position = text.Length;
-                    return 0xFFFD;
+                    element = 0xFFFD;
+                    return true;
                 }
 
                 // Lone low surrogate is invalid.
                 if (((uint)c1 & 0xFC00u) == 0xDC00u)
                 {
-                    return 0xFFFD;
+                    element = 0xFFFD;
+                    return true;
                 }
 
-                return c1;
+                element = c1;
+                return true;
             }
 
             position = text.Length;
-            return null;
+            element = default;
+            return false;
         }
     }
 }

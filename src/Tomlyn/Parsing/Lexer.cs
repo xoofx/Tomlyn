@@ -1536,15 +1536,14 @@ namespace Tomlyn.Parsing
         private char32 NextCharFromReaderCore()
         {
             int position = _position.Offset;
-            var nextChar = _reader.TryGetNext(ref position);
-            _current.NextPosition.Offset = position;
-
-            if (!nextChar.HasValue)
+            if (!_reader.TryGetNext(ref position, out var nextChar))
             {
+                _current.NextPosition.Offset = position;
                 return Eof;
             }
+            _current.NextPosition.Offset = position;
 
-            var nextc = nextChar.Value;
+            var nextc = nextChar;
             if (nextc == '\n')
             {
                 _current.NextPosition.Column = 0;

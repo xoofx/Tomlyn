@@ -1521,13 +1521,12 @@ public sealed class TomlParser
             var hash = 14695981039346656037UL;
             while (position < endExclusive)
             {
-                var next = iterator.TryGetNext(ref position);
-                if (!next.HasValue)
+                if (!iterator.TryGetNext(ref position, out var next))
                 {
                     break;
                 }
 
-                hash = HashAdd(hash, next.Value.Code);
+                hash = HashAdd(hash, next.Code);
             }
 
             return hash;
@@ -1539,26 +1538,24 @@ public sealed class TomlParser
             var hash = 14695981039346656037UL;
             while (position < endExclusive)
             {
-                var next = iterator.TryGetNext(ref position);
-                if (!next.HasValue)
+                if (!iterator.TryGetNext(ref position, out var next))
                 {
                     break;
                 }
 
-                var c = next.Value.Code;
+                var c = next.Code;
                 if (c != '\\')
                 {
                     hash = HashAdd(hash, c);
                     continue;
                 }
 
-                var escape = iterator.TryGetNext(ref position);
-                if (!escape.HasValue)
+                if (!iterator.TryGetNext(ref position, out var escape))
                 {
                     throw CreateException(CurrentSpan(), "Invalid escape sequence in key.");
                 }
 
-                hash = HashAdd(hash, DecodeEscape(ref iterator, ref position, endExclusive, escape.Value.Code));
+                hash = HashAdd(hash, DecodeEscape(ref iterator, ref position, endExclusive, escape.Code));
             }
 
             return hash;
@@ -1597,13 +1594,12 @@ public sealed class TomlParser
                     throw CreateException(CurrentSpan(), "Incomplete hexadecimal escape sequence in key.");
                 }
 
-                var next = iterator.TryGetNext(ref position);
-                if (!next.HasValue)
+                if (!iterator.TryGetNext(ref position, out var next))
                 {
                     throw CreateException(CurrentSpan(), "Incomplete hexadecimal escape sequence in key.");
                 }
 
-                var c = next.Value.Code;
+                var c = next.Code;
                 var digit = c switch
                 {
                     >= '0' and <= '9' => c - '0',
