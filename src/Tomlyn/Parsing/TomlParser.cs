@@ -375,12 +375,41 @@ public sealed class TomlParser
         private bool _initialized;
         private bool _terminatedDueToError;
 
-        private readonly PendingQueue _pending;
-        private readonly TriviaQueue? _pendingTriviaQueue;
         private readonly List<TomlSyntaxTriviaMetadata>? _pendingTrivia;
         private string? _pendingWhitespace;
         private TomlSyntaxTriviaMetadata[]? _leadingTrivia;
         private TomlSyntaxTriviaMetadata[]? _trailingTrivia;
+
+        private TomlParseEvent _pendingEvent;
+        private bool _hasPendingEvent;
+        private TomlSyntaxTriviaMetadata[]? _pendingLeadingTrivia;
+        private TomlSyntaxTriviaMetadata[]? _pendingTrailingTrivia;
+
+        private PendingOperationKind _pendingOperation;
+
+        // Pending key/value entry emission (EnsureImplicitPrefix + leaf PropertyName + consume `=`).
+        private int _pendingKeyValueImplicitBaseIndex;
+        private int _pendingKeyValuePrefixLength;
+        private int _pendingKeyValueCommonPrefixLength;
+        private int _pendingKeyValueOpenIndex;
+        private bool _pendingKeyValueOpenEmitPropertyName;
+        private bool _pendingKeyValueLeafEmitted;
+        private bool _pendingKeyValueClosingsCompleted;
+
+        // Pending table-header emission (Close implicit frames, transition explicit frames).
+        private int _pendingTableHeaderExplicitPrefixLength;
+        private int _pendingTableHeaderOpenIndex;
+        private bool _pendingTableHeaderOpenEmitPropertyName;
+        private ExplicitFrame _pendingTableHeaderOpenFrame;
+        private bool _pendingTableHeaderHasOpenFrame;
+        private bool _pendingTableHeaderClosingsCompleted;
+
+        // Pending document termination.
+        private DocumentEndStage _pendingDocumentEndStage;
+        private bool _pendingDocumentEndRootTableClosed;
+        private bool _pendingDocumentEndDocumentClosed;
+        private int _pendingDocumentStartStage;
+
         private readonly List<KeySegment> _implicitFrames;
         private readonly List<ExplicitFrame> _explicitFrames;
         private readonly List<KeySegment> _pathSegments;
@@ -403,12 +432,32 @@ public sealed class TomlParser
             _token = default;
             _initialized = false;
             _terminatedDueToError = false;
-            _pending = new PendingQueue();
-            _pendingTriviaQueue = _captureTrivia ? new TriviaQueue() : null;
             _pendingTrivia = _captureTrivia ? new List<TomlSyntaxTriviaMetadata>(capacity: 8) : null;
             _pendingWhitespace = null;
             _leadingTrivia = null;
             _trailingTrivia = null;
+            _pendingEvent = default;
+            _hasPendingEvent = false;
+            _pendingLeadingTrivia = null;
+            _pendingTrailingTrivia = null;
+            _pendingOperation = PendingOperationKind.None;
+            _pendingKeyValueImplicitBaseIndex = 0;
+            _pendingKeyValuePrefixLength = 0;
+            _pendingKeyValueCommonPrefixLength = 0;
+            _pendingKeyValueOpenIndex = 0;
+            _pendingKeyValueOpenEmitPropertyName = true;
+            _pendingKeyValueLeafEmitted = false;
+            _pendingKeyValueClosingsCompleted = false;
+            _pendingTableHeaderExplicitPrefixLength = 0;
+            _pendingTableHeaderOpenIndex = 0;
+            _pendingTableHeaderOpenEmitPropertyName = true;
+            _pendingTableHeaderOpenFrame = default;
+            _pendingTableHeaderHasOpenFrame = false;
+            _pendingTableHeaderClosingsCompleted = false;
+            _pendingDocumentEndStage = DocumentEndStage.Containers;
+            _pendingDocumentEndRootTableClosed = false;
+            _pendingDocumentEndDocumentClosed = false;
+            _pendingDocumentStartStage = 0;
 
             _implicitFrames = new List<KeySegment>(capacity: 8);
             _explicitFrames = new List<ExplicitFrame>(capacity: 16);
@@ -427,9 +476,14 @@ public sealed class TomlParser
 
         public bool MoveNext(out TomlParseEvent parseEvent)
         {
-            if (_pending.TryDequeue(out parseEvent))
+            if (_hasPendingEvent)
             {
-                DequeueTrivia();
+                parseEvent = _pendingEvent;
+                _leadingTrivia = _pendingLeadingTrivia;
+                _trailingTrivia = _pendingTrailingTrivia;
+                _hasPendingEvent = false;
+                _pendingLeadingTrivia = null;
+                _pendingTrailingTrivia = null;
                 return true;
             }
 
@@ -446,7 +500,7 @@ public sealed class TomlParser
                     {
                         _terminatedDueToError = true;
                         RecordDiagnostics(ex);
-                        TerminateStream();
+                        BeginDocumentEnd();
                     }
 
                     producedNext = true;
@@ -457,9 +511,14 @@ public sealed class TomlParser
                     break;
                 }
 
-                if (_pending.TryDequeue(out parseEvent))
+                if (_hasPendingEvent)
                 {
-                    DequeueTrivia();
+                    parseEvent = _pendingEvent;
+                    _leadingTrivia = _pendingLeadingTrivia;
+                    _trailingTrivia = _pendingTrailingTrivia;
+                    _hasPendingEvent = false;
+                    _pendingLeadingTrivia = null;
+                    _pendingTrailingTrivia = null;
                     return true;
                 }
             }
@@ -468,26 +527,6 @@ public sealed class TomlParser
             _leadingTrivia = null;
             _trailingTrivia = null;
             return false;
-        }
-
-        private void DequeueTrivia()
-        {
-            if (!_captureTrivia || _pendingTriviaQueue is null)
-            {
-                _leadingTrivia = null;
-                _trailingTrivia = null;
-                return;
-            }
-
-            if (_pendingTriviaQueue.TryDequeue(out var attachment))
-            {
-                _leadingTrivia = attachment.Leading;
-                _trailingTrivia = attachment.Trailing;
-                return;
-            }
-
-            _leadingTrivia = null;
-            _trailingTrivia = null;
         }
 
         private bool ProduceNext()
@@ -499,14 +538,23 @@ public sealed class TomlParser
 
             if (_state == DocumentState.NotStarted)
             {
-                EnqueueEvent(new TomlParseEvent(TomlParseEventKind.StartDocument, span: null, propertyName: null, stringValue: null, data: 0));
-                EnqueueEvent(new TomlParseEvent(TomlParseEventKind.StartTable, span: null, propertyName: null, stringValue: null, data: 0));
                 _state = DocumentState.Statement;
                 EnsureInitialized();
+                _pendingOperation = PendingOperationKind.DocumentStart;
+                _pendingDocumentStartStage = 1;
+                SetPendingEvent(new TomlParseEvent(TomlParseEventKind.StartDocument, span: null, propertyName: null, stringValue: null, data: 0));
                 return true;
             }
 
             EnsureInitialized();
+
+            if (_pendingOperation != PendingOperationKind.None)
+            {
+                if (ProducePendingOperation())
+                {
+                    return true;
+                }
+            }
 
             if (_containers.Count > 0)
             {
@@ -595,13 +643,17 @@ public sealed class TomlParser
             NextToken();
         }
 
-        private void EnqueueEvent(TomlParseEvent parseEvent, TomlSyntaxTriviaMetadata[]? leadingTrivia = null, TomlSyntaxTriviaMetadata[]? trailingTrivia = null)
+        private void SetPendingEvent(TomlParseEvent parseEvent, TomlSyntaxTriviaMetadata[]? leadingTrivia = null, TomlSyntaxTriviaMetadata[]? trailingTrivia = null)
         {
-            _pending.Enqueue(parseEvent);
-            if (_captureTrivia && _pendingTriviaQueue is not null)
+            if (_hasPendingEvent)
             {
-                _pendingTriviaQueue.Enqueue(new TriviaAttachment(leadingTrivia, trailingTrivia));
+                throw new InvalidOperationException("The parser already has a pending event to return.");
             }
+
+            _pendingEvent = parseEvent;
+            _pendingLeadingTrivia = leadingTrivia;
+            _pendingTrailingTrivia = trailingTrivia;
+            _hasPendingEvent = true;
         }
 
         private TomlSyntaxTriviaMetadata[]? ExtractPendingTrivia()
@@ -614,6 +666,265 @@ public sealed class TomlParser
             var array = _pendingTrivia.ToArray();
             _pendingTrivia.Clear();
             return array;
+        }
+
+        private bool ProducePendingOperation()
+        {
+            return _pendingOperation switch
+            {
+                PendingOperationKind.DocumentStart => ProducePendingDocumentStart(),
+                PendingOperationKind.DocumentEnd => ProducePendingDocumentEnd(),
+                PendingOperationKind.TableHeaderTransition => ProducePendingTableHeaderTransition(),
+                PendingOperationKind.KeyValueEntry => ProducePendingKeyValueEntry(),
+                PendingOperationKind.None => false,
+                _ => throw new InvalidOperationException($"Unsupported pending operation kind {_pendingOperation}."),
+            };
+        }
+
+        private bool ProducePendingDocumentStart()
+        {
+            if (_pendingDocumentStartStage == 1)
+            {
+                _pendingDocumentStartStage = 0;
+                _pendingOperation = PendingOperationKind.None;
+                SetPendingEvent(new TomlParseEvent(TomlParseEventKind.StartTable, span: null, propertyName: null, stringValue: null, data: 0));
+                return true;
+            }
+
+            _pendingOperation = PendingOperationKind.None;
+            return false;
+        }
+
+        private void BeginDocumentEnd()
+        {
+            if (_pendingOperation == PendingOperationKind.DocumentEnd || _state == DocumentState.Ended)
+            {
+                return;
+            }
+
+            _pendingOperation = PendingOperationKind.DocumentEnd;
+            _pendingDocumentEndStage = DocumentEndStage.Containers;
+            _pendingDocumentEndRootTableClosed = false;
+            _pendingDocumentEndDocumentClosed = false;
+            _state = DocumentState.Terminating;
+        }
+
+        private bool ProducePendingDocumentEnd()
+        {
+            while (true)
+            {
+                switch (_pendingDocumentEndStage)
+                {
+                    case DocumentEndStage.Containers:
+                        if (_containers.Count > 0)
+                        {
+                            var frame = _containers[_containers.Count - 1];
+                            if (frame.Kind == ContainerKind.InlineTable && _implicitFrames.Count > frame.InlineImplicitBase)
+                            {
+                                _implicitFrames.RemoveAt(_implicitFrames.Count - 1);
+                                SetPendingEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
+                                return true;
+                            }
+
+                            _containers.RemoveAt(_containers.Count - 1);
+                            SetPendingEvent(frame.Kind == ContainerKind.Array
+                                ? new TomlParseEvent(TomlParseEventKind.EndArray, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0)
+                                : new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
+                            return true;
+                        }
+
+                        _pendingDocumentEndStage = DocumentEndStage.ImplicitFrames;
+                        continue;
+
+                    case DocumentEndStage.ImplicitFrames:
+                        if (_implicitFrames.Count > 0)
+                        {
+                            _implicitFrames.RemoveAt(_implicitFrames.Count - 1);
+                            SetPendingEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
+                            return true;
+                        }
+
+                        _pendingDocumentEndStage = DocumentEndStage.ExplicitFrames;
+                        continue;
+
+                    case DocumentEndStage.ExplicitFrames:
+                        if (_explicitFrames.Count > 0)
+                        {
+                            var frame = _explicitFrames[_explicitFrames.Count - 1];
+                            _explicitFrames.RemoveAt(_explicitFrames.Count - 1);
+                            SetPendingEvent(frame.Kind == ExplicitFrameKind.Array
+                                ? new TomlParseEvent(TomlParseEventKind.EndArray, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0)
+                                : new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
+                            return true;
+                        }
+
+                        _pendingDocumentEndStage = DocumentEndStage.RootTable;
+                        continue;
+
+                    case DocumentEndStage.RootTable:
+                        if (!_pendingDocumentEndRootTableClosed)
+                        {
+                            _pendingDocumentEndRootTableClosed = true;
+                            SetPendingEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
+                            return true;
+                        }
+
+                        _pendingDocumentEndStage = DocumentEndStage.Document;
+                        continue;
+
+                    case DocumentEndStage.Document:
+                        if (!_pendingDocumentEndDocumentClosed)
+                        {
+                            _pendingDocumentEndDocumentClosed = true;
+                            SetPendingEvent(new TomlParseEvent(TomlParseEventKind.EndDocument, span: null, propertyName: null, stringValue: null, data: 0));
+                            _pendingOperation = PendingOperationKind.None;
+                            _state = DocumentState.Ended;
+                            return true;
+                        }
+
+                        _pendingOperation = PendingOperationKind.None;
+                        _state = DocumentState.Ended;
+                        return false;
+
+                    default:
+                        throw new InvalidOperationException($"Unsupported document end stage {_pendingDocumentEndStage}.");
+                }
+            }
+        }
+
+        private bool ProducePendingTableHeaderTransition()
+        {
+            if (!_pendingTableHeaderClosingsCompleted)
+            {
+                if (_implicitFrames.Count > 0)
+                {
+                    _implicitFrames.RemoveAt(_implicitFrames.Count - 1);
+                    SetPendingEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
+                    return true;
+                }
+
+                if (_explicitFrames.Count > _pendingTableHeaderExplicitPrefixLength)
+                {
+                    var frame = _explicitFrames[_explicitFrames.Count - 1];
+                    _explicitFrames.RemoveAt(_explicitFrames.Count - 1);
+                    SetPendingEvent(frame.Kind == ExplicitFrameKind.Array
+                        ? new TomlParseEvent(TomlParseEventKind.EndArray, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0)
+                        : new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
+                    return true;
+                }
+
+                _pendingTableHeaderClosingsCompleted = true;
+            }
+
+            if (_pendingTableHeaderOpenIndex < _targetExplicitFrames.Count)
+            {
+                if (_pendingTableHeaderHasOpenFrame)
+                {
+                    var openFrame = _pendingTableHeaderOpenFrame;
+                    _pendingTableHeaderHasOpenFrame = false;
+                    _pendingTableHeaderOpenEmitPropertyName = true;
+                    _pendingTableHeaderOpenIndex++;
+
+                    SetPendingEvent(openFrame.Kind == ExplicitFrameKind.Array
+                        ? new TomlParseEvent(TomlParseEventKind.StartArray, span: null, propertyName: null, stringValue: null, data: 0)
+                        : new TomlParseEvent(TomlParseEventKind.StartTable, span: null, propertyName: null, stringValue: null, data: 0));
+                    _explicitFrames.Add(openFrame);
+                    return true;
+                }
+
+                var frame = _targetExplicitFrames[_pendingTableHeaderOpenIndex];
+                if (frame.Kind == ExplicitFrameKind.TableArrayElement)
+                {
+                    _pendingTableHeaderOpenIndex++;
+                    SetPendingEvent(new TomlParseEvent(TomlParseEventKind.StartTable, span: null, propertyName: null, stringValue: null, data: 0));
+                    _explicitFrames.Add(frame);
+                    return true;
+                }
+
+                if (_pendingTableHeaderOpenEmitPropertyName)
+                {
+                    if (frame.Name is not { } name)
+                    {
+                        throw CreateException(CurrentSpan(), "Invalid explicit frame without a name.");
+                    }
+
+                    _pendingTableHeaderOpenFrame = frame;
+                    _pendingTableHeaderHasOpenFrame = true;
+                    _pendingTableHeaderOpenEmitPropertyName = false;
+
+                    var leadingTrivia = ExtractPendingTrivia();
+                    SetPendingEvent(new TomlParseEvent(
+                        TomlParseEventKind.PropertyName,
+                        span: name.Span,
+                        propertyName: _decodeScalars ? name.Value : null,
+                        stringValue: null,
+                        data: (ulong)name.TokenKind),
+                        leadingTrivia: leadingTrivia);
+                    return true;
+                }
+
+                throw CreateException(CurrentSpan(), "Invalid table header open state.");
+            }
+
+            _pendingOperation = PendingOperationKind.None;
+            return false;
+        }
+
+        private bool ProducePendingKeyValueEntry()
+        {
+            if (!_pendingKeyValueClosingsCompleted)
+            {
+                var targetCount = _pendingKeyValueImplicitBaseIndex + _pendingKeyValueCommonPrefixLength;
+                if (_implicitFrames.Count > targetCount)
+                {
+                    _implicitFrames.RemoveAt(_implicitFrames.Count - 1);
+                    SetPendingEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
+                    return true;
+                }
+
+                _pendingKeyValueClosingsCompleted = true;
+            }
+
+            if (_pendingKeyValueOpenIndex < _pendingKeyValuePrefixLength)
+            {
+                var segment = _pathSegments[_pendingKeyValueOpenIndex];
+                if (_pendingKeyValueOpenEmitPropertyName)
+                {
+                    _pendingKeyValueOpenEmitPropertyName = false;
+                    SetPendingEvent(new TomlParseEvent(
+                        TomlParseEventKind.PropertyName,
+                        span: segment.Span,
+                        propertyName: _decodeScalars ? segment.Value : null,
+                        stringValue: null,
+                        data: (ulong)segment.TokenKind));
+                    return true;
+                }
+
+                _pendingKeyValueOpenEmitPropertyName = true;
+                _pendingKeyValueOpenIndex++;
+                _implicitFrames.Add(segment);
+                SetPendingEvent(new TomlParseEvent(TomlParseEventKind.StartTable, span: null, propertyName: null, stringValue: null, data: 0));
+                return true;
+            }
+
+            if (!_pendingKeyValueLeafEmitted)
+            {
+                _pendingKeyValueLeafEmitted = true;
+                var leaf = _pathSegments[_pathSegments.Count - 1];
+                var leadingTrivia = ExtractPendingTrivia();
+                SetPendingEvent(new TomlParseEvent(
+                    TomlParseEventKind.PropertyName,
+                    span: leaf.Span,
+                    propertyName: _decodeScalars ? leaf.Value : null,
+                    stringValue: null,
+                    data: (ulong)leaf.TokenKind),
+                    leadingTrivia: leadingTrivia);
+                return true;
+            }
+
+            Consume(TokenKind.Equal, LexerState.Value);
+            _pendingOperation = PendingOperationKind.None;
+            return false;
         }
 
         private void SkipNewLines(LexerState lexerState)
@@ -643,12 +954,7 @@ public sealed class TomlParser
 
                 if (_token.Kind == TokenKind.Eof)
                 {
-                    CloseImplicitFrames(baseIndex: 0);
-                    CloseExplicitFrames(targetPrefixLength: 0);
-
-                    EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
-                    EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndDocument, span: null, propertyName: null, stringValue: null, data: 0));
-                    _state = DocumentState.Ended;
+                    BeginDocumentEnd();
                     return true;
                 }
 
@@ -717,7 +1023,7 @@ public sealed class TomlParser
                     {
                         Consume(TokenKind.CloseBracket, DetermineLexerStateAfterContainerClose());
                         _containers.RemoveAt(_containers.Count - 1);
-                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndArray, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
+                        SetPendingEvent(new TomlParseEvent(TomlParseEventKind.EndArray, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
                         return true;
                     }
 
@@ -743,7 +1049,7 @@ public sealed class TomlParser
                     {
                         Consume(TokenKind.CloseBracket, DetermineLexerStateAfterContainerClose());
                         _containers.RemoveAt(_containers.Count - 1);
-                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndArray, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
+                        SetPendingEvent(new TomlParseEvent(TomlParseEventKind.EndArray, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
                         return true;
                     }
 
@@ -756,7 +1062,7 @@ public sealed class TomlParser
                 {
                     Consume(TokenKind.CloseBracket, DetermineLexerStateAfterContainerClose());
                     _containers.RemoveAt(_containers.Count - 1);
-                    EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndArray, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
+                    SetPendingEvent(new TomlParseEvent(TomlParseEventKind.EndArray, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
                     return true;
                 }
 
@@ -790,13 +1096,13 @@ public sealed class TomlParser
                         if (_implicitFrames.Count > frame.InlineImplicitBase)
                         {
                             _implicitFrames.RemoveAt(_implicitFrames.Count - 1);
-                            EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
+                            SetPendingEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
                             return true;
                         }
 
                         Consume(TokenKind.CloseBrace, DetermineLexerStateAfterContainerClose());
                         _containers.RemoveAt(_containers.Count - 1);
-                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
+                        SetPendingEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
                         return true;
                     }
 
@@ -878,13 +1184,16 @@ public sealed class TomlParser
                 throw CreateException(CurrentSpan(), $"Expected end-of-line after table header but was `{ToPrintable(_token)}`.");
             }
 
-            CloseImplicitFrames(baseIndex: 0);
-
             _targetExplicitFrames.Clear();
             BuildExplicitTargetFrames(_pathSegments, isTableArray, _explicitFrames, _targetExplicitFrames);
             var prefixLength = GetExplicitCommonPrefixLength(_targetExplicitFrames, isTableArray);
-            CloseExplicitFrames(prefixLength);
-            OpenExplicitFrames(_targetExplicitFrames, prefixLength);
+
+            _pendingTableHeaderExplicitPrefixLength = prefixLength;
+            _pendingTableHeaderOpenIndex = prefixLength;
+            _pendingTableHeaderOpenEmitPropertyName = true;
+            _pendingTableHeaderHasOpenFrame = false;
+            _pendingTableHeaderClosingsCompleted = false;
+            _pendingOperation = PendingOperationKind.TableHeaderTransition;
         }
 
         private void BeginKeyValueEntry(int implicitBaseIndex)
@@ -902,97 +1211,22 @@ public sealed class TomlParser
             }
 
             var prefixLength = _pathSegments.Count - 1;
-            EnsureImplicitPrefix(implicitBaseIndex, _pathSegments, prefixLength);
-
-            var leaf = _pathSegments[_pathSegments.Count - 1];
-            var leadingTrivia = ExtractPendingTrivia();
-            EnqueueEvent(new TomlParseEvent(
-                TomlParseEventKind.PropertyName,
-                span: leaf.Span,
-                propertyName: _decodeScalars ? leaf.Value : null,
-                stringValue: null,
-                data: (ulong)leaf.TokenKind),
-                leadingTrivia: leadingTrivia);
-
-            Consume(TokenKind.Equal, LexerState.Value);
-        }
-
-        private void CloseImplicitFrames(int baseIndex)
-        {
-            for (var i = _implicitFrames.Count - 1; i >= baseIndex; i--)
+            var common = 0;
+            var currentCount = _implicitFrames.Count - implicitBaseIndex;
+            while (common < currentCount && common < prefixLength &&
+                   _implicitFrames[implicitBaseIndex + common].Hash == _pathSegments[common].Hash)
             {
-                _implicitFrames.RemoveAt(i);
-                EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
+                common++;
             }
-        }
 
-        private void CloseExplicitFrames(int targetPrefixLength)
-        {
-            for (var i = _explicitFrames.Count - 1; i >= targetPrefixLength; i--)
-            {
-                var frame = _explicitFrames[i];
-                switch (frame.Kind)
-                {
-                    case ExplicitFrameKind.Table:
-                    case ExplicitFrameKind.TableArrayElement:
-                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
-                        break;
-                    case ExplicitFrameKind.Array:
-                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndArray, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
-                        break;
-                }
-
-                _explicitFrames.RemoveAt(i);
-            }
-        }
-
-        private void OpenExplicitFrames(List<ExplicitFrame> targetFrames, int startIndex)
-        {
-            for (var i = startIndex; i < targetFrames.Count; i++)
-            {
-                var frame = targetFrames[i];
-                TomlSyntaxTriviaMetadata[]? leadingTrivia;
-                switch (frame.Kind)
-                {
-                    case ExplicitFrameKind.Table:
-                        if (frame.Name is not { } tableName)
-                        {
-                            throw CreateException(CurrentSpan(), "Invalid explicit table frame.");
-                        }
-
-                        leadingTrivia = ExtractPendingTrivia();
-                        EnqueueEvent(new TomlParseEvent(
-                            TomlParseEventKind.PropertyName,
-                            span: tableName.Span,
-                            propertyName: _decodeScalars ? tableName.Value : null,
-                            stringValue: null,
-                            data: (ulong)tableName.TokenKind),
-                            leadingTrivia: leadingTrivia);
-                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.StartTable, span: null, propertyName: null, stringValue: null, data: 0));
-                        break;
-                    case ExplicitFrameKind.Array:
-                        if (frame.Name is not { } arrayName)
-                        {
-                            throw CreateException(CurrentSpan(), "Invalid explicit array frame.");
-                        }
-
-                        leadingTrivia = ExtractPendingTrivia();
-                        EnqueueEvent(new TomlParseEvent(
-                            TomlParseEventKind.PropertyName,
-                            span: arrayName.Span,
-                            propertyName: _decodeScalars ? arrayName.Value : null,
-                            stringValue: null,
-                            data: (ulong)arrayName.TokenKind),
-                            leadingTrivia: leadingTrivia);
-                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.StartArray, span: null, propertyName: null, stringValue: null, data: 0));
-                        break;
-                    case ExplicitFrameKind.TableArrayElement:
-                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.StartTable, span: null, propertyName: null, stringValue: null, data: 0));
-                        break;
-                }
-
-                _explicitFrames.Add(frame);
-            }
+            _pendingKeyValueImplicitBaseIndex = implicitBaseIndex;
+            _pendingKeyValuePrefixLength = prefixLength;
+            _pendingKeyValueCommonPrefixLength = common;
+            _pendingKeyValueOpenIndex = common;
+            _pendingKeyValueOpenEmitPropertyName = true;
+            _pendingKeyValueLeafEmitted = false;
+            _pendingKeyValueClosingsCompleted = false;
+            _pendingOperation = PendingOperationKind.KeyValueEntry;
         }
 
         private static void BuildExplicitTargetFrames(List<KeySegment> path, bool isTableArray, List<ExplicitFrame> currentFrames, List<ExplicitFrame> frames)
@@ -1122,7 +1356,7 @@ public sealed class TomlParser
                 var span = new TomlSourceSpan(_lexer.Source.SourcePath,
                     new TomlTextPosition(spanStart.Offset, spanStart.Line, spanStart.Column),
                     new TomlTextPosition(_token.End.Offset, _token.End.Line, _token.End.Column));
-                EnqueueEvent(new TomlParseEvent(TomlParseEventKind.StartArray, span: span, propertyName: null, stringValue: null, data: 0));
+                SetPendingEvent(new TomlParseEvent(TomlParseEventKind.StartArray, span: span, propertyName: null, stringValue: null, data: 0));
                 Consume(TokenKind.OpenBracket, LexerState.Value);
                 _containers.Add(new ContainerFrame(ContainerKind.Array, inlineImplicitBase: 0));
                 return;
@@ -1133,7 +1367,7 @@ public sealed class TomlParser
                 var span = new TomlSourceSpan(_lexer.Source.SourcePath,
                     new TomlTextPosition(spanStart.Offset, spanStart.Line, spanStart.Column),
                     new TomlTextPosition(_token.End.Offset, _token.End.Line, _token.End.Column));
-                EnqueueEvent(new TomlParseEvent(TomlParseEventKind.StartTable, span: span, propertyName: null, stringValue: null, data: 0));
+                SetPendingEvent(new TomlParseEvent(TomlParseEventKind.StartTable, span: span, propertyName: null, stringValue: null, data: 0));
                 Consume(TokenKind.OpenBrace, LexerState.Key);
                 _containers.Add(new ContainerFrame(ContainerKind.InlineTable, inlineImplicitBase: _implicitFrames.Count));
                 return;
@@ -1150,7 +1384,7 @@ public sealed class TomlParser
                 var parseEvent = new TomlParseEvent(TomlParseEventKind.String, span: eventSpan, propertyName: null, stringValue: text, data: (ulong)tokenKind);
                 Consume(tokenKind, nextStateAfterScalar);
                 var trailingTrivia = ExtractPendingTrivia();
-                EnqueueEvent(parseEvent, trailingTrivia: trailingTrivia);
+                SetPendingEvent(parseEvent, trailingTrivia: trailingTrivia);
                 return;
             }
 
@@ -1160,7 +1394,7 @@ public sealed class TomlParser
                 var parseEvent = new TomlParseEvent(TomlParseEventKind.Integer, span: eventSpan, propertyName: null, stringValue: null, data: _token.Data);
                 Consume(tokenKind, nextStateAfterScalar);
                 var trailingTrivia = ExtractPendingTrivia();
-                EnqueueEvent(parseEvent, trailingTrivia: trailingTrivia);
+                SetPendingEvent(parseEvent, trailingTrivia: trailingTrivia);
                 return;
             }
 
@@ -1170,7 +1404,7 @@ public sealed class TomlParser
                 var parseEvent = new TomlParseEvent(TomlParseEventKind.Float, span: eventSpan, propertyName: null, stringValue: null, data: _token.Data);
                 Consume(tokenKind, nextStateAfterScalar);
                 var trailingTrivia = ExtractPendingTrivia();
-                EnqueueEvent(parseEvent, trailingTrivia: trailingTrivia);
+                SetPendingEvent(parseEvent, trailingTrivia: trailingTrivia);
                 return;
             }
 
@@ -1180,7 +1414,7 @@ public sealed class TomlParser
                 var parseEvent = new TomlParseEvent(TomlParseEventKind.Boolean, span: eventSpan, propertyName: null, stringValue: null, data: _token.Data);
                 Consume(tokenKind, nextStateAfterScalar);
                 var trailingTrivia = ExtractPendingTrivia();
-                EnqueueEvent(parseEvent, trailingTrivia: trailingTrivia);
+                SetPendingEvent(parseEvent, trailingTrivia: trailingTrivia);
                 return;
             }
 
@@ -1191,7 +1425,7 @@ public sealed class TomlParser
                 var parseEvent = new TomlParseEvent(TomlParseEventKind.DateTime, span: eventSpan, propertyName: null, stringValue: literal, data: 0);
                 Consume(tokenKind, nextStateAfterScalar);
                 var trailingTrivia = ExtractPendingTrivia();
-                EnqueueEvent(parseEvent, trailingTrivia: trailingTrivia);
+                SetPendingEvent(parseEvent, trailingTrivia: trailingTrivia);
                 return;
             }
 
@@ -1234,36 +1468,6 @@ public sealed class TomlParser
             }
 
             throw CreateException(CurrentSpan(), $"Unexpected token `{ToPrintable(_token)}` while parsing a key.");
-        }
-
-        private void EnsureImplicitPrefix(int baseIndex, List<KeySegment> pathSegments, int prefixLength)
-        {
-            var common = 0;
-            var currentCount = _implicitFrames.Count - baseIndex;
-            while (common < currentCount && common < prefixLength &&
-                   _implicitFrames[baseIndex + common].Hash == pathSegments[common].Hash)
-            {
-                common++;
-            }
-
-            for (var i = currentCount - 1; i >= common; i--)
-            {
-                _implicitFrames.RemoveAt(baseIndex + i);
-                EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
-            }
-
-            for (var i = common; i < prefixLength; i++)
-            {
-                var segment = pathSegments[i];
-                EnqueueEvent(new TomlParseEvent(
-                    TomlParseEventKind.PropertyName,
-                    span: segment.Span,
-                    propertyName: _decodeScalars ? segment.Value : null,
-                    stringValue: null,
-                    data: (ulong)segment.TokenKind));
-                EnqueueEvent(new TomlParseEvent(TomlParseEventKind.StartTable, span: null, propertyName: null, stringValue: null, data: 0));
-                _implicitFrames.Add(segment);
-            }
         }
 
         private ulong ComputeKeySegmentHash(TokenKind tokenKind, TextPosition start, TextPosition end)
@@ -1435,35 +1639,22 @@ public sealed class TomlParser
             }
         }
 
-        private void TerminateStream()
+        private enum PendingOperationKind
         {
-            if (_state == DocumentState.Ended)
-            {
-                return;
-            }
+            None = 0,
+            DocumentStart = 1,
+            KeyValueEntry = 2,
+            TableHeaderTransition = 3,
+            DocumentEnd = 4,
+        }
 
-            while (_containers.Count > 0)
-            {
-                var frame = _containers[_containers.Count - 1];
-                if (frame.Kind == ContainerKind.InlineTable && _implicitFrames.Count > frame.InlineImplicitBase)
-                {
-                    _implicitFrames.RemoveAt(_implicitFrames.Count - 1);
-                    EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
-                    continue;
-                }
-
-                _containers.RemoveAt(_containers.Count - 1);
-                EnqueueEvent(frame.Kind == ContainerKind.Array
-                    ? new TomlParseEvent(TomlParseEventKind.EndArray, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0)
-                    : new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
-            }
-
-            CloseImplicitFrames(baseIndex: 0);
-            CloseExplicitFrames(targetPrefixLength: 0);
-
-            EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
-            EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndDocument, span: null, propertyName: null, stringValue: null, data: 0));
-            _state = DocumentState.Ended;
+        private enum DocumentEndStage
+        {
+            Containers = 0,
+            ImplicitFrames = 1,
+            ExplicitFrames = 2,
+            RootTable = 3,
+            Document = 4,
         }
 
         private enum DocumentState
@@ -1472,7 +1663,8 @@ public sealed class TomlParser
             Statement = 1,
             ExpectValue = 2,
             AfterValue = 3,
-            Ended = 4,
+            Terminating = 4,
+            Ended = 5,
         }
 
         private enum ContainerKind
