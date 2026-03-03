@@ -224,7 +224,7 @@ enabled = true
         try
         {
             var tomlText = File.ReadAllText(twitterPath);
-            var table = TomlSerializer.Deserialize<TomlTable>(tomlText);
+            var table = TomlSerializer.Deserialize(tomlText, AotTomlSerializerContext.Default.TomlTable);
             if (table is null)
             {
                 errors.Add("twitter.toml parse returned null.");
