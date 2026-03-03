@@ -398,21 +398,57 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 .Append(arrayElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
                 .AppendLine(">(this);");
         }
-        else if (TryGetEnumerableElementType(type, out var enumerableElementType, out var isConcreteList))
+        else if (TryGetSequenceElementType(type, out var enumerableElementType, out var kind))
         {
-            if (isConcreteList)
+            if (kind == SequenceKind.List)
             {
                 builder.Append("        return CreateSourceGeneratedListTypeInfo<")
                     .Append(enumerableElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
                     .AppendLine(">(this);");
             }
-            else
+            else if (kind == SequenceKind.ListBackedEnumerable)
             {
                 builder.Append("        return CreateSourceGeneratedListBackedEnumerableTypeInfo<")
                     .Append(typeName)
                     .Append(", ")
                     .Append(enumerableElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
                     .AppendLine(">(this);");
+            }
+            else if (kind == SequenceKind.HashSet)
+            {
+                builder.Append("        return CreateSourceGeneratedHashSetTypeInfo<")
+                    .Append(enumerableElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                    .AppendLine(">(this);");
+            }
+            else if (kind == SequenceKind.HashSetBackedEnumerable)
+            {
+                builder.Append("        return CreateSourceGeneratedHashSetBackedEnumerableTypeInfo<")
+                    .Append(typeName)
+                    .Append(", ")
+                    .Append(enumerableElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                    .AppendLine(">(this);");
+            }
+            else if (kind == SequenceKind.ImmutableArray)
+            {
+                builder.Append("        return CreateSourceGeneratedImmutableArrayTypeInfo<")
+                    .Append(enumerableElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                    .AppendLine(">(this);");
+            }
+            else if (kind == SequenceKind.ImmutableList)
+            {
+                builder.Append("        return CreateSourceGeneratedImmutableListTypeInfo<")
+                    .Append(enumerableElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                    .AppendLine(">(this);");
+            }
+            else if (kind == SequenceKind.ImmutableHashSet)
+            {
+                builder.Append("        return CreateSourceGeneratedImmutableHashSetTypeInfo<")
+                    .Append(enumerableElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                    .AppendLine(">(this);");
+            }
+            else
+            {
+                builder.Append("        throw new global::System.InvalidOperationException(\"Unsupported sequence kind.\");");
             }
         }
         else if (TryGetDictionaryValueType(type, out var dictionaryValueType))
@@ -624,7 +660,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 continue;
             }
 
-            if (TryGetEnumerableElementType(current, out var enumerableElementType, out _))
+            if (TryGetSequenceElementType(current, out var enumerableElementType, out _))
             {
                 if (IsSupportedMemberType(enumerableElementType))
                 {
@@ -692,7 +728,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             return IsSupportedMemberType(arrayElementType);
         }
 
-        if (TryGetEnumerableElementType(type, out var enumerableElementType, out _))
+        if (TryGetSequenceElementType(type, out var enumerableElementType, out _))
         {
             return IsSupportedMemberType(enumerableElementType);
         }
@@ -770,7 +806,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         if (TryGetArrayElementType(type, out _) ||
-            TryGetEnumerableElementType(type, out _, out _) ||
+            TryGetSequenceElementType(type, out _, out _) ||
             TryGetDictionaryKeyValueTypes(type, out _, out _))
         {
             return false;
@@ -870,10 +906,21 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         return false;
     }
 
-    private static bool TryGetEnumerableElementType(ITypeSymbol type, out ITypeSymbol elementType, out bool isConcreteList)
+    private enum SequenceKind
+    {
+        List = 0,
+        ListBackedEnumerable = 1,
+        HashSet = 2,
+        HashSetBackedEnumerable = 3,
+        ImmutableArray = 4,
+        ImmutableList = 5,
+        ImmutableHashSet = 6,
+    }
+
+    private static bool TryGetSequenceElementType(ITypeSymbol type, out ITypeSymbol elementType, out SequenceKind kind)
     {
         elementType = null!;
-        isConcreteList = false;
+        kind = default;
 
         if (type is not INamedTypeSymbol named || !named.IsGenericType)
         {
@@ -884,7 +931,42 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         if (constructedFrom == "global::System.Collections.Generic.List<T>")
         {
             elementType = named.TypeArguments[0];
-            isConcreteList = true;
+            kind = SequenceKind.List;
+            return true;
+        }
+
+        if (constructedFrom == "global::System.Collections.Generic.HashSet<T>")
+        {
+            elementType = named.TypeArguments[0];
+            kind = SequenceKind.HashSet;
+            return true;
+        }
+
+        if (constructedFrom == "global::System.Collections.Generic.ISet<T>")
+        {
+            elementType = named.TypeArguments[0];
+            kind = SequenceKind.HashSetBackedEnumerable;
+            return true;
+        }
+
+        if (constructedFrom == "global::System.Collections.Immutable.ImmutableArray<T>")
+        {
+            elementType = named.TypeArguments[0];
+            kind = SequenceKind.ImmutableArray;
+            return true;
+        }
+
+        if (constructedFrom == "global::System.Collections.Immutable.ImmutableList<T>")
+        {
+            elementType = named.TypeArguments[0];
+            kind = SequenceKind.ImmutableList;
+            return true;
+        }
+
+        if (constructedFrom == "global::System.Collections.Immutable.ImmutableHashSet<T>")
+        {
+            elementType = named.TypeArguments[0];
+            kind = SequenceKind.ImmutableHashSet;
             return true;
         }
 
@@ -896,6 +978,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             "global::System.Collections.Generic.IReadOnlyList<T>")
         {
             elementType = named.TypeArguments[0];
+            kind = SequenceKind.ListBackedEnumerable;
             return true;
         }
 
