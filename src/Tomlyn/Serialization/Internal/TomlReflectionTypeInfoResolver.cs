@@ -613,7 +613,7 @@ internal static class TomlReflectionTypeInfoResolver
 
                 if (_parameterIndexByName.ContainsKey(keyName))
                 {
-                    throw new InvalidOperationException($"Constructor parameter name collision for key '{keyName}' on type '{type.FullName}'.");
+                    throw new TomlException($"Constructor parameter name collision for key '{keyName}' on type '{type.FullName}'.");
                 }
 
                 _parameterIndexByName.Add(keyName, i);
