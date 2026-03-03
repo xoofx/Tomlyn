@@ -934,13 +934,49 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
             throw new TomlException("TOML does not support null values.");
         }
 
+        var options = writer.Options;
+        var runtimeType = value.GetType();
+
+        // Custom converters always win (mirrors serializer pipeline).
+        var fromConverters = Tomlyn.Serialization.Internal.TomlTypeInfoResolverPipeline.TryResolveFromConverters(options, runtimeType);
+        if (fromConverters is not null)
+        {
+            fromConverters.Write(writer, value);
+            return;
+        }
+
+        var fromResolver = options.TypeInfoResolver?.GetTypeInfo(runtimeType, options);
+        if (fromResolver is not null)
+        {
+            fromResolver.Write(writer, value);
+            return;
+        }
+
         switch (value)
         {
             case string s:
                 writer.WriteStringValue(s);
                 return;
+            case char c:
+                TomlCharConverter.Instance.Write(writer, c);
+                return;
             case bool b:
                 writer.WriteBooleanValue(b);
+                return;
+            case sbyte i8:
+                TomlSByteConverter.Instance.Write(writer, i8);
+                return;
+            case byte u8:
+                TomlByteConverter.Instance.Write(writer, u8);
+                return;
+            case short i16:
+                TomlInt16Converter.Instance.Write(writer, i16);
+                return;
+            case ushort u16:
+                TomlUInt16Converter.Instance.Write(writer, u16);
+                return;
+            case uint u32:
+                TomlUInt32Converter.Instance.Write(writer, u32);
                 return;
             case long l:
                 writer.WriteIntegerValue(l);
@@ -948,14 +984,65 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
             case int i:
                 writer.WriteIntegerValue(i);
                 return;
+            case ulong u64:
+                TomlUInt64Converter.Instance.Write(writer, u64);
+                return;
+            case nint ni:
+                TomlNIntConverter.Instance.Write(writer, ni);
+                return;
+            case nuint nu:
+                TomlNUIntConverter.Instance.Write(writer, nu);
+                return;
             case double d:
                 writer.WriteFloatValue(d);
                 return;
             case float f:
                 writer.WriteFloatValue(f);
                 return;
+            case decimal m:
+                TomlDecimalConverter.Instance.Write(writer, m);
+                return;
             case TomlDateTime dt:
                 writer.WriteDateTimeValue(dt);
+                return;
+            case DateTime dt2:
+                TomlDateTimeConverter.Instance.Write(writer, dt2);
+                return;
+            case DateTimeOffset dto:
+                TomlDateTimeOffsetConverter.Instance.Write(writer, dto);
+                return;
+#if NET6_0_OR_GREATER
+            case DateOnly dateOnly:
+                TomlDateOnlyConverter.Instance.Write(writer, dateOnly);
+                return;
+            case TimeOnly timeOnly:
+                TomlTimeOnlyConverter.Instance.Write(writer, timeOnly);
+                return;
+#endif
+#if NET5_0_OR_GREATER
+            case Half half:
+                TomlHalfConverter.Instance.Write(writer, half);
+                return;
+#endif
+#if NET7_0_OR_GREATER
+            case Int128 i128:
+                TomlInt128Converter.Instance.Write(writer, i128);
+                return;
+            case UInt128 u128:
+                TomlUInt128Converter.Instance.Write(writer, u128);
+                return;
+#endif
+            case Guid guid:
+                TomlGuidConverter.Instance.Write(writer, guid);
+                return;
+            case TimeSpan ts:
+                TomlTimeSpanConverter.Instance.Write(writer, ts);
+                return;
+            case Uri uri:
+                TomlUriConverter.Instance.Write(writer, uri);
+                return;
+            case Version version:
+                TomlVersionConverter.Instance.Write(writer, version);
                 return;
             case TomlTable table:
                 WriteTable(writer, table);
@@ -966,8 +1053,16 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
             case TomlTableArray tableArray:
                 WriteTableArray(writer, tableArray);
                 return;
+            case Enum:
+                TomlEnumConverter.Instance.Write(writer, value);
+                return;
             default:
-                throw new TomlException($"Unsupported untyped TOML value `{value.GetType().FullName}`.");
+                if (runtimeType == typeof(object))
+                {
+                    throw new TomlException("An untyped System.Object instance cannot be represented as TOML. Use a supported scalar/container type or a custom converter.");
+                }
+
+                throw new TomlException($"Unsupported untyped TOML value `{runtimeType.FullName}`.");
         }
     }
 
