@@ -392,6 +392,12 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         {
             builder.Append("        return GetBuiltInTypeInfo<").Append(typeName).AppendLine(">(Options);");
         }
+        else if (TryGetNullableUnderlyingType(type, out var nullableUnderlyingType))
+        {
+            builder.Append("        return CreateSourceGeneratedNullableTypeInfo<")
+                .Append(nullableUnderlyingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                .AppendLine(">(this);");
+        }
         else if (TryGetArrayElementType(type, out var arrayElementType))
         {
             builder.Append("        return CreateSourceGeneratedArrayTypeInfo<")
@@ -558,6 +564,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         var writeIndent = "                ";
         var openIndent = "            ";
         var defaultLiteral = member.Type.IsReferenceType ? "default!" : "default";
+        var defaultIsNull = member.Type.IsReferenceType || TryGetNullableUnderlyingType(member.Type, out _);
 
         if (member.WriteIgnore == WriteIgnoreKind.WhenWritingNull)
         {
@@ -578,13 +585,21 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         if (member.WriteIgnore == WriteIgnoreKind.WhenWritingDefault)
         {
-            builder.Append(openIndent).Append("if (!global::System.Collections.Generic.EqualityComparer<")
-                .Append(memberTypeName)
-                .Append(">.Default.Equals(")
-                .Append(localName)
-                .Append(", ")
-                .Append(defaultLiteral)
-                .AppendLine("))");
+            if (defaultIsNull && canBeNull)
+            {
+                builder.Append(openIndent).Append("if (").Append(localName).AppendLine(" is not null)");
+            }
+            else
+            {
+                builder.Append(openIndent).Append("if (!global::System.Collections.Generic.EqualityComparer<")
+                    .Append(memberTypeName)
+                    .Append(">.Default.Equals(")
+                    .Append(localName)
+                    .Append(", ")
+                    .Append(defaultLiteral)
+                    .AppendLine("))");
+            }
+
             builder.Append(openIndent).AppendLine("{");
             builder.Append(writeIndent).Append("writer.WritePropertyName(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
             builder.Append(writeIndent).Append("_context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".Write(writer, ").Append(writeArgument).AppendLine(");");
@@ -603,13 +618,21 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         builder.Append(hasPrevious ? ") && !(" : string.Empty);
-        builder.Append("Options.DefaultIgnoreCondition == global::Tomlyn.TomlIgnoreCondition.WhenWritingDefault && global::System.Collections.Generic.EqualityComparer<")
-            .Append(memberTypeName)
-            .Append(">.Default.Equals(")
-            .Append(localName)
-            .Append(", ")
-            .Append(defaultLiteral)
-            .Append(")");
+        builder.Append("Options.DefaultIgnoreCondition == global::Tomlyn.TomlIgnoreCondition.WhenWritingDefault && ");
+        if (defaultIsNull && canBeNull)
+        {
+            builder.Append(localName).Append(" is null");
+        }
+        else
+        {
+            builder.Append("global::System.Collections.Generic.EqualityComparer<")
+                .Append(memberTypeName)
+                .Append(">.Default.Equals(")
+                .Append(localName)
+                .Append(", ")
+                .Append(defaultLiteral)
+                .Append(")");
+        }
         builder.AppendLine("))");
         builder.Append(openIndent).AppendLine("{");
         builder.Append(writeIndent).Append("writer.WritePropertyName(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
@@ -624,14 +647,22 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             return true;
         }
 
-        if (type is INamedTypeSymbol named &&
-            named.IsGenericType &&
-            named.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.Nullable<T>")
+        return TryGetNullableUnderlyingType(type, out _);
+    }
+
+    private static bool TryGetNullableUnderlyingType(ITypeSymbol type, out ITypeSymbol underlyingType)
+    {
+        underlyingType = null!;
+
+        if (type is not INamedTypeSymbol named ||
+            !named.IsGenericType ||
+            named.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) != "global::System.Nullable<T>")
         {
-            return true;
+            return false;
         }
 
-        return false;
+        underlyingType = named.TypeArguments[0];
+        return true;
     }
 
     private static ImmutableArray<ITypeSymbol> ExpandTypeGraph(SourceProductionContext context, ContextModel model)
@@ -649,6 +680,16 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             }
 
             list.Add(current);
+
+            if (TryGetNullableUnderlyingType(current, out var nullableUnderlyingType))
+            {
+                if (IsSupportedMemberType(nullableUnderlyingType))
+                {
+                    queue.Enqueue(nullableUnderlyingType);
+                }
+
+                continue;
+            }
 
             if (TryGetArrayElementType(current, out var arrayElementType))
             {
@@ -717,6 +758,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private static bool IsSupportedMemberType(ITypeSymbol type)
     {
+        if (TryGetNullableUnderlyingType(type, out var nullableUnderlyingType))
+        {
+            return IsSupportedMemberType(nullableUnderlyingType);
+        }
+
         // v1 generator milestone: built-in scalars/containers and POCOs.
         if (IsBuiltInType(type))
         {
@@ -799,6 +845,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
     private static bool TryGetPocoShape(ITypeSymbol type, SourceGenOptions options, out PocoShape shape)
     {
         shape = null!;
+
+        if (TryGetNullableUnderlyingType(type, out _))
+        {
+            return false;
+        }
 
         if (IsBuiltInType(type))
         {

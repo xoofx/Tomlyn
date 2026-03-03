@@ -50,6 +50,12 @@ internal static class TomlTypeInfoResolverPipeline
             return TomlPolymorphicTypeInfo.TryWrap(builtIn);
         }
 
+        var nullable = TryResolveNullable(type, options);
+        if (nullable is not null)
+        {
+            return nullable;
+        }
+
         if (IsNonStringKeyDictionary(type))
         {
             throw new TomlException(
@@ -71,6 +77,20 @@ internal static class TomlTypeInfoResolverPipeline
         throw new TomlException(
             $"No TOML metadata is available for type '{type.FullName}'. " +
             $"Provide {nameof(TomlSerializerOptions)}.{nameof(TomlSerializerOptions.TypeInfoResolver)} (source generation) or a custom resolver.");
+    }
+
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
+    private static TomlTypeInfo? TryResolveNullable(Type type, TomlSerializerOptions options)
+    {
+        var underlyingType = Nullable.GetUnderlyingType(type);
+        if (underlyingType is null)
+        {
+            return null;
+        }
+
+        var inner = Resolve(options, underlyingType);
+        return new TomlUntypedNullableTypeInfo(type, options, inner);
     }
 
     private static bool IsNonStringKeyDictionary([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type type)

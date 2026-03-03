@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Text.Json.Serialization;
@@ -41,6 +42,13 @@ public sealed class GeneratedCollectionsPayload
     public ISet<string>? Tags { get; set; }
 
     public HashSet<int>? Values { get; set; }
+}
+
+public sealed class GeneratedNullablePayload
+{
+    public int? Count { get; set; }
+
+    public DateTimeOffset? When { get; set; }
 }
 
 public sealed class GeneratedOptionsConverter : TomlConverter<string>
@@ -93,6 +101,12 @@ internal partial class TestTomlSerializerContextWithOptions : TomlSerializerCont
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(GeneratedCollectionsPayload))]
 internal partial class TestTomlSerializerContextCollections : TomlSerializerContext
+{
+}
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(GeneratedNullablePayload))]
+internal partial class TestTomlSerializerContextNullables : TomlSerializerContext
 {
 }
 #pragma warning restore SYSLIB1224
@@ -215,5 +229,28 @@ public class NewApiSourceGenerationTests
         Assert.That(roundtrip.Tags!.SetEquals(payload.Tags!), Is.True);
         Assert.That(roundtrip.Values, Is.Not.Null);
         Assert.That(roundtrip.Values!.SetEquals(payload.Values!), Is.True);
+    }
+
+    [Test]
+    public void GeneratedContext_CanHandleNullableValueTypes()
+    {
+        var context = TestTomlSerializerContextNullables.Default;
+        var toml = """
+            count = 1
+            when = 1979-05-27T07:32:00Z
+            """;
+
+        var payload = TomlSerializer.Deserialize(toml, context.GeneratedNullablePayload);
+
+        Assert.That(payload, Is.Not.Null);
+        Assert.That(payload!.Count, Is.EqualTo(1));
+        Assert.That(payload.When, Is.Not.Null);
+
+        var roundtripToml = TomlSerializer.Serialize(payload, context.GeneratedNullablePayload);
+        var roundtrip = TomlSerializer.Deserialize(roundtripToml, context.GeneratedNullablePayload);
+
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.Count, Is.EqualTo(payload.Count));
+        Assert.That(roundtrip.When, Is.EqualTo(payload.When));
     }
 }

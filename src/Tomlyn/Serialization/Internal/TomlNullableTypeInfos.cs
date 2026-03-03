@@ -1,0 +1,67 @@
+using System;
+using Tomlyn.Helpers;
+
+namespace Tomlyn.Serialization.Internal;
+
+internal sealed class TomlNullableTypeInfo<T> : TomlTypeInfo<T?>
+    where T : struct
+{
+    private readonly TomlTypeInfo<T> _inner;
+
+    public TomlNullableTypeInfo(TomlSerializerOptions options, TomlTypeInfo inner)
+        : base(options)
+    {
+        ArgumentGuard.ThrowIfNull(inner, nameof(inner));
+
+        _inner = inner as TomlTypeInfo<T>
+            ?? throw new TomlException($"The provided TOML metadata for type '{inner.Type.FullName}' cannot be used as metadata for '{typeof(T).FullName}'.");
+    }
+
+    public override void Write(TomlWriter writer, T? value)
+    {
+        ArgumentGuard.ThrowIfNull(writer, nameof(writer));
+
+        if (!value.HasValue)
+        {
+            throw new TomlException("TOML does not support null values.");
+        }
+
+        _inner.Write(writer, value.Value);
+    }
+
+    public override T? Read(TomlReader reader)
+    {
+        ArgumentGuard.ThrowIfNull(reader, nameof(reader));
+        return _inner.Read(reader);
+    }
+}
+
+internal sealed class TomlUntypedNullableTypeInfo : TomlTypeInfo
+{
+    private readonly TomlTypeInfo _inner;
+
+    public TomlUntypedNullableTypeInfo(Type nullableType, TomlSerializerOptions options, TomlTypeInfo inner)
+        : base(nullableType, options)
+    {
+        ArgumentGuard.ThrowIfNull(inner, nameof(inner));
+        _inner = inner;
+    }
+
+    public override void Write(TomlWriter writer, object? value)
+    {
+        ArgumentGuard.ThrowIfNull(writer, nameof(writer));
+
+        if (value is null)
+        {
+            throw new TomlException("TOML does not support null values.");
+        }
+
+        _inner.Write(writer, value);
+    }
+
+    public override object? ReadAsObject(TomlReader reader)
+    {
+        ArgumentGuard.ThrowIfNull(reader, nameof(reader));
+        return _inner.ReadAsObject(reader);
+    }
+}

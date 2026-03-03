@@ -119,6 +119,26 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     }
 
     /// <summary>
+    /// Creates metadata for a nullable value type (<see cref="Nullable{T}"/>) using source-generated resolution for the underlying value type.
+    /// </summary>
+    /// <remarks>
+    /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
+    /// </remarks>
+    protected static TomlTypeInfo<T?> CreateSourceGeneratedNullableTypeInfo<T>(TomlSerializerContext context)
+        where T : struct
+    {
+        ArgumentGuard.ThrowIfNull(context, nameof(context));
+
+        var inner = context.GetTypeInfo(typeof(T), context.Options);
+        if (inner is null)
+        {
+            throw new TomlException($"No TOML metadata is available for type '{typeof(T).FullName}'.");
+        }
+
+        return new TomlNullableTypeInfo<T>(context.Options, inner);
+    }
+
+    /// <summary>
     /// Creates metadata for a single-dimensional array type.
     /// </summary>
     [RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
