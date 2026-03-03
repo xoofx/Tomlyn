@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text;
 using Tomlyn.Helpers;
@@ -12,6 +13,10 @@ namespace Tomlyn;
 /// </summary>
 public static class TomlSerializer
 {
+    private const string ReflectionBasedSerializationMessage =
+        "Reflection-based TOML serialization is not compatible with trimming/NativeAOT. " +
+        "Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.";
+
     private static readonly bool ReflectionEnabledByDefault = TomlSerializerFeatureSwitches.IsReflectionEnabledByDefaultCalculated;
     private static readonly Encoding DefaultStreamEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
@@ -23,6 +28,8 @@ public static class TomlSerializer
     /// <summary>
     /// Serializes a value into TOML text.
     /// </summary>
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     public static string Serialize<T>(T value, TomlSerializerOptions? options = null)
         => Serialize((object?)value, typeof(T), options);
 
@@ -38,6 +45,8 @@ public static class TomlSerializer
     /// <summary>
     /// Serializes a value into TOML text using an explicit input type.
     /// </summary>
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     public static string Serialize(object? value, Type inputType, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(inputType, nameof(inputType));
@@ -110,6 +119,8 @@ public static class TomlSerializer
     /// <summary>
     /// Serializes a value to a writer.
     /// </summary>
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     public static void Serialize<T>(TextWriter writer, T value, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(writer, nameof(writer));
@@ -119,6 +130,8 @@ public static class TomlSerializer
     /// <summary>
     /// Serializes a value to a writer using an explicit input type.
     /// </summary>
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     public static void Serialize(TextWriter writer, object? value, Type inputType, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(writer, nameof(writer));
@@ -131,6 +144,8 @@ public static class TomlSerializer
     /// <summary>
     /// Serializes a value to a stream using UTF-8 encoding.
     /// </summary>
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     public static void Serialize<T>(Stream utf8Stream, T value, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
@@ -140,6 +155,8 @@ public static class TomlSerializer
     /// <summary>
     /// Serializes a value to a stream using UTF-8 encoding and an explicit input type.
     /// </summary>
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     public static void Serialize(Stream utf8Stream, object? value, Type inputType, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
@@ -153,6 +170,8 @@ public static class TomlSerializer
     /// <summary>
     /// Deserializes a TOML payload from text.
     /// </summary>
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     public static T? Deserialize<T>(string toml, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(toml, nameof(toml));
@@ -174,6 +193,8 @@ public static class TomlSerializer
     /// <summary>
     /// Deserializes a TOML payload from text into an explicit destination type.
     /// </summary>
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     public static object? Deserialize(string toml, Type returnType, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(toml, nameof(toml));
@@ -187,6 +208,8 @@ public static class TomlSerializer
     /// <summary>
     /// Deserializes a TOML payload from a text reader.
     /// </summary>
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     public static T? Deserialize<T>(TextReader reader, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(reader, nameof(reader));
@@ -206,6 +229,8 @@ public static class TomlSerializer
     /// <summary>
     /// Deserializes a TOML payload from a text reader into an explicit destination type.
     /// </summary>
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     public static object? Deserialize(TextReader reader, Type returnType, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(reader, nameof(reader));
@@ -216,6 +241,8 @@ public static class TomlSerializer
     /// <summary>
     /// Deserializes a TOML payload from a UTF-8 stream.
     /// </summary>
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     public static T? Deserialize<T>(Stream utf8Stream, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
@@ -237,6 +264,8 @@ public static class TomlSerializer
     /// <summary>
     /// Deserializes a TOML payload from a UTF-8 stream into an explicit destination type.
     /// </summary>
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     public static object? Deserialize(Stream utf8Stream, Type returnType, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
@@ -248,6 +277,8 @@ public static class TomlSerializer
     /// <summary>
     /// Attempts to deserialize a TOML payload from text.
     /// </summary>
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     public static bool TryDeserialize<T>(string toml, out T? value, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(toml, nameof(toml));
@@ -266,6 +297,8 @@ public static class TomlSerializer
     /// <summary>
     /// Attempts to deserialize a TOML payload from text into an explicit destination type.
     /// </summary>
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     public static bool TryDeserialize(string toml, Type returnType, out object? value, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(toml, nameof(toml));
@@ -353,6 +386,8 @@ public static class TomlSerializer
         tomlWriter.WriteEndDocument();
     }
 
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     private static TomlTypeInfo ResolveTypeInfo(TomlSerializerOptions options, Type type)
     {
         return TomlTypeInfoResolverPipeline.Resolve(options, type);

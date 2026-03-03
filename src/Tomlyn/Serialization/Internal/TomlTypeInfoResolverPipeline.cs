@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
@@ -10,8 +11,14 @@ namespace Tomlyn.Serialization.Internal;
 
 internal static class TomlTypeInfoResolverPipeline
 {
+    private const string ReflectionBasedSerializationMessage =
+        "Reflection-based TOML serialization is not compatible with trimming/NativeAOT. " +
+        "Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.";
+
     private static readonly ConditionalWeakTable<TomlSerializerOptions, ConcurrentDictionary<Type, TomlTypeInfo>> ReflectionCacheByOptions = new();
 
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     public static TomlTypeInfo Resolve(TomlSerializerOptions options, Type type)
     {
         ArgumentGuard.ThrowIfNull(options, nameof(options));
@@ -58,6 +65,8 @@ internal static class TomlTypeInfoResolverPipeline
             $"Provide {nameof(TomlSerializerOptions)}.{nameof(TomlSerializerOptions.TypeInfoResolver)} (source generation) or a custom resolver.");
     }
 
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     private static TomlTypeInfo? TryResolveFromConverterAttributes(TomlSerializerOptions options, Type type)
     {
         var tomlConverterAttribute = type.GetCustomAttribute<TomlConverterAttribute>(inherit: true);
@@ -77,6 +86,8 @@ internal static class TomlTypeInfoResolverPipeline
         return null;
     }
 
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     private static TomlConverter CreateConverterFromAttribute(Type converterType, Type typeToConvert, TomlSerializerOptions options)
     {
         if (!typeof(TomlConverter).IsAssignableFrom(converterType))
@@ -164,6 +175,8 @@ internal static class TomlTypeInfoResolverPipeline
         return null;
     }
 
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     private static TomlTypeInfo ResolveFromReflection(TomlSerializerOptions options, Type type)
     {
         var cache = ReflectionCacheByOptions.GetOrCreateValue(options);

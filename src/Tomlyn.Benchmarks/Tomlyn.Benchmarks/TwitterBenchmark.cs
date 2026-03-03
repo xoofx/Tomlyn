@@ -18,12 +18,12 @@ public class TwitterBenchmark
     public async Task Setup()
     {
         _tomlString = await File.ReadAllTextAsync("./twitter.toml");
-        _tomlObject = Toml.ToModel(_tomlString);
+        _tomlObject = TomlSerializer.Deserialize<TomlTable>(_tomlString)!;
     }
 
     [Benchmark]
-    public TomlTable StringToModel() => Toml.ToModel(_tomlString!);
+    public TomlTable StringToModel() => TomlSerializer.Deserialize<TomlTable>(_tomlString!)!;
 
     [Benchmark]
-    public string ModelToString() => Toml.FromModel(_tomlObject!);
+    public string ModelToString() => TomlSerializer.Serialize(_tomlObject!);
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using Tomlyn.Helpers;
 using Tomlyn.Model;
 using Tomlyn.Serialization.Converters;
@@ -8,6 +9,12 @@ namespace Tomlyn.Serialization.Internal;
 
 internal static class TomlBuiltInTypeInfoResolver
 {
+    private const string ReflectionBasedSerializationMessage =
+        "Reflection-based TOML serialization is not compatible with trimming/NativeAOT. " +
+        "Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.";
+
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     public static TomlTypeInfo? GetTypeInfo(Type type, TomlSerializerOptions options)
     {
         ArgumentGuard.ThrowIfNull(type, nameof(type));
@@ -60,6 +67,8 @@ internal static class TomlBuiltInTypeInfoResolver
         return null;
     }
 
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     private static TomlTypeInfo? TryCreateCollectionTypeInfo(Type type, TomlSerializerOptions options)
     {
         if (type.IsArray && type.GetArrayRank() == 1)

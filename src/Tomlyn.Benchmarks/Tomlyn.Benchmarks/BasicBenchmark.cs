@@ -47,11 +47,11 @@ public class BasicBenchmark
                              ]
                              """;
 
-    private static readonly TomlTable TomlObject = Toml.ToModel(TomlString);
+    private static readonly TomlTable TomlObject = TomlSerializer.Deserialize<TomlTable>(TomlString)!;
 
     [Benchmark]
-    public TomlTable StringToModel() => Toml.ToModel(TomlString);
+    public TomlTable StringToModel() => TomlSerializer.Deserialize<TomlTable>(TomlString)!;
 
     [Benchmark]
-    public string ModelToString() => Toml.FromModel(TomlObject);
+    public string ModelToString() => TomlSerializer.Serialize(TomlObject);
 }

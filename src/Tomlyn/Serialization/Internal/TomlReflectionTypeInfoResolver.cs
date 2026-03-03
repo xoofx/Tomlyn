@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json.Serialization;
@@ -12,6 +13,8 @@ using Tomlyn.Syntax;
 
 namespace Tomlyn.Serialization.Internal;
 
+[RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
+[RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
 internal static class TomlReflectionTypeInfoResolver
 {
     public static TomlTypeInfo? TryCreateTypeInfo(Type type, TomlSerializerOptions options)
