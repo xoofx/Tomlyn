@@ -23,7 +23,8 @@ namespace Tomlyn.Text
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public char32? TryGetNext(ref int position)
         {
-            return CharHelper.ToUtf8(_text, ref position);
+            var text = _text;
+            return CharHelper.ToUtf8(text, ref position);
         }
     }
 }

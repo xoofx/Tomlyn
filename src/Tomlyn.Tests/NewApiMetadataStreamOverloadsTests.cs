@@ -38,7 +38,7 @@ public sealed class NewApiMetadataStreamOverloadsTests
     }
 
     [Test]
-    public void Deserialize_Stream_ObjectTypeInfo_UsesByteOffsets()
+    public void Deserialize_Utf8Bytes_ObjectTypeInfo_UsesByteOffsets()
     {
         var context = new BuiltInContext();
         var typeInfo = context.GetTypeInfo(typeof(TomlTable), context.Options);
@@ -56,22 +56,19 @@ public sealed class NewApiMetadataStreamOverloadsTests
             (byte)'"',
         };
 
-        using var stream = new MemoryStream(bytes);
-        var ex = Assert.Throws<TomlException>(() => TomlSerializer.Deserialize(stream, typeInfo!));
+        var ex = Assert.Throws<TomlException>(() => TomlSerializer.Deserialize(bytes, typeInfo!));
         Assert.NotNull(ex);
         Assert.AreEqual(5, ex!.Offset);
     }
 
     [Test]
-    public void Deserialize_TextReader_ObjectTypeInfo_Works()
+    public void Deserialize_String_ObjectTypeInfo_Works()
     {
         var context = new BuiltInContext();
         var typeInfo = context.GetTypeInfo(typeof(TomlTable), context.Options);
         Assert.NotNull(typeInfo);
 
-        using var reader = new StringReader("a = 1");
-        var table = (TomlTable)TomlSerializer.Deserialize(reader, typeInfo!)!;
+        var table = (TomlTable)TomlSerializer.Deserialize("a = 1", typeInfo!)!;
         Assert.AreEqual(1L, (long)table["a"]);
     }
 }
-

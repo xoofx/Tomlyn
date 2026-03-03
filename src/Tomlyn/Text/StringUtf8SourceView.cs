@@ -1,6 +1,7 @@
 // Copyright (c) Alexandre Mutel. All rights reserved.
 // Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
+using System;
 using System.Text;
 
 namespace Tomlyn.Text
@@ -16,6 +17,14 @@ namespace Tomlyn.Text
         }
 
         public string SourcePath { get; }
+
+        public int Length => _text.Length;
+
+        public ReadOnlySpan<char> GetSpan(int offset, int length)
+        {
+            var text = GetString(offset, length);
+            return text is null ? default : text.AsSpan();
+        }
 
         public string? GetString(int offset, int length)
         {

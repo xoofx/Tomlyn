@@ -7,3 +7,4 @@ namespace Tomlyn.Benchmarks;
 internal partial class TomlynBenchmarkContext : TomlSerializerContext
 {
 }
+

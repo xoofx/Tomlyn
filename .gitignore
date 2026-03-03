@@ -87,6 +87,8 @@ ipch/
 *.psess
 *.vsp
 *.vspx
+*.etlx
+*.nettrace
 
 # TFS 2012 Local Workspace
 $tf/
@@ -221,6 +223,11 @@ _Pvt_Extensions
 # dotnet-releaser
 artifacts-dotnet-releaser/
 
+# BenchmarkDotNet
+BenchmarkDotNet.Artifacts/
+**/BenchmarkDotNet.Artifacts/
+
 # Local design specs (do not commit)
 tomlyn1_0_specs.md
+tomlyn1_0_readiness.md
 tomlyn1_0_checklist.md

@@ -79,8 +79,14 @@ public static class SyntaxParser
     /// <param name="sourceName">An optional source name used in diagnostics.</param>
     /// <param name="validate">When <c>true</c>, runs semantic validation after parsing.</param>
     /// <returns>The parsed syntax tree, possibly containing diagnostics.</returns>
-    public static DocumentSyntax Parse(ReadOnlySpan<byte> utf8Toml, string? sourceName = null, bool validate = true)
+    /// <exception cref="ArgumentNullException"><paramref name="utf8Toml"/> is <c>null</c>.</exception>
+    public static DocumentSyntax Parse(byte[] utf8Toml, string? sourceName = null, bool validate = true)
     {
+        if (utf8Toml is null)
+        {
+            throw new ArgumentNullException(nameof(utf8Toml));
+        }
+
         var lexer = TomlLexer.Create(utf8Toml, new TomlLexerOptions { DecodeScalars = true }, sourceName);
         return Parse(lexer, validate);
     }

@@ -4,7 +4,6 @@ using System.Globalization;
 using System.IO;
 using Tomlyn.Helpers;
 using Tomlyn.Model;
-using Tomlyn.Text;
 
 namespace Tomlyn.Serialization.Internal;
 
@@ -17,7 +16,8 @@ internal static class TomlModelTextWriter
         ArgumentGuard.ThrowIfNull(options, nameof(options));
 
         var state = new State(writer, options);
-        state.WriteTableBody(root, path: null, headerKind: HeaderKind.None);
+        var path = new List<string>();
+        state.WriteTableBody(root, path, headerKind: HeaderKind.None);
     }
 
     private enum HeaderKind
@@ -40,56 +40,64 @@ internal static class TomlModelTextWriter
             _newLine = options.NewLine == TomlNewLineKind.CrLf ? "\r\n" : "\n";
         }
 
-        public void WriteTableBody(TomlTable table, List<string>? path, HeaderKind headerKind)
+        public void WriteTableBody(TomlTable table, List<string> path, HeaderKind headerKind)
         {
             if (headerKind != HeaderKind.None)
             {
-                WriteHeader(path!, headerKind, table.PropertiesMetadata);
+                WriteHeader(path, headerKind, table.PropertiesMetadata);
             }
 
             // 1) scalar/array/inline-table key-values
-            var scalarKeys = new List<(string Key, object Value)>();
-            var tableKeys = new List<(string Key, TomlTable Value)>();
-            var tableArrayKeys = new List<(string Key, TomlTableArray Value)>();
-
             foreach (var pair in table)
             {
                 if (pair.Value is TomlTableArray tableArray)
                 {
                     if (_options.TableArrayStyle == TomlTableArrayStyle.InlineArrayOfTables &&
-                        TryWriteTableArrayInline(pair.Key, tableArray, table.PropertiesMetadata))
+                        IsInlineableTableArray(tableArray))
                     {
+                        WriteTableArrayInline(pair.Key, tableArray, table.PropertiesMetadata);
                         continue;
                     }
 
-                    tableArrayKeys.Add((pair.Key, tableArray));
                     continue;
                 }
 
                 if (pair.Value is TomlTable subTable && !ShouldInlineTable(subTable))
                 {
-                    tableKeys.Add((pair.Key, subTable));
                     continue;
                 }
 
-                scalarKeys.Add((pair.Key, pair.Value));
+                WriteKeyValuePair(table, pair.Key, pair.Value);
             }
 
-            WriteKeyValuePairs(table, scalarKeys);
-
             // 2) named tables
-            for (var i = 0; i < tableKeys.Count; i++)
+            foreach (var pair in table)
             {
-                var (key, value) = tableKeys[i];
-                var childPath = AppendPath(path, key);
-                WriteTableBody(value, childPath, HeaderKind.Table);
+                if (pair.Value is TomlTable subTable && !ShouldInlineTable(subTable))
+                {
+                    path.Add(pair.Key);
+                    WriteTableBody(subTable, path, HeaderKind.Table);
+                    path.RemoveAt(path.Count - 1);
+                }
             }
 
             // 3) table arrays
-            for (var i = 0; i < tableArrayKeys.Count; i++)
+            foreach (var pair in table)
             {
-                var (key, value) = tableArrayKeys[i];
-                WriteTableArray(value, AppendPath(path, key));
+                if (pair.Value is not TomlTableArray tableArray)
+                {
+                    continue;
+                }
+
+                if (_options.TableArrayStyle == TomlTableArrayStyle.InlineArrayOfTables &&
+                    IsInlineableTableArray(tableArray))
+                {
+                    continue;
+                }
+
+                path.Add(pair.Key);
+                WriteTableArray(tableArray, path);
+                path.RemoveAt(path.Count - 1);
             }
         }
 
@@ -106,29 +114,25 @@ internal static class TomlModelTextWriter
             }
         }
 
-        private void WriteKeyValuePairs(TomlTable table, List<(string Key, object Value)> pairs)
+        private void WriteKeyValuePair(TomlTable table, string key, object value)
         {
-            for (var i = 0; i < pairs.Count; i++)
+            WriteLeadingTrivia(table.PropertiesMetadata, key);
+
+            WriteKey(key);
+            _writer.Write(" = ");
+
+            var displayKind = TomlPropertyDisplayKind.Default;
+            if (table.PropertiesMetadata is { } metadata &&
+                metadata.TryGetProperty(key, out var propertyMetadata) &&
+                propertyMetadata is not null)
             {
-                var (key, value) = pairs[i];
-                WriteLeadingTrivia(table.PropertiesMetadata, key);
-
-                WriteKey(key);
-                _writer.Write(" = ");
-
-                var displayKind = TomlPropertyDisplayKind.Default;
-                if (table.PropertiesMetadata is { } metadata &&
-                    metadata.TryGetProperty(key, out var propertyMetadata) &&
-                    propertyMetadata is not null)
-                {
-                    displayKind = propertyMetadata.DisplayKind;
-                }
-
-                WriteValue(value, displayKind);
-                WriteTrailingTrivia(table.PropertiesMetadata, key);
-                WriteNewLine();
-                WriteTrailingTriviaAfterEndOfLine(table.PropertiesMetadata, key);
+                displayKind = propertyMetadata.DisplayKind;
             }
+
+            WriteValue(value, displayKind);
+            WriteTrailingTrivia(table.PropertiesMetadata, key);
+            WriteNewLine();
+            WriteTrailingTriviaAfterEndOfLine(table.PropertiesMetadata, key);
         }
 
         private bool ShouldInlineTable(TomlTable table)
@@ -169,7 +173,7 @@ internal static class TomlModelTextWriter
             return true;
         }
 
-        private bool TryWriteTableArrayInline(string key, TomlTableArray tableArray, TomlPropertiesMetadata? metadata)
+        private static bool IsInlineableTableArray(TomlTableArray tableArray)
         {
             for (var i = 0; i < tableArray.Count; i++)
             {
@@ -179,6 +183,11 @@ internal static class TomlModelTextWriter
                 }
             }
 
+            return true;
+        }
+
+        private void WriteTableArrayInline(string key, TomlTableArray tableArray, TomlPropertiesMetadata? metadata)
+        {
             WriteLeadingTrivia(metadata, key);
             WriteKey(key);
             _writer.Write(" = ");
@@ -198,7 +207,6 @@ internal static class TomlModelTextWriter
             WriteTrailingTrivia(metadata, key);
             WriteNewLine();
             WriteTrailingTriviaAfterEndOfLine(metadata, key);
-            return true;
         }
 
         private void WriteHeader(List<string> path, HeaderKind kind, TomlPropertiesMetadata? metadata)
@@ -282,40 +290,101 @@ internal static class TomlModelTextWriter
             switch (value)
             {
                 case string s:
-                    _writer.Write(TomlFormatHelper.ToString(s, displayKind));
+                    WriteString(s, displayKind);
                     return;
                 case bool b:
-                    _writer.Write(TomlFormatHelper.ToString(b));
+                    _writer.Write(b ? "true" : "false");
                     return;
                 case sbyte i8:
-                    _writer.Write(TomlFormatHelper.ToString(i8, displayKind));
+                    if (displayKind == TomlPropertyDisplayKind.Default)
+                    {
+                        WriteInteger(i8);
+                    }
+                    else
+                    {
+                        _writer.Write(TomlFormatHelper.ToString(i8, displayKind));
+                    }
                     return;
                 case byte u8:
-                    _writer.Write(TomlFormatHelper.ToString(u8, displayKind));
+                    if (displayKind == TomlPropertyDisplayKind.Default)
+                    {
+                        WriteInteger(u8);
+                    }
+                    else
+                    {
+                        _writer.Write(TomlFormatHelper.ToString(u8, displayKind));
+                    }
                     return;
                 case short i16:
-                    _writer.Write(TomlFormatHelper.ToString(i16, displayKind));
+                    if (displayKind == TomlPropertyDisplayKind.Default)
+                    {
+                        WriteInteger(i16);
+                    }
+                    else
+                    {
+                        _writer.Write(TomlFormatHelper.ToString(i16, displayKind));
+                    }
                     return;
                 case ushort u16:
-                    _writer.Write(TomlFormatHelper.ToString(u16, displayKind));
+                    if (displayKind == TomlPropertyDisplayKind.Default)
+                    {
+                        WriteInteger(u16);
+                    }
+                    else
+                    {
+                        _writer.Write(TomlFormatHelper.ToString(u16, displayKind));
+                    }
                     return;
                 case int i32:
-                    _writer.Write(TomlFormatHelper.ToString(i32, displayKind));
+                    if (displayKind == TomlPropertyDisplayKind.Default)
+                    {
+                        WriteInteger(i32);
+                    }
+                    else
+                    {
+                        _writer.Write(TomlFormatHelper.ToString(i32, displayKind));
+                    }
                     return;
                 case uint u32:
-                    _writer.Write(TomlFormatHelper.ToString(u32, displayKind));
+                    if (displayKind == TomlPropertyDisplayKind.Default)
+                    {
+                        WriteInteger(u32);
+                    }
+                    else
+                    {
+                        _writer.Write(TomlFormatHelper.ToString(u32, displayKind));
+                    }
                     return;
                 case long i64:
-                    _writer.Write(TomlFormatHelper.ToString(i64, displayKind));
+                    if (displayKind == TomlPropertyDisplayKind.Default)
+                    {
+                        WriteInteger(i64);
+                    }
+                    else
+                    {
+                        _writer.Write(TomlFormatHelper.ToString(i64, displayKind));
+                    }
                     return;
                 case ulong u64:
-                    _writer.Write(TomlFormatHelper.ToString(u64, displayKind));
+                    if (u64 > long.MaxValue)
+                    {
+                        throw new TomlException($"TOML integers are limited to signed 64-bit. Value {u64} cannot be written.");
+                    }
+
+                    if (displayKind == TomlPropertyDisplayKind.Default)
+                    {
+                        WriteInteger(unchecked((long)u64));
+                    }
+                    else
+                    {
+                        _writer.Write(TomlFormatHelper.ToString(u64, displayKind));
+                    }
                     return;
                 case float f32:
-                    _writer.Write(TomlFormatHelper.ToString(f32));
+                    WriteFloat(f32);
                     return;
                 case double f64:
-                    _writer.Write(TomlFormatHelper.ToString(f64));
+                    WriteFloat(f64);
                     return;
                 case decimal dec:
                     _writer.Write(ToTomlFloatString(dec));
@@ -350,13 +419,115 @@ internal static class TomlModelTextWriter
                 default:
                     if (value is Enum enumValue)
                     {
-                        _writer.Write(TomlFormatHelper.ToString(enumValue.ToString(), displayKind));
+                        WriteString(enumValue.ToString(), displayKind);
                         return;
                     }
 
                     throw new TomlException($"Unsupported TOML value `{value.GetType().FullName}`.");
             }
         }
+
+        private void WriteInteger(long value)
+        {
+#if NET8_0_OR_GREATER
+            Span<char> buffer = stackalloc char[32];
+            if (value.TryFormat(buffer, out var written, provider: CultureInfo.InvariantCulture))
+            {
+                _writer.Write(buffer.Slice(0, written));
+                return;
+            }
+#endif
+
+            _writer.Write(value.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private void WriteFloat(float value)
+        {
+            if (float.IsNaN(value))
+            {
+                _writer.Write("nan");
+                return;
+            }
+
+            if (float.IsPositiveInfinity(value))
+            {
+                _writer.Write("+inf");
+                return;
+            }
+
+            if (float.IsNegativeInfinity(value))
+            {
+                _writer.Write("-inf");
+                return;
+            }
+
+#if NET8_0_OR_GREATER
+            Span<char> buffer = stackalloc char[64];
+            if (value.TryFormat(buffer, out var written, "g9", CultureInfo.InvariantCulture))
+            {
+                WriteFloatWithDecimalPoint(buffer.Slice(0, written));
+                return;
+            }
+#endif
+
+            _writer.Write(TomlFormatHelper.ToString(value));
+        }
+
+        private void WriteFloat(double value)
+        {
+            if (double.IsNaN(value))
+            {
+                _writer.Write("nan");
+                return;
+            }
+
+            if (double.IsPositiveInfinity(value))
+            {
+                _writer.Write("+inf");
+                return;
+            }
+
+            if (double.IsNegativeInfinity(value))
+            {
+                _writer.Write("-inf");
+                return;
+            }
+
+#if NET8_0_OR_GREATER
+            Span<char> buffer = stackalloc char[64];
+            if (value.TryFormat(buffer, out var written, "g16", CultureInfo.InvariantCulture))
+            {
+                WriteFloatWithDecimalPoint(buffer.Slice(0, written));
+                return;
+            }
+#endif
+
+            _writer.Write(TomlFormatHelper.ToString(value));
+        }
+
+#if NET8_0_OR_GREATER
+        private void WriteFloatWithDecimalPoint(ReadOnlySpan<char> text)
+        {
+            if (text.Length == 1 && text[0] == '0')
+            {
+                _writer.Write("0.0");
+                return;
+            }
+
+            for (var i = 0; i < text.Length; i++)
+            {
+                var c = text[i];
+                if (c == '.' || c == 'e' || c == 'E')
+                {
+                    _writer.Write(text);
+                    return;
+                }
+            }
+
+            _writer.Write(text);
+            _writer.Write(".0");
+        }
+#endif
 
         private void WriteArray(TomlArray array)
         {
@@ -387,26 +558,224 @@ internal static class TomlModelTextWriter
 
         private void WriteKey(string name)
         {
-            _writer.Write(EscapeKey(name));
-        }
-
-        private static string EscapeKey(string name)
-        {
             if (string.IsNullOrWhiteSpace(name))
             {
-                return $"\"{name.EscapeForToml()}\"";
+                _writer.Write('\"');
+                WriteEscapedBasicStringContent(name, allowNewLinesAndTabs: false);
+                _writer.Write('\"');
+                return;
             }
 
             // A-Za-z0-9_-
-            foreach (var c in name)
+            for (var i = 0; i < name.Length; i++)
             {
-                if (!(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-') || c == '.')
+                var c = name[i];
+                if (!(c >= 'a' && c <= 'z' ||
+                      c >= 'A' && c <= 'Z' ||
+                      c >= '0' && c <= '9' ||
+                      c == '_' ||
+                      c == '-') ||
+                    c == '.')
                 {
-                    return $"\"{name.EscapeForToml()}\"";
+                    _writer.Write('\"');
+                    WriteEscapedBasicStringContent(name, allowNewLinesAndTabs: false);
+                    _writer.Write('\"');
+                    return;
                 }
             }
 
-            return name;
+            _writer.Write(name);
+        }
+
+        private void WriteString(string value, TomlPropertyDisplayKind displayKind)
+        {
+            switch (displayKind)
+            {
+                case TomlPropertyDisplayKind.StringMulti:
+                {
+                    _writer.Write("\"\"\"");
+                    WriteEscapedBasicStringContent(value, allowNewLinesAndTabs: true);
+                    _writer.Write("\"\"\"");
+                    return;
+                }
+                case TomlPropertyDisplayKind.StringLiteral:
+                    if (IsSafeStringLiteral(value))
+                    {
+                        _writer.Write('\'');
+                        _writer.Write(value);
+                        _writer.Write('\'');
+                        return;
+                    }
+                    break;
+                case TomlPropertyDisplayKind.StringLiteralMulti:
+                    if (IsSafeStringLiteralMulti(value))
+                    {
+                        _writer.Write("'''");
+                        _writer.Write(value);
+                        _writer.Write("'''");
+                        return;
+                    }
+                    break;
+            }
+
+            _writer.Write('\"');
+            WriteEscapedBasicStringContent(value, allowNewLinesAndTabs: false);
+            _writer.Write('\"');
+        }
+
+        private void WriteEscapedBasicStringContent(string value, bool allowNewLinesAndTabs)
+        {
+            if (!RequiresEscaping(value, allowNewLinesAndTabs))
+            {
+                _writer.Write(value);
+                return;
+            }
+
+            for (var i = 0; i < value.Length; i++)
+            {
+                var c = value[i];
+
+                if (allowNewLinesAndTabs)
+                {
+                    if (c == '\r' && i + 1 < value.Length && value[i + 1] == '\n')
+                    {
+                        _writer.Write("\r\n");
+                        i++;
+                        continue;
+                    }
+
+                    if (c == '\n')
+                    {
+                        _writer.Write('\n');
+                        continue;
+                    }
+
+                    if (c == '\t')
+                    {
+                        _writer.Write('\t');
+                        continue;
+                    }
+                }
+
+                if (c < ' ' || c == '"' || c == '\\' || char.IsControl(c))
+                {
+                    switch (c)
+                    {
+                        case '\b':
+                            _writer.Write("\\b");
+                            continue;
+                        case '\t':
+                            _writer.Write("\\t");
+                            continue;
+                        case '\n':
+                            _writer.Write("\\n");
+                            continue;
+                        case '\f':
+                            _writer.Write("\\f");
+                            continue;
+                        case '\r':
+                            _writer.Write("\\r");
+                            continue;
+                        case '"':
+                            _writer.Write("\\\"");
+                            continue;
+                        case '\\':
+                            _writer.Write("\\\\");
+                            continue;
+                        default:
+                            _writer.Write("\\u");
+                            WriteHex4((ushort)c);
+                            continue;
+                    }
+                }
+
+                _writer.Write(c);
+            }
+        }
+
+        private static bool RequiresEscaping(string value, bool allowNewLinesAndTabs)
+        {
+            for (var i = 0; i < value.Length; i++)
+            {
+                var c = value[i];
+
+                if (allowNewLinesAndTabs)
+                {
+                    if (c == '\r' && i + 1 < value.Length && value[i + 1] == '\n')
+                    {
+                        i++;
+                        continue;
+                    }
+
+                    if (c == '\n' || c == '\t')
+                    {
+                        continue;
+                    }
+                }
+
+                if (c < ' ' || c == '"' || c == '\\' || char.IsControl(c))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void WriteHex4(ushort value)
+        {
+            WriteHexDigit((value >> 12) & 0xF);
+            WriteHexDigit((value >> 8) & 0xF);
+            WriteHexDigit((value >> 4) & 0xF);
+            WriteHexDigit(value & 0xF);
+        }
+
+        private void WriteHexDigit(int value)
+        {
+            _writer.Write((char)(value < 10 ? '0' + value : 'A' + (value - 10)));
+        }
+
+        private static bool IsSafeStringLiteral(string text)
+        {
+            for (var i = 0; i < text.Length; i++)
+            {
+                var c = text[i];
+                if (char.IsControl(c) || c == '\'')
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool IsSafeStringLiteralMulti(string text)
+        {
+            for (var i = 0; i < text.Length; i++)
+            {
+                var c = text[i];
+                // Newlines are permitted.
+                if ((c == '\r' && i + 1 < text.Length && text[i + 1] == '\n') || c == '\n')
+                {
+                    continue;
+                }
+
+                if (char.IsControl(c))
+                {
+                    return false;
+                }
+
+                // Sequence of 3 or more ' are not permitted.
+                if (c == '\'')
+                {
+                    if (i + 2 < text.Length && text[i + 1] == '\'' && text[i + 2] == '\'')
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
         }
 
         private static string ToTomlFloatString(decimal value)
@@ -424,19 +793,6 @@ internal static class TomlModelTextWriter
         private void WriteNewLine()
         {
             _writer.Write(_newLine);
-        }
-
-        private static List<string> AppendPath(List<string>? path, string name)
-        {
-            if (path is null)
-            {
-                return new List<string> { name };
-            }
-
-            var list = new List<string>(path.Count + 1);
-            list.AddRange(path);
-            list.Add(name);
-            return list;
         }
 
         private void WriteLeadingTrivia(TomlPropertiesMetadata? metadata, string key)

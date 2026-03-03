@@ -517,11 +517,10 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.AppendLine("            while (reader.TokenType != TomlTokenType.EndTable)");
         builder.AppendLine("            {");
         builder.AppendLine("                if (reader.TokenType != TomlTokenType.PropertyName) throw reader.CreateException($\"Expected {TomlTokenType.PropertyName} token but was {reader.TokenType}.\");");
-        builder.AppendLine("                var name = reader.PropertyName!;");
-        builder.AppendLine("                reader.Read();");
-        builder.AppendLine();
         builder.AppendLine("                if (Options.PropertyNameCaseInsensitive)");
         builder.AppendLine("                {");
+        builder.AppendLine("                    var name = reader.PropertyName!;");
+        builder.AppendLine("                    reader.Read();");
         EmitMemberDispatch(builder, poco, ignoreCase: true);
         builder.AppendLine("                }");
         builder.AppendLine("                else");
@@ -538,22 +537,76 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private static void EmitMemberDispatch(StringBuilder builder, PocoShape poco, bool ignoreCase)
     {
-        var comparison = ignoreCase ? "StringComparison.OrdinalIgnoreCase" : "StringComparison.Ordinal";
+        if (ignoreCase)
+        {
+            var comparison = "StringComparison.OrdinalIgnoreCase";
+            for (var i = 0; i < poco.Members.Length; i++)
+            {
+                var member = poco.Members[i];
+                builder.Append("                    ").Append(i == 0 ? "if" : "else if").Append("(string.Equals(name, \"").Append(EscapeStringLiteral(member.SerializedName)).Append("\", ").Append(comparison).AppendLine("))");
+                builder.AppendLine("                    {");
+                builder.AppendLine("                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
+                builder.AppendLine("                        {");
+                builder.Append("                            const int bit = 1 << ").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
+                builder.AppendLine("                            if ((seenMask & bit) != 0) throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
+                builder.AppendLine("                            seenMask |= bit;");
+                builder.AppendLine("                        }");
+                builder.Append("                        value.").Append(member.MemberName).Append(" = _context.").Append(GetTypeInfoPropertyName(member.Type)).AppendLine(".Read(reader)!;");
+                builder.AppendLine("                        continue;");
+                builder.AppendLine("                    }");
+            }
+
+            builder.AppendLine("                    reader.Skip();");
+            return;
+        }
+
+        var membersByHash = new Dictionary<ulong, List<(int Index, PocoMember Member)>>();
         for (var i = 0; i < poco.Members.Length; i++)
         {
             var member = poco.Members[i];
-            builder.Append("                    ").Append(i == 0 ? "if" : "else if").Append("(string.Equals(name, \"").Append(EscapeStringLiteral(member.SerializedName)).Append("\", ").Append(comparison).AppendLine("))");
-            builder.AppendLine("                    {");
-            builder.AppendLine("                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
-            builder.AppendLine("                        {");
-            builder.Append("                            const int bit = 1 << ").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
-            builder.AppendLine("                            if ((seenMask & bit) != 0) throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
-            builder.AppendLine("                            seenMask |= bit;");
-            builder.AppendLine("                        }");
-            builder.Append("                        value.").Append(member.MemberName).Append(" = _context.").Append(GetTypeInfoPropertyName(member.Type)).AppendLine(".Read(reader)!;");
-            builder.AppendLine("                        continue;");
-            builder.AppendLine("                    }");
+            var hash = ComputePropertyNameHash56(member.SerializedName);
+            if (!membersByHash.TryGetValue(hash, out var bucket))
+            {
+                bucket = new List<(int, PocoMember)>(capacity: 1);
+                membersByHash.Add(hash, bucket);
+            }
+
+            bucket.Add((i, member));
         }
+
+        builder.AppendLine("                    if (reader.TryGetPropertyNameHash(out var hash))");
+        builder.AppendLine("                    {");
+        builder.AppendLine("                        switch (hash)");
+        builder.AppendLine("                        {");
+
+        foreach (var kvp in membersByHash.OrderBy(static pair => pair.Key))
+        {
+            builder.Append("                            case 0x").Append(kvp.Key.ToString("X", CultureInfo.InvariantCulture)).AppendLine("UL:");
+            builder.AppendLine("                            {");
+
+            foreach (var (index, member) in kvp.Value)
+            {
+                builder.Append("                                if (reader.PropertyNameEquals(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\"))");
+                builder.AppendLine("                                {");
+                builder.AppendLine("                                    if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
+                builder.AppendLine("                                    {");
+                builder.Append("                                        const int bit = 1 << ").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
+                builder.AppendLine("                                        if ((seenMask & bit) != 0) throw reader.CreateException($\"Duplicate key '{reader.PropertyName}' was encountered.\");");
+                builder.AppendLine("                                        seenMask |= bit;");
+                builder.AppendLine("                                    }");
+                builder.AppendLine("                                    reader.Read();");
+                builder.Append("                                    value.").Append(member.MemberName).Append(" = _context.").Append(GetTypeInfoPropertyName(member.Type)).AppendLine(".Read(reader)!;");
+                builder.AppendLine("                                    continue;");
+                builder.AppendLine("                                }");
+            }
+
+            builder.AppendLine("                                break;");
+            builder.AppendLine("                            }");
+        }
+
+        builder.AppendLine("                        }");
+        builder.AppendLine("                    }");
+        builder.AppendLine("                    reader.Read();");
         builder.AppendLine("                    reader.Skip();");
     }
 
@@ -1674,4 +1727,32 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private static string EscapeStringLiteral(string value)
         => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+
+    private static ulong ComputePropertyNameHash56(string value)
+    {
+        const ulong offsetBasis = 14695981039346656037UL;
+        const ulong prime = 1099511628211UL;
+        const ulong mask = 0x00FF_FFFF_FFFF_FFFFUL;
+
+        var hash = offsetBasis;
+        for (var i = 0; i < value.Length; i++)
+        {
+            var c1 = value[i];
+            var codePoint = (int)c1;
+            if (char.IsHighSurrogate(c1) && i + 1 < value.Length)
+            {
+                var c2 = value[i + 1];
+                if (char.IsLowSurrogate(c2))
+                {
+                    codePoint = char.ConvertToUtf32(c1, c2);
+                    i++;
+                }
+            }
+
+            hash ^= unchecked((uint)codePoint);
+            hash *= prime;
+        }
+
+        return hash & mask;
+    }
 }

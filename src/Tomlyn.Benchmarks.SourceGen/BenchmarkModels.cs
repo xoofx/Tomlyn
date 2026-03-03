@@ -1,38 +1,56 @@
+using CsToml;
+
 namespace Tomlyn.Benchmarks;
 
-public sealed class BenchmarkOwner
+[TomlSerializedObject]
+public sealed partial class BenchmarkOwner
 {
+    [TomlValueOnSerialized]
     public string Name { get; set; } = string.Empty;
 
+    [TomlValueOnSerialized]
     public string Organization { get; set; } = string.Empty;
 }
 
-public sealed class BenchmarkEndpoint
+[TomlSerializedObject]
+public sealed partial class BenchmarkEndpoint
 {
+    [TomlValueOnSerialized]
     public string Name { get; set; } = string.Empty;
 
+    [TomlValueOnSerialized]
     public string Url { get; set; } = string.Empty;
 
+    [TomlValueOnSerialized]
     public bool Enabled { get; set; }
 }
 
-public sealed class BenchmarkService
+[TomlSerializedObject]
+public sealed partial class BenchmarkService
 {
+    [TomlValueOnSerialized]
     public string Name { get; set; } = string.Empty;
 
+    [TomlValueOnSerialized]
     public string Host { get; set; } = string.Empty;
 
+    [TomlValueOnSerialized]
     public int Port { get; set; }
 
+    [TomlValueOnSerialized]
     public BenchmarkEndpoint[] Endpoints { get; set; } = [];
 }
 
-public sealed class BenchmarkDocument
+[TomlSerializedObject]
+public sealed partial class BenchmarkDocument
 {
+    [TomlValueOnSerialized]
     public string Title { get; set; } = string.Empty;
 
+    [TomlValueOnSerialized]
     public BenchmarkOwner Owner { get; set; } = new();
 
+    [TomlValueOnSerialized]
     public BenchmarkService[] Services { get; set; } = [];
 }
 

@@ -118,18 +118,6 @@ public sealed class TomlLexer
     /// <param name="utf8Toml">The UTF-8 TOML payload.</param>
     /// <param name="sourceName">An optional source name used in diagnostics.</param>
     /// <returns>A lexer instance positioned before the first token.</returns>
-    public static TomlLexer Create(ReadOnlySpan<byte> utf8Toml, string? sourceName = null)
-    {
-        var bytes = utf8Toml.ToArray();
-        return Create(bytes, sourceName);
-    }
-
-    /// <summary>
-    /// Creates a lexer over UTF-8 TOML bytes.
-    /// </summary>
-    /// <param name="utf8Toml">The UTF-8 TOML payload.</param>
-    /// <param name="sourceName">An optional source name used in diagnostics.</param>
-    /// <returns>A lexer instance positioned before the first token.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="utf8Toml"/> is <c>null</c>.</exception>
     public static TomlLexer Create(byte[] utf8Toml, string? sourceName = null)
     {
@@ -144,25 +132,6 @@ public sealed class TomlLexer
             DecodeScalars = false,
         };
         return new TomlLexer(new LexerAdapter<StringUtf8SourceView, StringCharacterUtf8Iterator>(lexer));
-    }
-
-    /// <summary>
-    /// Creates a lexer over UTF-8 TOML bytes.
-    /// </summary>
-    /// <param name="utf8Toml">The UTF-8 TOML payload.</param>
-    /// <param name="lexerOptions">Options controlling lexer behavior.</param>
-    /// <param name="sourceName">An optional source name used in diagnostics.</param>
-    /// <returns>A lexer instance positioned before the first token.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="lexerOptions"/> is <c>null</c>.</exception>
-    public static TomlLexer Create(ReadOnlySpan<byte> utf8Toml, TomlLexerOptions lexerOptions, string? sourceName = null)
-    {
-        if (lexerOptions is null)
-        {
-            throw new ArgumentNullException(nameof(lexerOptions));
-        }
-
-        var bytes = utf8Toml.ToArray();
-        return Create(bytes, lexerOptions, sourceName);
     }
 
     /// <summary>
@@ -239,13 +208,16 @@ public sealed class TomlLexer
             return false;
         }
 
-        var token = _adapter.Token;
+        ref readonly var token = ref _adapter.Token;
+        var data = token.Kind.IsInteger() || token.Kind.IsFloat() || token.Kind is TokenKind.True or TokenKind.False
+            ? token.Data
+            : 0;
         _current = new TomlToken(
             token.Kind,
             new TomlTextPosition(token.Start.Offset, token.Start.Line, token.Start.Column),
             new TomlTextPosition(token.End.Offset, token.End.Line, token.End.Column),
             token.StringValue,
-            token.Data);
+            data);
         return true;
     }
 
@@ -268,7 +240,7 @@ public sealed class TomlLexer
 
         LexerState State { get; set; }
 
-        SyntaxTokenValue Token { get; }
+        ref readonly SyntaxTokenValue Token { get; }
 
         bool MoveNext();
     }
@@ -298,7 +270,7 @@ public sealed class TomlLexer
             set => _lexer.State = value;
         }
 
-        public SyntaxTokenValue Token => _lexer.Token;
+        public ref readonly SyntaxTokenValue Token => ref _lexer.Token;
 
         public bool MoveNext() => _lexer.MoveNext();
     }
@@ -324,7 +296,7 @@ public sealed class TomlLexer
 
         public bool MoveNext() => _adapter.MoveNext();
 
-        public SyntaxTokenValue Token => _adapter.Token;
+        public ref readonly SyntaxTokenValue Token => ref _adapter.Token;
 
         public IEnumerable<DiagnosticMessage> Errors => _adapter.Errors;
     }

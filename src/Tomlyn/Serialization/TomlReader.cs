@@ -23,6 +23,7 @@ public sealed class TomlReader
     private string? _currentPropertyName;
     private string? _currentString;
     private ulong _currentData;
+    private TokenKind _currentPropertyNameTokenKind;
     private TokenKind _currentStringTokenKind;
     private TomlDateTime _currentDateTime;
     private bool _hasDateTime;
@@ -87,15 +88,6 @@ public sealed class TomlReader
     /// <summary>
     /// Creates a TOML reader over a UTF-8 payload.
     /// </summary>
-    public static TomlReader Create(ReadOnlySpan<byte> utf8Toml, TomlSerializerOptions? options = null)
-    {
-        var bytes = utf8Toml.ToArray();
-        return Create(bytes, options);
-    }
-
-    /// <summary>
-    /// Creates a TOML reader over a UTF-8 payload.
-    /// </summary>
     /// <exception cref="ArgumentNullException"><paramref name="utf8Toml"/> is <c>null</c>.</exception>
     public static TomlReader Create(byte[] utf8Toml, TomlSerializerOptions? options = null)
     {
@@ -123,7 +115,29 @@ public sealed class TomlReader
     /// <summary>
     /// Gets the current property name when <see cref="TokenType"/> is <see cref="TomlTokenType.PropertyName"/>.
     /// </summary>
-    public string? PropertyName => _currentPropertyName;
+    public string? PropertyName
+    {
+        get
+        {
+            if (_tokenType != TomlTokenType.PropertyName)
+            {
+                return null;
+            }
+
+            if (_currentPropertyName is not null)
+            {
+                return _currentPropertyName;
+            }
+
+            if (_parser is null)
+            {
+                return null;
+            }
+
+            _currentPropertyName = _parser.GetPropertyName();
+            return _currentPropertyName;
+        }
+    }
 
     /// <summary>
     /// Gets the optional source name associated with the TOML payload (for example, a file path).
@@ -164,6 +178,7 @@ public sealed class TomlReader
         _currentPropertyName = null;
         _currentString = null;
         _currentData = 0;
+        _currentPropertyNameTokenKind = default;
         _currentStringTokenKind = default;
         _currentDateTime = default;
         _hasDateTime = false;
@@ -213,7 +228,7 @@ public sealed class TomlReader
             return false;
         }
 
-        var parseEvent = _parser.Current;
+        ref readonly var parseEvent = ref _parser.Current;
         _currentSpan = parseEvent.Span;
         _currentLeadingTrivia = _parser.CurrentLeadingTrivia;
         _currentTrailingTrivia = _parser.CurrentTrailingTrivia;
@@ -233,7 +248,9 @@ public sealed class TomlReader
                 break;
             case TomlParseEventKind.PropertyName:
                 _tokenType = TomlTokenType.PropertyName;
-                _currentPropertyName = parseEvent.PropertyName ?? _parser.GetPropertyName();
+                _currentPropertyName = parseEvent.PropertyName;
+                _currentPropertyNameTokenKind = TomlParseEventData.UnpackPropertyNameTokenKind(parseEvent.Data);
+                _currentData = TomlParseEventData.UnpackPropertyNameHash(parseEvent.Data);
                 break;
             case TomlParseEventKind.StartArray:
                 _tokenType = TomlTokenType.StartArray;
@@ -267,6 +284,87 @@ public sealed class TomlReader
                 throw CreateException($"Unsupported TOML parse event `{parseEvent.Kind}`.");
         }
 
+        return true;
+    }
+
+    /// <summary>
+    /// Checks whether the current property name matches the expected value, using an ordinal, case-sensitive comparison.
+    /// </summary>
+    /// <param name="expected">The expected property name.</param>
+    /// <returns><c>true</c> when the property name matches; otherwise <c>false</c>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="expected"/> is <c>null</c>.</exception>
+    /// <exception cref="TomlException">The current token does not have a source span.</exception>
+    public bool PropertyNameEquals(string expected)
+    {
+        ArgumentGuard.ThrowIfNull(expected, nameof(expected));
+
+        if (_tokenType != TomlTokenType.PropertyName)
+        {
+            return false;
+        }
+
+        if (_currentPropertyName is not null)
+        {
+            return string.Equals(_currentPropertyName, expected, StringComparison.Ordinal);
+        }
+
+        if (_currentSpan is not { } span || _parser is null)
+        {
+            throw CreateException("The current token does not have a source span.");
+        }
+
+        var raw = _parser.GetSpan(span);
+        if (raw.IsEmpty)
+        {
+            return expected.Length == 0;
+        }
+
+        var expectedSpan = expected.AsSpan();
+        switch (_currentPropertyNameTokenKind)
+        {
+            case TokenKind.BasicKey:
+                return raw.SequenceEqual(expectedSpan);
+            case TokenKind.StringLiteral:
+                if (raw.Length >= 2 && raw[0] == '\'' && raw[raw.Length - 1] == '\'')
+                {
+                    return raw.Slice(1, raw.Length - 2).SequenceEqual(expectedSpan);
+                }
+
+                return false;
+            case TokenKind.String:
+                if (raw.Length >= 2 && raw[0] == '"' && raw[raw.Length - 1] == '"')
+                {
+                    var content = raw.Slice(1, raw.Length - 2);
+                    if (content.IndexOf('\\') < 0)
+                    {
+                        return content.SequenceEqual(expectedSpan);
+                    }
+                }
+
+                _currentPropertyName = _parser.GetPropertyName();
+                return string.Equals(_currentPropertyName, expected, StringComparison.Ordinal);
+            default:
+                _currentPropertyName = _parser.GetPropertyName();
+                return string.Equals(_currentPropertyName, expected, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Attempts to get a stable hash for the current property name without materializing it.
+    /// </summary>
+    /// <param name="hash">
+    /// When this method returns <c>true</c>, contains the property-name hash (case-sensitive) computed by the parser.
+    /// </param>
+    /// <returns><c>true</c> when the current token is a property name; otherwise <c>false</c>.</returns>
+    public bool TryGetPropertyNameHash(out ulong hash)
+    {
+        if (_tokenType != TomlTokenType.PropertyName)
+        {
+            hash = 0;
+            return false;
+        }
+
+        hash = _currentData;
         return true;
     }
 
@@ -378,8 +476,8 @@ public sealed class TomlReader
             return _currentString;
         }
 
-        var raw = _parser.GetText(span);
-        if (raw is null)
+        var raw = _parser.GetSpan(span);
+        if (raw.IsEmpty)
         {
             _currentString = string.Empty;
             return _currentString;
@@ -567,6 +665,7 @@ public sealed class TomlReader
             : null;
 
         var stringValue = _tokenType == TomlTokenType.String ? GetString() : null;
+        var propertyName = _tokenType == TomlTokenType.PropertyName ? PropertyName : _currentPropertyName;
 
         tokens.Add(new TomlReaderToken(
             _tokenType,
@@ -574,7 +673,7 @@ public sealed class TomlReader
             rawText,
             _currentLeadingTrivia,
             _currentTrailingTrivia,
-            _currentPropertyName,
+            propertyName,
             stringValue,
             _currentData,
             _currentStringTokenKind,

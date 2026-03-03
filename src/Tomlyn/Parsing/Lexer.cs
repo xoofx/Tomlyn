@@ -21,14 +21,16 @@ namespace Tomlyn.Parsing
     /// </summary>
     internal class Lexer<TSourceView, TCharReader> : ITokenProvider<TSourceView> where TSourceView : struct, ISourceView<TCharReader> where TCharReader : struct, CharacterIterator
     {
+        private static readonly bool ReaderCanThrow = typeof(TCharReader) == typeof(StringCharacterUtf8Iterator);
+        private static readonly bool UseStringSpanFastPaths = typeof(TSourceView) == typeof(StringSourceView) && typeof(TCharReader) == typeof(StringCharacterIterator);
         private SyntaxTokenValue _token;
         private List<DiagnosticMessage>? _errors;
         private TCharReader _reader;
         private const int Eof = -1;
         private TSourceView _sourceView;
         private readonly StringBuilder _textBuilder;
-        private readonly List<char32> _currentIdentifierChars;
-        private LexerInternalState? _preview1 = null;
+        private LexerInternalState _preview1;
+        private bool _hasPreview1;
         private LexerInternalState _current;
 
         /// <summary>
@@ -41,7 +43,6 @@ namespace Tomlyn.Parsing
         {
             _sourceView = sourceView;
             _reader = sourceView.GetIterator();
-            _currentIdentifierChars = new List<char32>();
             _textBuilder = new StringBuilder();
             Reset();
         }
@@ -63,6 +64,11 @@ namespace Tomlyn.Parsing
         /// </summary>
         public bool DecodeScalars { get; set; } = true;
 
+        /// <summary>
+        /// Gets or sets a value indicating whether the lexer should emit hidden tokens (whitespace and comments).
+        /// </summary>
+        public bool EmitHiddenTokens { get; set; } = true;
+
         public bool MoveNext()
         {
             // If we have errors or we are already at the end of the file, we don't continue
@@ -71,18 +77,20 @@ namespace Tomlyn.Parsing
                 return false;
             }
 
+            var emitHiddenTokens = EmitHiddenTokens;
             if (State == LexerState.Key)
             {
-                NextTokenForKey();
+                NextTokenForKey(emitHiddenTokens);
             }
             else
             {
-                NextTokenForValue();
+                NextTokenForValue(emitHiddenTokens);
             }
+
             return true;
         }
 
-        public SyntaxTokenValue Token => _token;
+        public ref readonly SyntaxTokenValue Token => ref _token;
 
         public LexerState State { get; set; }
 
@@ -90,295 +98,482 @@ namespace Tomlyn.Parsing
 
         private char32 _c => _current.CurrentChar;
 
-        private void NextTokenForKey()
+        private void NextTokenForKey(bool emitHiddenTokens)
         {
-            var start = _position;
-            switch (_c)
+            while (true)
             {
-                case '\n':
-                    _token = new SyntaxTokenValue(TokenKind.NewLine, start, start);
-                    NextChar();
-                    break;
-                case '\r':
-                    NextChar();
-                    // case of: \r\n
-                    if (_c == '\n')
-                    {
-                        _token = new SyntaxTokenValue(TokenKind.NewLine, start, _position);
+                var start = _position;
+                switch (_c)
+                {
+                    case '\n':
+                        _token = new SyntaxTokenValue(TokenKind.NewLine, start, start);
                         NextChar();
-                        break;
-                    }
-                    AddError($"Invalid \\r not followed by \\n", start, start);
-                    // case of \r
-                    _token = new SyntaxTokenValue(TokenKind.NewLine, start, start);
-                    break;
-                case '#':
-                    NextChar();
-                    ReadComment(start);
-                    break;
-                case '.':
-                    NextChar();
-                    _token = new SyntaxTokenValue(TokenKind.Dot, start, start);
-                    break;
-                case '=': // in the context of a key, we need to parse up to the =
-                    NextChar();
-                    _token = new SyntaxTokenValue(TokenKind.Equal, start, start);
-                    break;
-                case ',':
-                    _token = new SyntaxTokenValue(TokenKind.Comma, start, start);
-                    NextChar();
-                    break;
-                case '{':
-                    _token = new SyntaxTokenValue(TokenKind.OpenBrace, _position, _position);
-                    NextChar();
-                    break;
-                case '}':
-                    _token = new SyntaxTokenValue(TokenKind.CloseBrace, _position, _position);
-                    NextChar();
-                    break;
-                case '[':
-                    NextChar();
-                    // case of: ]]
-                    if (_c == '[')
-                    {
-                        _token = new SyntaxTokenValue(TokenKind.OpenBracketDouble, start, _position);
+                        return;
+                    case '\r':
                         NextChar();
-                        break;
-                    }
-                    _token = new SyntaxTokenValue(TokenKind.OpenBracket, start, start);
-                    break;
-                case ']':
-                    NextChar();
-                    // case of: ]]
-                    if (_c == ']')
+                        // case of: \r\n
+                        if (_c == '\n')
+                        {
+                            _token = new SyntaxTokenValue(TokenKind.NewLine, start, _position);
+                            NextChar();
+                            return;
+                        }
+                        AddError($"Invalid \\r not followed by \\n", start, start);
+                        // case of \r
+                        _token = new SyntaxTokenValue(TokenKind.NewLine, start, start);
+                        return;
+                    case '#':
                     {
-                        _token = new SyntaxTokenValue(TokenKind.CloseBracketDouble, start, _position);
                         NextChar();
-                        break;
+                        var end = ReadCommentCore(start);
+                        if (emitHiddenTokens)
+                        {
+                            _token = new SyntaxTokenValue(TokenKind.Comment, start, end);
+                            return;
+                        }
+                        continue;
                     }
-                    _token = new SyntaxTokenValue(TokenKind.CloseBracket, start, start);
-                    break;
-                case '"':
-                    ReadString(start, false);
-                    break;
-                case '\'':
-                    ReadStringLiteral(start, false);
-                    break;
-                case Eof:
-                    _token = new SyntaxTokenValue(TokenKind.Eof, _position, _position);
-                    break;
-                default:
-                    // Eat any whitespace
-                    if (ConsumeWhitespace())
-                    {
-                        break;
-                    }
+                    case '.':
+                        NextChar();
+                        _token = new SyntaxTokenValue(TokenKind.Dot, start, start);
+                        return;
+                    case '=': // in the context of a key, we need to parse up to the =
+                        NextChar();
+                        _token = new SyntaxTokenValue(TokenKind.Equal, start, start);
+                        return;
+                    case ',':
+                        _token = new SyntaxTokenValue(TokenKind.Comma, start, start);
+                        NextChar();
+                        return;
+                    case '{':
+                        _token = new SyntaxTokenValue(TokenKind.OpenBrace, _position, _position);
+                        NextChar();
+                        return;
+                    case '}':
+                        _token = new SyntaxTokenValue(TokenKind.CloseBrace, _position, _position);
+                        NextChar();
+                        return;
+                    case '[':
+                        NextChar();
+                        // case of: ]]
+                        if (_c == '[')
+                        {
+                            _token = new SyntaxTokenValue(TokenKind.OpenBracketDouble, start, _position);
+                            NextChar();
+                            return;
+                        }
+                        _token = new SyntaxTokenValue(TokenKind.OpenBracket, start, start);
+                        return;
+                    case ']':
+                        NextChar();
+                        // case of: ]]
+                        if (_c == ']')
+                        {
+                            _token = new SyntaxTokenValue(TokenKind.CloseBracketDouble, start, _position);
+                            NextChar();
+                            return;
+                        }
+                        _token = new SyntaxTokenValue(TokenKind.CloseBracket, start, start);
+                        return;
+                    case '"':
+                        ReadString(start, false);
+                        return;
+                    case '\'':
+                        ReadStringLiteral(start, false);
+                        return;
+                    case Eof:
+                        _token = new SyntaxTokenValue(TokenKind.Eof, _position, _position);
+                        return;
+                    default:
+                        // Eat any whitespace
+                        if (ConsumeWhitespaceCore(out var whitespaceEnd))
+                        {
+                            if (emitHiddenTokens)
+                            {
+                                _token = new SyntaxTokenValue(TokenKind.Whitespaces, start, whitespaceEnd);
+                                return;
+                            }
 
-                    if (CharHelper.IsKeyStart(_c))
-                    {
-                        ReadKey();
-                        break;
-                    }
+                            continue;
+                        }
 
-                    // invalid char
-                    _token = new SyntaxTokenValue(TokenKind.Invalid, _position, _position);
-                    NextChar();
-                    break;
+                        if (CharHelper.IsKeyStart(_c))
+                        {
+                            ReadKey();
+                            return;
+                        }
+
+                        // invalid char
+                        _token = new SyntaxTokenValue(TokenKind.Invalid, _position, _position);
+                        NextChar();
+                        return;
+                }
             }
         }
 
-        private void NextTokenForValue()
+        private void NextTokenForValue(bool emitHiddenTokens)
         {
-            var start = _position;
-            switch (_c)
+            while (true)
             {
-                case '\n':
-                    _token = new SyntaxTokenValue(TokenKind.NewLine, start, _position);
-                    NextChar();
-                    break;
-                case '\r':
-                    NextChar();
-                    // case of: \r\n
-                    if (_c == '\n')
-                    {
+                var start = _position;
+                switch (_c)
+                {
+                    case '\n':
                         _token = new SyntaxTokenValue(TokenKind.NewLine, start, _position);
                         NextChar();
-                        break;
-                    }
+                        return;
+                    case '\r':
+                        NextChar();
+                        // case of: \r\n
+                        if (_c == '\n')
+                        {
+                            _token = new SyntaxTokenValue(TokenKind.NewLine, start, _position);
+                            NextChar();
+                            return;
+                        }
 
-                    AddError($"Invalid \\r not followed by \\n", start, start);
-                    // case of \r
-                    _token = new SyntaxTokenValue(TokenKind.NewLine, start, start);
-                    break;
-                case '#':
-                    NextChar();
-                    ReadComment(start);
-                    break;
-                case ',':
-                    _token = new SyntaxTokenValue(TokenKind.Comma, start, start);
-                    NextChar();
-                    break;
-                case '[':
-                    NextChar();
-                    _token = new SyntaxTokenValue(TokenKind.OpenBracket, start, start);
-                    break;
-                case ']':
-                    NextChar();
-                    _token = new SyntaxTokenValue(TokenKind.CloseBracket, start, start);
-                    break;
-                case '{':
-                    _token = new SyntaxTokenValue(TokenKind.OpenBrace, _position, _position);
-                    NextChar();
-                    break;
-                case '}':
-                    _token = new SyntaxTokenValue(TokenKind.CloseBrace, _position, _position);
-                    NextChar();
-                    break;
-                case '"':
-                    ReadString(start, true);
-                    break;
-                case '\'':
-                    ReadStringLiteral(start, true);
-                    break;
-                case Eof:
-                    _token = new SyntaxTokenValue(TokenKind.Eof, _position, _position);
-                    break;
-                default:
-                    // Eat any whitespace
-                    if (ConsumeWhitespace())
+                        AddError($"Invalid \\r not followed by \\n", start, start);
+                        // case of \r
+                        _token = new SyntaxTokenValue(TokenKind.NewLine, start, start);
+                        return;
+                    case '#':
                     {
-                        break;
+                        NextChar();
+                        var end = ReadCommentCore(start);
+                        if (emitHiddenTokens)
+                        {
+                            _token = new SyntaxTokenValue(TokenKind.Comment, start, end);
+                            return;
+                        }
+                        continue;
                     }
+                    case ',':
+                        _token = new SyntaxTokenValue(TokenKind.Comma, start, start);
+                        NextChar();
+                        return;
+                    case '[':
+                        NextChar();
+                        _token = new SyntaxTokenValue(TokenKind.OpenBracket, start, start);
+                        return;
+                    case ']':
+                        NextChar();
+                        _token = new SyntaxTokenValue(TokenKind.CloseBracket, start, start);
+                        return;
+                    case '{':
+                        _token = new SyntaxTokenValue(TokenKind.OpenBrace, _position, _position);
+                        NextChar();
+                        return;
+                    case '}':
+                        _token = new SyntaxTokenValue(TokenKind.CloseBrace, _position, _position);
+                        NextChar();
+                        return;
+                    case '"':
+                        ReadString(start, true);
+                        return;
+                    case '\'':
+                        ReadStringLiteral(start, true);
+                        return;
+                    case Eof:
+                        _token = new SyntaxTokenValue(TokenKind.Eof, _position, _position);
+                        return;
+                    default:
+                        // Eat any whitespace
+                        if (ConsumeWhitespaceCore(out var whitespaceEnd))
+                        {
+                            if (emitHiddenTokens)
+                            {
+                                _token = new SyntaxTokenValue(TokenKind.Whitespaces, start, whitespaceEnd);
+                                return;
+                            }
 
-                    // Handle inf, +inf, -inf, true, false
-                    if (_c == '+' || _c == '-' || CharHelper.IsIdentifierStart(_c))
-                    {
-                        ReadSpecialToken();
-                        break;
-                    }
+                            continue;
+                        }
 
-                    if (CharHelper.IsDigit(_c))
-                    {
-                        ReadNumberOrDate();
-                        break;
-                    }
+                        // Handle inf, +inf, -inf, true, false
+                        if (_c == '+' || _c == '-' || CharHelper.IsIdentifierStart(_c))
+                        {
+                            ReadSpecialToken();
+                            return;
+                        }
 
-                    // invalid char
-                    _token = new SyntaxTokenValue(TokenKind.Invalid, _position, _position);
-                    NextChar();
-                    break;
+                        if (CharHelper.IsDigit(_c))
+                        {
+                            ReadNumberOrDate();
+                            return;
+                        }
+
+                        // invalid char
+                        _token = new SyntaxTokenValue(TokenKind.Invalid, _position, _position);
+                        NextChar();
+                        return;
+                }
             }
         }
 
-        private bool ConsumeWhitespace()
+        private bool ConsumeWhitespaceCore(out TextPosition end)
         {
-            var start = _position;
-            var end = _position;
+            if (UseStringSpanFastPaths && !_hasPreview1)
+            {
+                var startPosition = _position;
+                var offset = startPosition.Offset;
+                var remaining = _sourceView.Length - offset;
+                if (remaining <= 0)
+                {
+                    end = startPosition;
+                    return false;
+                }
+
+                var span = _sourceView.GetSpan(offset, remaining);
+                var i = 0;
+                while ((uint)i < (uint)span.Length)
+                {
+                    var c = span[i];
+                    if (c != ' ' && c != '\t')
+                    {
+                        break;
+                    }
+                    i++;
+                }
+
+                if (i == 0)
+                {
+                    end = startPosition;
+                    return false;
+                }
+
+                end = new TextPosition(offset + i - 1, startPosition.Line, startPosition.Column + i - 1);
+
+                var nextPosition = new TextPosition(offset + i, startPosition.Line, startPosition.Column + i);
+                _current.Position = nextPosition;
+                _current.NextPosition = nextPosition;
+                _current.CurrentChar = NextCharFromReader();
+                return true;
+            }
+
+            end = _position;
+            var consumed = false;
             while (CharHelper.IsWhiteSpace(_c))
             {
                 end = _position;
                 NextChar();
+                consumed = true;
             }
 
-            if (start != _position)
-            {
-                _token = new SyntaxTokenValue(TokenKind.Whitespaces, start, end);
-                return true;
-            }
-
-            return false;
+            return consumed;
         }
 
         private void ReadKey()
         {
-            var start = _position;
-            var end = _position;
-            while (CharHelper.IsKeyContinue(_c))
+            if (UseStringSpanFastPaths && !_hasPreview1)
             {
-                end = _position;
-                NextChar();
+                static bool IsKeyContinueChar(char c)
+                    => (c >= 'a' && c <= 'z') ||
+                       (c >= 'A' && c <= 'Z') ||
+                       c == '_' ||
+                       c == '-' ||
+                       (c >= '0' && c <= '9');
+
+                var start = _position;
+                var offset = start.Offset;
+                var remaining = _sourceView.Length - offset;
+                var span = remaining > 0 ? _sourceView.GetSpan(offset, remaining) : default;
+
+                var hash = 14695981039346656037UL;
+                var i = 0;
+                while ((uint)i < (uint)span.Length)
+                {
+                    var c = span[i];
+                    if (!IsKeyContinueChar(c))
+                    {
+                        break;
+                    }
+
+                    hash = HashAdd(hash, c);
+                    i++;
+                }
+
+                Debug.Assert(i > 0, "ReadKey fast-path must only run when positioned on a key start character.");
+
+                var end = new TextPosition(offset + i - 1, start.Line, start.Column + i - 1);
+                _token = new SyntaxTokenValue(TokenKind.BasicKey, start, end, stringValue: null, data: hash);
+
+                var nextPosition = new TextPosition(offset + i, start.Line, start.Column + i);
+                _current.Position = nextPosition;
+                _current.NextPosition = nextPosition;
+                _current.CurrentChar = NextCharFromReader();
+                return;
             }
 
-            _token = new SyntaxTokenValue(TokenKind.BasicKey, start, end);
+            {
+                var start = _position;
+                var end = _position;
+                var hash = 14695981039346656037UL;
+                while (CharHelper.IsKeyContinue(_c))
+                {
+                    hash = HashAdd(hash, _c.Code);
+                    end = _position;
+                    NextChar();
+                }
+
+                _token = new SyntaxTokenValue(TokenKind.BasicKey, start, end, stringValue: null, data: hash);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static ulong HashAdd(ulong hash, int codePoint)
+        {
+            hash ^= unchecked((uint)codePoint);
+            return hash * 1099511628211UL;
         }
 
         private void ReadSpecialToken()
         {
             var start = _position;
             var end = _position;
-            _currentIdentifierChars.Clear();
-
-            // We track an identifier to check if it is a keyword (inf, true, false)
             var firstChar = _c;
-            _currentIdentifierChars.Add(_c);
-
             NextChar();
 
-            // IF we have a digit, this is a -1 or +2
+            // If we have a digit, this is a -1 or +2
             if ((firstChar == '+' || firstChar == '-') && CharHelper.IsDigit(_c))
             {
-                _currentIdentifierChars.Clear();
                 ReadNumberOrDate(firstChar, start);
                 return;
             }
 
+            if (firstChar == 't')
+            {
+                if (TryConsumeIdentifierChar('r', ref end) &&
+                    TryConsumeIdentifierChar('u', ref end) &&
+                    TryConsumeIdentifierChar('e', ref end) &&
+                    !CharHelper.IsIdentifierContinue(_c))
+                {
+                    _token = new SyntaxTokenValue(TokenKind.True, start, end, stringValue: null, data: 1);
+                    return;
+                }
+
+                ConsumeIdentifierContinue(ref end);
+                _token = new SyntaxTokenValue(TokenKind.Invalid, start, end);
+                return;
+            }
+
+            if (firstChar == 'f')
+            {
+                if (TryConsumeIdentifierChar('a', ref end) &&
+                    TryConsumeIdentifierChar('l', ref end) &&
+                    TryConsumeIdentifierChar('s', ref end) &&
+                    TryConsumeIdentifierChar('e', ref end) &&
+                    !CharHelper.IsIdentifierContinue(_c))
+                {
+                    _token = new SyntaxTokenValue(TokenKind.False, start, end, stringValue: null, data: 0);
+                    return;
+                }
+
+                ConsumeIdentifierContinue(ref end);
+                _token = new SyntaxTokenValue(TokenKind.Invalid, start, end);
+                return;
+            }
+
+            if (firstChar == 'i')
+            {
+                if (TryConsumeIdentifierChar('n', ref end) &&
+                    TryConsumeIdentifierChar('f', ref end) &&
+                    !CharHelper.IsIdentifierContinue(_c))
+                {
+                    _token = new SyntaxTokenValue(TokenKind.Infinite, start, end, stringValue: null,
+                        data: unchecked((ulong)BitConverter.DoubleToInt64Bits(double.PositiveInfinity)));
+                    return;
+                }
+
+                ConsumeIdentifierContinue(ref end);
+                _token = new SyntaxTokenValue(TokenKind.Invalid, start, end);
+                return;
+            }
+
+            if (firstChar == 'n')
+            {
+                if (TryConsumeIdentifierChar('a', ref end) &&
+                    TryConsumeIdentifierChar('n', ref end) &&
+                    !CharHelper.IsIdentifierContinue(_c))
+                {
+                    _token = new SyntaxTokenValue(TokenKind.Nan, start, end, stringValue: null,
+                        data: unchecked((ulong)BitConverter.DoubleToInt64Bits(double.NaN)));
+                    return;
+                }
+
+                ConsumeIdentifierContinue(ref end);
+                _token = new SyntaxTokenValue(TokenKind.Invalid, start, end);
+                return;
+            }
+
+            if (firstChar == '+' || firstChar == '-')
+            {
+                if (_c == 'i')
+                {
+                    if (TryConsumeIdentifierChar('i', ref end) &&
+                        TryConsumeIdentifierChar('n', ref end) &&
+                        TryConsumeIdentifierChar('f', ref end) &&
+                        !CharHelper.IsIdentifierContinue(_c))
+                    {
+                        var data = firstChar == '-'
+                            ? unchecked((ulong)BitConverter.DoubleToInt64Bits(double.NegativeInfinity))
+                            : unchecked((ulong)BitConverter.DoubleToInt64Bits(double.PositiveInfinity));
+                        var kind = firstChar == '-' ? TokenKind.NegativeInfinite : TokenKind.PositiveInfinite;
+                        _token = new SyntaxTokenValue(kind, start, end, stringValue: null, data: data);
+                        return;
+                    }
+
+                    ConsumeIdentifierContinue(ref end);
+                    _token = new SyntaxTokenValue(TokenKind.Invalid, start, end);
+                    return;
+                }
+
+                if (_c == 'n')
+                {
+                    if (TryConsumeIdentifierChar('n', ref end) &&
+                        TryConsumeIdentifierChar('a', ref end) &&
+                        TryConsumeIdentifierChar('n', ref end) &&
+                        !CharHelper.IsIdentifierContinue(_c))
+                    {
+                        var kind = firstChar == '-' ? TokenKind.NegativeNan : TokenKind.PositiveNan;
+                        _token = new SyntaxTokenValue(kind, start, end, stringValue: null,
+                            data: unchecked((ulong)BitConverter.DoubleToInt64Bits(double.NaN)));
+                        return;
+                    }
+
+                    ConsumeIdentifierContinue(ref end);
+                    _token = new SyntaxTokenValue(TokenKind.Invalid, start, end);
+                    return;
+                }
+
+                ConsumeIdentifierContinue(ref end);
+                _token = new SyntaxTokenValue(TokenKind.Invalid, start, end);
+                return;
+            }
+
+            ConsumeIdentifierContinue(ref end);
+            _token = new SyntaxTokenValue(TokenKind.Invalid, start, end);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool TryConsumeIdentifierChar(char32 expected, ref TextPosition end)
+        {
+            if (_c != expected)
+            {
+                return false;
+            }
+
+            end = _position;
+            NextChar();
+            return true;
+        }
+
+        private void ConsumeIdentifierContinue(ref TextPosition end)
+        {
             while (CharHelper.IsIdentifierContinue(_c))
             {
-                // We track an identifier to check if it is a keyword (inf, true, false)
-                _currentIdentifierChars.Add(_c);
-
                 end = _position;
                 NextChar();
             }
-
-            if (MatchCurrentIdentifier("true"))
-            {
-                _token = new SyntaxTokenValue(TokenKind.True, start, end, stringValue: null, data: 1);
-            }
-            else if (MatchCurrentIdentifier("false"))
-            {
-                _token = new SyntaxTokenValue(TokenKind.False, start, end, stringValue: null, data: 0);
-            }
-            else if (MatchCurrentIdentifier("inf"))
-            {
-                _token = new SyntaxTokenValue(TokenKind.Infinite, start, end, stringValue: null, data: unchecked((ulong)BitConverter.DoubleToInt64Bits(double.PositiveInfinity)));
-            }
-            else if (MatchCurrentIdentifier("+inf"))
-            {
-                _token = new SyntaxTokenValue(TokenKind.PositiveInfinite, start, end, stringValue: null, data: unchecked((ulong)BitConverter.DoubleToInt64Bits(double.PositiveInfinity)));
-            }
-            else if (MatchCurrentIdentifier("-inf"))
-            {
-                _token = new SyntaxTokenValue(TokenKind.NegativeInfinite, start, end, stringValue: null, data: unchecked((ulong)BitConverter.DoubleToInt64Bits(double.NegativeInfinity)));
-            }
-            else if (MatchCurrentIdentifier("nan"))
-            {
-                _token = new SyntaxTokenValue(TokenKind.Nan, start, end, stringValue: null, data: unchecked((ulong)BitConverter.DoubleToInt64Bits(double.NaN)));
-            }
-            else if (MatchCurrentIdentifier("+nan"))
-            {
-                _token = new SyntaxTokenValue(TokenKind.PositiveNan, start, end, stringValue: null, data: unchecked((ulong)BitConverter.DoubleToInt64Bits(double.NaN)));
-            }
-            else if (MatchCurrentIdentifier("-nan"))
-            {
-                _token = new SyntaxTokenValue(TokenKind.NegativeNan, start, end, stringValue: null, data: unchecked((ulong)BitConverter.DoubleToInt64Bits(double.NaN)));
-            }
-            else
-            {
-                _token = new SyntaxTokenValue(TokenKind.Invalid, start, end);
-            }
-            _currentIdentifierChars.Clear();
-        }
-
-        private bool MatchCurrentIdentifier(string text)
-        {
-            // TODO: we expect strings to be ASCII only 
-            if (_currentIdentifierChars.Count != text.Length) return false;
-            for (int i = 0; i < text.Length; i++)
-            {
-                if (_currentIdentifierChars[i] != text[i]) return false;
-            }
-            return true;
         }
 
         private void ReadNumberOrDate(char32? signPrefix = null, TextPosition? signPrefixPos = null)
@@ -1279,7 +1474,7 @@ namespace Tomlyn.Parsing
         }
         
 
-        private void ReadComment(TextPosition start)
+        private TextPosition ReadCommentCore(TextPosition start)
         {
             var end = start;
             // Read until the end of the line/file
@@ -1302,17 +1497,17 @@ namespace Tomlyn.Parsing
                 AddError($"Invalid control character U+{_c.Code:X4} in comment", _position, _position);
             }
 
-            _token = new SyntaxTokenValue(TokenKind.Comment, start, end);
+            return end;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void NextChar()
         {
             // If we have a character in preview
-            if (_preview1 != null)
+            if (_hasPreview1)
             {
-                _current = _preview1.Value;
-                _preview1 = null;
+                _current = _preview1;
+                _hasPreview1 = false;
                 return;
             }
 
@@ -1325,56 +1520,67 @@ namespace Tomlyn.Parsing
         // Peek one char ahead
         private char32 PeekChar()
         {
-            if (_preview1 == null)
+            if (!_hasPreview1)
             {
                 var saved = _current;
                 NextChar();
                 _preview1 = _current;
+                _hasPreview1 = true;
                 _current = saved;
             }
 
-            return _preview1.Value.CurrentChar;
+            return _preview1.CurrentChar;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private char32 NextCharFromReaderCore()
+        {
+            int position = _position.Offset;
+            var nextChar = _reader.TryGetNext(ref position);
+            _current.NextPosition.Offset = position;
+
+            if (!nextChar.HasValue)
+            {
+                return Eof;
+            }
+
+            var nextc = nextChar.Value;
+            if (nextc == '\n')
+            {
+                _current.NextPosition.Column = 0;
+                _current.NextPosition.Line += 1;
+            }
+            else
+            {
+                _current.NextPosition.Column++;
+            }
+
+            // U+FFFD is the Unicode replacement character. If it shows up in the input, it is typically a sign
+            // that the original TOML payload contained invalid UTF-8 sequences (e.g. when decoded by a reader
+            // that replaces invalid bytes). Treat it as invalid to match TOML conformance expectations.
+            if (nextc == 0xFFFD)
+            {
+                AddError($"The character `{nextc}` is an invalid UTF8 character", _current.Position, _current.Position);
+            }
+
+            return nextc;
         }
 
         private char32 NextCharFromReader()
         {
+            if (!ReaderCanThrow)
+            {
+                return NextCharFromReaderCore();
+            }
+
             try
             {
-                int position = _position.Offset;
-                var nextChar = _reader.TryGetNext(ref position);
-                _current.NextPosition.Offset = position;
-
-                if (nextChar.HasValue)
-                {
-                    var nextc = nextChar.Value;
-                    if (nextc == '\n')
-                    {
-                        _current.NextPosition.Column = 0;
-                        _current.NextPosition.Line += 1;
-                    }
-                    else
-                    {
-                        _current.NextPosition.Column++;
-                    }
-                    CheckCharacter(nextc);
-                    return nextc;
-                }
-
+                return NextCharFromReaderCore();
             }
             catch (CharReaderException ex)
             {
                 AddError(ex.Message, _position, _position);
-            }
-
-            return Eof;
-        }
-
-        private void CheckCharacter(char32 c)
-        {
-            // The character 0xFFFD is the replacement character and we assume that something went wrong when reading the input
-            if (!CharHelper.IsValidUnicodeScalarValue(c) || c == 0xFFFD)
-            {
-                AddError($"The character `{c}` is an invalid UTF8 character", _current.Position, _current.Position);
+                return Eof;
             }
         }
 
@@ -1390,7 +1596,7 @@ namespace Tomlyn.Parsing
         private void Reset()
         {
             // Initialize the position at -1 when starting
-            _preview1 = null;
+            _hasPreview1 = false;
             _current = new LexerInternalState {Position = new TextPosition(_reader.Start, 0, 0)};
             // It is important to initialize this separately from the previous line
             _current.CurrentChar = NextCharFromReader();

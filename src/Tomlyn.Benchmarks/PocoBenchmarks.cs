@@ -15,6 +15,8 @@ public class PocoBenchmarks
     [GlobalSetup]
     public void Setup()
     {
+        CsTomlBenchmarkFormatters.EnsureRegistered();
+
         _document = BenchmarkDataFactory.CreateDocument(serviceCount: 200, endpointCountPerService: 12);
         _documentToml = BenchmarkDataFactory.CreateToml(_document);
         _documentUtf8 = BenchmarkDataFactory.ToUtf8Bytes(_documentToml);

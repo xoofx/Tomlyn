@@ -50,6 +50,8 @@ public readonly struct TomlParseEvent
     /// <summary>
     /// Gets the raw scalar payload for numeric and boolean scalars.
     /// When <see cref="Kind"/> is <see cref="TomlParseEventKind.String"/>, this contains the underlying <see cref="Tomlyn.Syntax.TokenKind"/> for the string literal.
+    /// When <see cref="Kind"/> is <see cref="TomlParseEventKind.PropertyName"/>, this contains an internal packed payload that includes the <see cref="Tomlyn.Syntax.TokenKind"/>
+    /// of the key literal (in the low 8 bits) as well as a case-sensitive hash of the decoded property name (in the remaining high bits).
     /// </summary>
     public ulong Data => _data;
 

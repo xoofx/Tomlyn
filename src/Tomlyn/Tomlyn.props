@@ -44,7 +44,14 @@
 
   <Target Name="PatchVersion" AfterTargets="MinVer">
     <PropertyGroup>
-      <AssemblyVersion>$(MinVerMajor).$(MinVerMinor).0.0</AssemblyVersion>
+      <!--
+        MinVer provides a SemVer `VersionPrefix` (e.g. 1.2.3). We derive AssemblyVersion/FileVersion
+        from it to keep a stable major.minor.0.0 format for binding redirects and assembly loading.
+      -->
+      <_TomlynAssemblyMajor>$([System.Version]::Parse('$(VersionPrefix)').Major)</_TomlynAssemblyMajor>
+      <_TomlynAssemblyMinor>$([System.Version]::Parse('$(VersionPrefix)').Minor)</_TomlynAssemblyMinor>
+      <AssemblyVersion>$(_TomlynAssemblyMajor).$(_TomlynAssemblyMinor).0.0</AssemblyVersion>
+      <FileVersion>$(_TomlynAssemblyMajor).$(_TomlynAssemblyMinor).0.0</FileVersion>
     </PropertyGroup>
   </Target>
 

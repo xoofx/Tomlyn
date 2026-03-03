@@ -17,7 +17,7 @@ internal static class TomlTypeInfoResolverPipeline
         "Reflection-based TOML serialization is not compatible with trimming/NativeAOT. " +
         "Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.";
 
-    private static readonly ConditionalWeakTable<TomlSerializerOptions, ConcurrentDictionary<Type, TomlTypeInfo>> ReflectionCacheByOptions = new();
+    private static readonly ConditionalWeakTable<TomlSerializerOptions, ConcurrentDictionary<Type, TomlTypeInfo>> CacheByOptions = new();
 
     [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
     [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
@@ -26,6 +26,21 @@ internal static class TomlTypeInfoResolverPipeline
         ArgumentGuard.ThrowIfNull(options, nameof(options));
         ArgumentGuard.ThrowIfNull(type, nameof(type));
 
+        var cache = CacheByOptions.GetOrCreateValue(options);
+        if (cache.TryGetValue(type, out var cached))
+        {
+            return cached;
+        }
+
+        var resolved = ResolveUncached(options, type);
+        cache.TryAdd(type, resolved);
+        return resolved;
+    }
+
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
+    private static TomlTypeInfo ResolveUncached(TomlSerializerOptions options, Type type)
+    {
         var fromTypeConverterAttribute = TryResolveFromConverterAttributes(options, type);
         if (fromTypeConverterAttribute is not null)
         {
@@ -263,26 +278,22 @@ internal static class TomlTypeInfoResolverPipeline
     [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     private static TomlTypeInfo ResolveFromReflection(TomlSerializerOptions options, Type type)
     {
-        var cache = ReflectionCacheByOptions.GetOrCreateValue(options);
-        return cache.GetOrAdd(type, t =>
+        var typeInfo = TomlReflectionTypeInfoResolver.TryCreateTypeInfo(type, options);
+        if (typeInfo is not null)
         {
-            var typeInfo = TomlReflectionTypeInfoResolver.TryCreateTypeInfo(t, options);
-            if (typeInfo is not null)
-            {
-                return typeInfo;
-            }
+            return typeInfo;
+        }
 
-            var dispatch = TomlPolymorphicTypeInfo.TryCreate(t, options, baseTypeInfo: null);
-            if (dispatch is not null)
-            {
-                return dispatch;
-            }
+        var dispatch = TomlPolymorphicTypeInfo.TryCreate(type, options, baseTypeInfo: null);
+        if (dispatch is not null)
+        {
+            return dispatch;
+        }
 
-            throw new TomlException(
-                $"No TOML metadata is available for type '{t.FullName}'. " +
-                $"Reflection-based metadata could not be generated for this type. " +
-                $"Provide {nameof(TomlSerializerOptions)}.{nameof(TomlSerializerOptions.TypeInfoResolver)} (source generation) or a custom resolver.");
-        });
+        throw new TomlException(
+            $"No TOML metadata is available for type '{type.FullName}'. " +
+            $"Reflection-based metadata could not be generated for this type. " +
+            $"Provide {nameof(TomlSerializerOptions)}.{nameof(TomlSerializerOptions.TypeInfoResolver)} (source generation) or a custom resolver.");
     }
 
     private sealed class ConverterTomlTypeInfo : TomlTypeInfo

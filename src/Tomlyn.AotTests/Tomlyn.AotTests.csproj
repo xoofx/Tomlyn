@@ -21,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\Tomlyn.Benchmarks\Tomlyn.Benchmarks\twitter.toml">
+    <None Include="..\Tomlyn.Benchmarks\twitter.toml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

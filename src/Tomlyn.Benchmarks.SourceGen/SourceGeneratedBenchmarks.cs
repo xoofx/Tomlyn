@@ -1,7 +1,5 @@
 using BenchmarkDotNet.Attributes;
 using CsToml;
-using Tomlet;
-using Tomlyn.Serialization;
 
 namespace Tomlyn.Benchmarks;
 
@@ -35,12 +33,7 @@ public class SourceGeneratedBenchmarks
 
     [Benchmark]
     [BenchmarkCategory("Serialize_SourceGenerated")]
-    public string Tomlet_Serialize_SourceGenerated()
-        => TomletMain.TomlStringFrom(_document);
-
-    [Benchmark]
-    [BenchmarkCategory("Serialize_SourceGenerated")]
-    public string CsToml_Serialize_SourceGenerated()
+    public string CsToml_SourceGenerated_Serialize()
     {
         var result = CsTomlSerializer.Serialize(_document, _csTomlOptions);
         var text = result.ToString();
@@ -55,11 +48,7 @@ public class SourceGeneratedBenchmarks
 
     [Benchmark]
     [BenchmarkCategory("Deserialize_SourceGenerated")]
-    public BenchmarkDocument Tomlet_Deserialize_SourceGenerated()
-        => TomletMain.To<BenchmarkDocument>(_documentToml);
-
-    [Benchmark]
-    [BenchmarkCategory("Deserialize_SourceGenerated")]
-    public BenchmarkDocument CsToml_Deserialize_SourceGenerated()
+    public BenchmarkDocument CsToml_SourceGenerated_Deserialize()
         => CsTomlSerializer.Deserialize<BenchmarkDocument>(_documentUtf8, _csTomlOptions);
 }
+

@@ -16,7 +16,8 @@
     <File Path="global.json" />
   </Folder>
   <Project Path="Tomlyn.AotTests/Tomlyn.AotTests.csproj" />
-  <Project Path="Tomlyn.Benchmarks/Tomlyn.Benchmarks/Tomlyn.Benchmarks.csproj" />
+  <Project Path="Tomlyn.Benchmarks/Tomlyn.Benchmarks.csproj" />
+  <Project Path="Tomlyn.Benchmarks.SourceGen/Tomlyn.Benchmarks.SourceGen.csproj" />
   <Project Path="Tomlyn.SourceGeneration/Tomlyn.SourceGeneration.csproj" />
   <Project Path="Tomlyn.Tests/Tomlyn.Tests.csproj" />
   <Project Path="Tomlyn/Tomlyn.csproj" />

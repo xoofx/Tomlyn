@@ -7,13 +7,8 @@ namespace Tomlyn.Parsing;
 
 internal static class TomlStringDecoder
 {
-    public static string Decode(string rawTokenText, TokenKind tokenKind)
+    public static string Decode(ReadOnlySpan<char> rawTokenText, TokenKind tokenKind)
     {
-        if (rawTokenText is null)
-        {
-            throw new ArgumentNullException(nameof(rawTokenText));
-        }
-
         return tokenKind switch
         {
             TokenKind.String => DecodeBasic(rawTokenText, isMultiline: false),
@@ -24,16 +19,15 @@ internal static class TomlStringDecoder
         };
     }
 
-    private static string DecodeLiteral(string rawTokenText, bool isMultiline)
+    private static string DecodeLiteral(ReadOnlySpan<char> rawTokenText, bool isMultiline)
     {
-        var span = rawTokenText.AsSpan();
         var delimiterLength = isMultiline ? 3 : 1;
-        if (span.Length < delimiterLength * 2)
+        if (rawTokenText.Length < delimiterLength * 2)
         {
             return string.Empty;
         }
 
-        var content = span.Slice(delimiterLength, span.Length - (delimiterLength * 2));
+        var content = rawTokenText.Slice(delimiterLength, rawTokenText.Length - (delimiterLength * 2));
         if (isMultiline)
         {
             content = SkipImmediateNewLine(content);
@@ -42,19 +36,23 @@ internal static class TomlStringDecoder
         return content.ToString();
     }
 
-    private static string DecodeBasic(string rawTokenText, bool isMultiline)
+    private static string DecodeBasic(ReadOnlySpan<char> rawTokenText, bool isMultiline)
     {
-        var span = rawTokenText.AsSpan();
         var delimiterLength = isMultiline ? 3 : 1;
-        if (span.Length < delimiterLength * 2)
+        if (rawTokenText.Length < delimiterLength * 2)
         {
             return string.Empty;
         }
 
-        var content = span.Slice(delimiterLength, span.Length - (delimiterLength * 2));
+        var content = rawTokenText.Slice(delimiterLength, rawTokenText.Length - (delimiterLength * 2));
         if (isMultiline)
         {
             content = SkipImmediateNewLine(content);
+        }
+
+        if (content.IndexOf('\\') < 0)
+        {
+            return content.ToString();
         }
 
         var builder = new StringBuilder(content.Length);

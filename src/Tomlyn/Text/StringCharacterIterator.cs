@@ -19,32 +19,43 @@ namespace Tomlyn.Text
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public char32? TryGetNext(ref int position)
         {
-            if (position < _text.Length)
+            var text = _text;
+            if (position < text.Length)
             {
-                var c1 = _text[position];
-                position++;
+                var c1 = text[position++];
 
-                // Handle surrogates
-                return char.IsHighSurrogate(c1) ? NextCharWithSurrogate(ref position, c1) : c1;
-            }
-
-            position = _text.Length;
-            return null;
-        }
-
-        private int NextCharWithSurrogate(ref int position, char c1)
-        {
-            if (position < _text.Length)
-            {
-                var c2 = _text[position];
-                position++;
-                if (char.IsLowSurrogate(c2))
+                // Fast surrogate checks (avoid char.IsHighSurrogate/IsLowSurrogate)
+                if (((uint)c1 & 0xFC00u) == 0xD800u)
                 {
-                    return char.ConvertToUtf32(c1, c2);
+                    // High surrogate; requires a following low surrogate.
+                    if (position < text.Length)
+                    {
+                        var c2 = text[position++];
+                        if (((uint)c2 & 0xFC00u) == 0xDC00u)
+                        {
+                            return char.ConvertToUtf32(c1, c2);
+                        }
+
+                        // Invalid pair; keep consuming and return U+FFFD.
+                        return 0xFFFD;
+                    }
+
+                    // Unexpected EOF after a high surrogate.
+                    position = text.Length;
+                    return 0xFFFD;
                 }
-                throw new CharReaderException("Unexpected character after high-surrogate char");
+
+                // Lone low surrogate is invalid.
+                if (((uint)c1 & 0xFC00u) == 0xDC00u)
+                {
+                    return 0xFFFD;
+                }
+
+                return c1;
             }
-            throw new CharReaderException("Unexpected EOF after high-surrogate char");
+
+            position = text.Length;
+            return null;
         }
     }
 }

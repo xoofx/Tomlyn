@@ -140,20 +140,6 @@ public sealed class TomlParser
     /// <param name="utf8Toml">The UTF-8 TOML payload.</param>
     /// <param name="options">Optional parser/serializer options.</param>
     /// <returns>A parser instance positioned before the first event.</returns>
-    /// <exception cref="TomlException">The TOML payload is invalid.</exception>
-    public static TomlParser Create(ReadOnlySpan<byte> utf8Toml, TomlSerializerOptions? options = null)
-    {
-        var effectiveOptions = options ?? TomlSerializerOptions.Default;
-        var bytes = utf8Toml.ToArray();
-        return Create(bytes, effectiveOptions);
-    }
-
-    /// <summary>
-    /// Creates a parser over UTF-8 TOML bytes.
-    /// </summary>
-    /// <param name="utf8Toml">The UTF-8 TOML payload.</param>
-    /// <param name="options">Optional parser/serializer options.</param>
-    /// <returns>A parser instance positioned before the first event.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="utf8Toml"/> is <c>null</c>.</exception>
     /// <exception cref="TomlException">The TOML payload is invalid.</exception>
     public static TomlParser Create(byte[] utf8Toml, TomlSerializerOptions? options = null)
@@ -174,27 +160,6 @@ public sealed class TomlParser
 
         var core = new ParserCore<StringUtf8SourceView, StringCharacterUtf8Iterator>(sourceView, parserOptions, diagnostics);
         return new TomlParser(core, effectiveOptions, parserOptions, diagnostics);
-    }
-
-    /// <summary>
-    /// Creates a parser over UTF-8 TOML bytes.
-    /// </summary>
-    /// <param name="utf8Toml">The UTF-8 TOML payload.</param>
-    /// <param name="parserOptions">Parser options controlling error handling.</param>
-    /// <param name="options">Optional parser/serializer options.</param>
-    /// <returns>A parser instance positioned before the first event.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="parserOptions"/> is <c>null</c>.</exception>
-    /// <exception cref="TomlException">The TOML payload is invalid.</exception>
-    public static TomlParser Create(ReadOnlySpan<byte> utf8Toml, TomlParserOptions parserOptions, TomlSerializerOptions? options = null)
-    {
-        if (parserOptions is null)
-        {
-            throw new ArgumentNullException(nameof(parserOptions));
-        }
-
-        var effectiveOptions = options ?? TomlSerializerOptions.Default;
-        var bytes = utf8Toml.ToArray();
-        return Create(bytes, parserOptions, effectiveOptions);
     }
 
     /// <summary>
@@ -234,7 +199,7 @@ public sealed class TomlParser
     /// <summary>
     /// Gets the current parse event.
     /// </summary>
-    public TomlParseEvent Current => _current;
+    public ref readonly TomlParseEvent Current => ref _current;
 
     /// <summary>
     /// Gets the current string scalar value by decoding it from the original TOML input.
@@ -253,8 +218,8 @@ public sealed class TomlParser
             return string.Empty;
         }
 
-        var raw = GetText(span);
-        if (raw is null)
+        var raw = GetSpan(span);
+        if (raw.IsEmpty)
         {
             return string.Empty;
         }
@@ -291,16 +256,16 @@ public sealed class TomlParser
             return string.Empty;
         }
 
-        var raw = GetText(span);
-        if (raw is null)
+        var raw = GetSpan(span);
+        if (raw.IsEmpty)
         {
             return string.Empty;
         }
 
-        var tokenKind = (TokenKind)_current.Data;
+        var tokenKind = TomlParseEventData.UnpackPropertyNameTokenKind(_current.Data);
         if (tokenKind == TokenKind.BasicKey)
         {
-            return raw;
+            return raw.ToString();
         }
 
         try
@@ -366,6 +331,8 @@ public sealed class TomlParser
 
     internal string? GetText(TomlSourceSpan span) => _core.GetText(span);
 
+    internal ReadOnlySpan<char> GetSpan(TomlSourceSpan span) => _core.GetSpan(span);
+
     internal TomlSyntaxTriviaMetadata[]? CurrentLeadingTrivia => _core.LeadingTrivia;
 
     internal TomlSyntaxTriviaMetadata[]? CurrentTrailingTrivia => _core.TrailingTrivia;
@@ -373,6 +340,8 @@ public sealed class TomlParser
     private interface IParserCore
     {
         bool MoveNext(out TomlParseEvent parseEvent);
+
+        ReadOnlySpan<char> GetSpan(TomlSourceSpan span);
 
         string? GetText(TomlSourceSpan span);
 
@@ -447,6 +416,7 @@ public sealed class TomlParser
             {
                 State = LexerState.Key,
                 DecodeScalars = _decodeScalars,
+                EmitHiddenTokens = _captureTrivia,
             };
             _token = default;
             _initialized = false;
@@ -488,6 +458,8 @@ public sealed class TomlParser
         }
 
         public string? GetText(TomlSourceSpan span) => _lexer.Source.GetString(span.Offset, span.Length);
+
+        public ReadOnlySpan<char> GetSpan(TomlSourceSpan span) => _lexer.Source.GetSpan(span.Offset, span.Length);
 
         public TomlSyntaxTriviaMetadata[]? LeadingTrivia => _leadingTrivia;
 
@@ -602,22 +574,48 @@ public sealed class TomlParser
 
         private void NextToken()
         {
-            bool result;
-            while ((result = _lexer.MoveNext()) && _lexer.Token.Kind.IsHidden(hideNewLine: false))
+            if (!_captureTrivia)
             {
+                var hasToken = _lexer.MoveNext();
+                _token = hasToken ? _lexer.Token : new SyntaxTokenValue(TokenKind.Eof, new TextPosition(), new TextPosition());
+
+                if (_lexer.HasErrors)
+                {
+                    throw new TomlException(new DiagnosticsBag(_lexer.Errors));
+                }
+
+                return;
+            }
+
+            bool result;
+            while (true)
+            {
+                result = _lexer.MoveNext();
+                if (!result)
+                {
+                    break;
+                }
+
+                ref readonly var token = ref _lexer.Token;
+                if (!token.Kind.IsHidden(hideNewLine: false))
+                {
+                    _token = token;
+                    goto TokenReady;
+                }
+
                 if (!_captureTrivia || _pendingTrivia is null)
                 {
                     continue;
                 }
 
-                if (_lexer.Token.Kind == TokenKind.Whitespaces)
+                if (token.Kind == TokenKind.Whitespaces)
                 {
-                    var text = _lexer.Token.GetText(_lexer.Source) ?? string.Empty;
+                    var text = token.GetText(_lexer.Source) ?? string.Empty;
                     _pendingWhitespace = _pendingWhitespace is null ? text : string.Concat(_pendingWhitespace, text);
                     continue;
                 }
 
-                if (_lexer.Token.Kind == TokenKind.Comment)
+                if (token.Kind == TokenKind.Comment)
                 {
                     if (_pendingWhitespace is not null)
                     {
@@ -625,7 +623,7 @@ public sealed class TomlParser
                         _pendingWhitespace = null;
                     }
 
-                    _pendingTrivia.Add(new TomlSyntaxTriviaMetadata(TokenKind.Comment, _lexer.Token.GetText(_lexer.Source) ?? string.Empty));
+                    _pendingTrivia.Add(new TomlSyntaxTriviaMetadata(TokenKind.Comment, token.GetText(_lexer.Source) ?? string.Empty));
                     continue;
                 }
 
@@ -633,8 +631,10 @@ public sealed class TomlParser
             }
 
             _pendingWhitespace = null;
+            _token = new SyntaxTokenValue(TokenKind.Eof, new TextPosition(), new TextPosition());
 
-            _token = result ? _lexer.Token : new SyntaxTokenValue(TokenKind.Eof, new TextPosition(), new TextPosition());
+        TokenReady:
+            _pendingWhitespace = null;
 
             if (_lexer.HasErrors)
             {
@@ -662,7 +662,7 @@ public sealed class TomlParser
             NextToken();
         }
 
-        private void SetPendingEvent(TomlParseEvent parseEvent, TomlSyntaxTriviaMetadata[]? leadingTrivia = null, TomlSyntaxTriviaMetadata[]? trailingTrivia = null)
+        private void SetPendingEvent(in TomlParseEvent parseEvent, TomlSyntaxTriviaMetadata[]? leadingTrivia = null, TomlSyntaxTriviaMetadata[]? trailingTrivia = null)
         {
             if (_hasPendingEvent)
             {
@@ -877,7 +877,7 @@ public sealed class TomlParser
                         span: name.Span,
                         propertyName: _decodeScalars ? name.Value : null,
                         stringValue: null,
-                        data: (ulong)name.TokenKind),
+                        data: TomlParseEventData.PackPropertyName(name.TokenKind, name.Hash)),
                         leadingTrivia: leadingTrivia);
                     return true;
                 }
@@ -915,7 +915,7 @@ public sealed class TomlParser
                         span: segment.Span,
                         propertyName: _decodeScalars ? segment.Value : null,
                         stringValue: null,
-                        data: (ulong)segment.TokenKind));
+                        data: TomlParseEventData.PackPropertyName(segment.TokenKind, segment.Hash)));
                     return true;
                 }
 
@@ -936,7 +936,7 @@ public sealed class TomlParser
                     span: leaf.Span,
                     propertyName: _decodeScalars ? leaf.Value : null,
                     stringValue: null,
-                    data: (ulong)leaf.TokenKind),
+                    data: TomlParseEventData.PackPropertyName(leaf.TokenKind, leaf.Hash)),
                     leadingTrivia: leadingTrivia);
                 return true;
             }
@@ -1468,7 +1468,7 @@ public sealed class TomlParser
             if (_token.Kind == TokenKind.BasicKey)
             {
                 var span = CurrentSpan();
-                var hash = ComputeKeySegmentHash(TokenKind.BasicKey, _token.Start, _token.End);
+                var hash = _token.Data;
                 var text = _decodeScalars ? _token.GetText(_lexer.Source) : null;
                 Consume(TokenKind.BasicKey, LexerState.Key);
                 segment = new KeySegment(TokenKind.BasicKey, span, hash, text);

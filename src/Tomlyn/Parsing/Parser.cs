@@ -672,12 +672,29 @@ namespace Tomlyn.Parsing
             bool result;
 
             // Skip trivias
-            while ((result = _lexer.MoveNext()) && _lexer.Token.Kind.IsHidden(_hideNewLine))
+            while (true)
             {
-                _currentTrivias.Add(new SyntaxTrivia { Span = new SourceSpan(_lexer.Source.SourcePath, _lexer.Token.Start, _lexer.Token.End), Kind = _lexer.Token.Kind, Text = _lexer.Token.GetText(_lexer.Source) });
-            }
+                result = _lexer.MoveNext();
+                if (!result)
+                {
+                    _token = new SyntaxTokenValue(TokenKind.Eof, new TextPosition(), new TextPosition());
+                    return;
+                }
 
-            _token = result ? _lexer.Token : new SyntaxTokenValue(TokenKind.Eof, new TextPosition(), new TextPosition());
+                ref readonly var token = ref _lexer.Token;
+                if (!token.Kind.IsHidden(_hideNewLine))
+                {
+                    _token = token;
+                    return;
+                }
+
+                _currentTrivias.Add(new SyntaxTrivia
+                {
+                    Span = new SourceSpan(_lexer.Source.SourcePath, token.Start, token.End),
+                    Kind = token.Kind,
+                    Text = token.GetText(_lexer.Source),
+                });
+            }
         }
 
         private void LogError(string text)

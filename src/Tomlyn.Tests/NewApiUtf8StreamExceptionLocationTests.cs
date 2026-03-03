@@ -1,4 +1,3 @@
-using System.IO;
 using NUnit.Framework;
 using Tomlyn.Model;
 
@@ -7,7 +6,7 @@ namespace Tomlyn.Tests;
 public sealed class NewApiUtf8StreamExceptionLocationTests
 {
     [Test]
-    public void Deserialize_Utf8Stream_InvalidUtf8_ThrowsTomlExceptionWithByteOffset()
+    public void Deserialize_Utf8Bytes_InvalidUtf8_ThrowsTomlExceptionWithByteOffset()
     {
         // a = "<invalid utf-8>"
         var bytes = new byte[]
@@ -22,9 +21,7 @@ public sealed class NewApiUtf8StreamExceptionLocationTests
             (byte)'"',
         };
 
-        using var stream = new MemoryStream(bytes);
-
-        var ex = Assert.Throws<TomlException>(() => TomlSerializer.Deserialize<TomlTable>(stream));
+        var ex = Assert.Throws<TomlException>(() => TomlSerializer.Deserialize<TomlTable>(bytes));
         Assert.NotNull(ex);
         Assert.NotNull(ex!.Span);
 
@@ -34,7 +31,7 @@ public sealed class NewApiUtf8StreamExceptionLocationTests
     }
 
     [Test]
-    public void Deserialize_Utf8Stream_WithBom_Succeeds()
+    public void Deserialize_Utf8Bytes_WithBom_Succeeds()
     {
         var bytes = new byte[]
         {
@@ -42,8 +39,7 @@ public sealed class NewApiUtf8StreamExceptionLocationTests
             (byte)'a', (byte)' ', (byte)'=', (byte)' ', (byte)'1', (byte)'\n',
         };
 
-        using var stream = new MemoryStream(bytes);
-        var table = TomlSerializer.Deserialize<TomlTable>(stream);
+        var table = TomlSerializer.Deserialize<TomlTable>(bytes);
 
         Assert.NotNull(table);
         Assert.AreEqual(1L, (long)table!["a"]);

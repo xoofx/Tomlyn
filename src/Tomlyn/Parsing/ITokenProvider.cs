@@ -20,7 +20,7 @@ namespace Tomlyn.Parsing
 
         bool MoveNext();
 
-        SyntaxTokenValue Token { get; }
+        ref readonly SyntaxTokenValue Token { get; }
 
         /// <summary>
         /// Gets error messages.

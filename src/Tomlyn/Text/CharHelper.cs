@@ -48,16 +48,19 @@ namespace Tomlyn.Text
             return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsValidUnicodeScalarValue(char32 c)
         {
             return c >= 0 && c <= 0xD7FF || c >= 0xE000 && c <= 0x10FFFF;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsDigit(char32 c)
         {
             return (c >= '0' && c <= '9');
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsDateTime(char32 c)
         {
             return IsDigit(c) || c == ':' || c == '-' || c == 'Z' || c == 'T' || c == 'z' || c == 't' || c == '+' || c == '.';
@@ -203,6 +206,7 @@ namespace Tomlyn.Text
                    c == '\t'; // horizontal tab
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsWhiteSpaceOrNewLine(char32 c)
         {
             return c == ' ' || // space
@@ -211,6 +215,7 @@ namespace Tomlyn.Text
                    c == '\n'; // \n
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsNewLine(char32 c)
         {
             return c == '\r' || // \r
