@@ -169,6 +169,19 @@ public static class TomlSerializer
     }
 
     /// <summary>
+    /// Serializes a value to a stream using UTF-8 encoding and explicit metadata.
+    /// </summary>
+    public static void Serialize(Stream utf8Stream, object? value, TomlTypeInfo typeInfo)
+    {
+        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
+        ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
+
+        using var writer = new StreamWriter(utf8Stream, DefaultStreamEncoding, bufferSize: 1024, leaveOpen: true);
+        Serialize(writer, value, typeInfo);
+        writer.Flush();
+    }
+
+    /// <summary>
     /// Deserializes a TOML payload from text.
     /// </summary>
     [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
@@ -240,6 +253,16 @@ public static class TomlSerializer
     }
 
     /// <summary>
+    /// Deserializes a TOML payload from a text reader using explicit metadata.
+    /// </summary>
+    public static object? Deserialize(TextReader reader, TomlTypeInfo typeInfo)
+    {
+        ArgumentGuard.ThrowIfNull(reader, nameof(reader));
+        ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
+        return Deserialize(reader.ReadToEnd(), typeInfo);
+    }
+
+    /// <summary>
     /// Deserializes a TOML payload from a UTF-8 stream.
     /// </summary>
     [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
@@ -278,6 +301,18 @@ public static class TomlSerializer
         var utf8Bytes = ReadUtf8Bytes(utf8Stream);
         var effectiveOptions = options ?? TomlSerializerOptions.Default;
         var typeInfo = ResolveTypeInfo(effectiveOptions, returnType);
+        return Deserialize(utf8Bytes, typeInfo);
+    }
+
+    /// <summary>
+    /// Deserializes a TOML payload from a UTF-8 stream using explicit metadata.
+    /// </summary>
+    public static object? Deserialize(Stream utf8Stream, TomlTypeInfo typeInfo)
+    {
+        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
+        ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
+
+        var utf8Bytes = ReadUtf8Bytes(utf8Stream);
         return Deserialize(utf8Bytes, typeInfo);
     }
 
