@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -48,6 +50,12 @@ internal static class TomlTypeInfoResolverPipeline
             return TomlPolymorphicTypeInfo.TryWrap(builtIn);
         }
 
+        if (IsNonStringKeyDictionary(type))
+        {
+            throw new TomlException(
+                $"Dictionaries must have string keys to be representable as TOML tables. Type '{type.FullName}' is not supported without a custom converter.");
+        }
+
         if (TomlSerializerFeatureSwitches.IsReflectionEnabledByDefaultCalculated)
         {
             var typeInfo = ResolveFromReflection(options, type);
@@ -63,6 +71,53 @@ internal static class TomlTypeInfoResolverPipeline
         throw new TomlException(
             $"No TOML metadata is available for type '{type.FullName}'. " +
             $"Provide {nameof(TomlSerializerOptions)}.{nameof(TomlSerializerOptions.TypeInfoResolver)} (source generation) or a custom resolver.");
+    }
+
+    private static bool IsNonStringKeyDictionary([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type type)
+    {
+        if (type == typeof(string))
+        {
+            return false;
+        }
+
+        var nonGenericDictionary = typeof(IDictionary).IsAssignableFrom(type);
+        var hasStringKeyDictionaryInterface = false;
+
+        // Scan the type itself and its interfaces for generic dictionary shapes.
+        var interfaces = type.GetInterfaces();
+        for (var i = -1; i < interfaces.Length; i++)
+        {
+            var iface = i < 0 ? type : interfaces[i];
+            if (!iface.IsGenericType)
+            {
+                continue;
+            }
+
+            var definition = iface.GetGenericTypeDefinition();
+            if (definition != typeof(System.Collections.Generic.IDictionary<,>) &&
+                definition != typeof(System.Collections.Generic.IReadOnlyDictionary<,>))
+            {
+                continue;
+            }
+
+            var args = iface.GetGenericArguments();
+            if (args.Length != 2)
+            {
+                continue;
+            }
+
+            if (args[0] == typeof(string))
+            {
+                hasStringKeyDictionaryInterface = true;
+                continue;
+            }
+
+            return true;
+        }
+
+        // If the type is a non-generic IDictionary but does not expose a string-key generic dictionary interface,
+        // treat it as non-string-key and reject by default.
+        return nonGenericDictionary && !hasStringKeyDictionaryInterface;
     }
 
     [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
