@@ -2,7 +2,7 @@
 
 <img align="right" width="160px" height="160px" src="img/logo.png">
 
-Tomlyn is a [TOML](https://toml.io/en/) parser, validator and authoring library for .NET Framework and .NET Core.
+Tomlyn is a high-performance [TOML](https://toml.io/en/) 1.1 parser and a `System.Text.Json`-style serializer for .NET.
 
 ## What is TOML?
 
@@ -10,27 +10,21 @@ Tomlyn is a [TOML](https://toml.io/en/) parser, validator and authoring library 
 > _TOML aims to be a minimal configuration file format that's easy to read due to obvious semantics. TOML is designed to map unambiguously to a hash table. TOML should be easy to parse into data structures in a wide variety of languages._
 
 - See the official website https://toml.io/en/ for more details.
-- Example and specifications are available at [TOML v1.0.0](https://toml.io/en/v1.0.0) 
+- TOML specs: [TOML v1.1.0](https://toml.io/en/v1.1.0)
 
 ## Features
 
-- Very fast parser, GC friendly.
-- Compatible with the latest [TOML v1.0.0 specs](https://toml.io/en/v1.0.0).
-- Allow to map a TOML string to a default runtime model via `Toml.ToModel(string)`
-- Allow to map a TOML string to a custom runtime model via `Toml.ToModel<T>(string)`
-  - Very convenient for loading custom configurations for example.
-- Source generator for AOT-friendly model mapping via `TomlModelAttribute` (apply to a root type; nested models are discovered transitively).
-- Allow to generate a TOML string from a runtime model via `string Toml.FromModel(object)`
-  - Preserve comments, by default with the default runtime model, or by implementing the `ITomlMetadataProvider`.
-- Allow to parse to a `DocumentSyntax` via `Toml.Parse(string)`.
-  - Preserve all spaces, new line, comments but also invalid characters/tokens.
-  - Can roundtrip to text with exact representation.
-- Provides a validator with the `Toml.Validate` method.
-- Supports for .NET Standard 2.0+ and provides an API with nullable annotations.
+- TOML 1.1.0 support (Tomlyn 1.0 does **not** support TOML 1.0).
+- Allocation-free pull-based parsing: `TomlLexer` → `TomlParser` (precise spans for all parse errors).
+- Lossless syntax tree: `SyntaxParser.Parse(...)` → `DocumentSyntax` (roundtrippable, trivia-preserving).
+- High-level serializer shaped like `System.Text.Json`: `TomlSerializer`, `TomlSerializerOptions`, `TomlSerializerContext`, `TomlTypeInfo<T>`.
+- Source generation for NativeAOT/trimming (no runtime reflection required).
+- Reflection-based POCO mapping remains available (can be disabled for NativeAOT via feature switch / publish settings).
 
 ## Documentation
 
-See the [documentation](https://github.com/xoofx/Tomlyn/blob/main/doc/readme.md) for more details.
+- User guide: `doc/readme.md`
+- Website (Lunet): `site/` (published to https://xoofx.github.io/Tomlyn)
 
 ## Install
 
@@ -38,7 +32,12 @@ Tomlyn is delivered as a [NuGet Package](https://www.nuget.org/packages/Tomlyn/)
 
 ## Usage
 
-```c#
+### Untyped model (`TomlTable`)
+
+```csharp
+using Tomlyn;
+using Tomlyn.Model;
+
 var toml = @"global = ""this is a string""
 # This is a comment of a table
 [my_table]
@@ -47,39 +46,41 @@ value = true
 list = [4, 5, 6]
 ";
 
-// Parse the TOML string to the default runtime model `TomlTable`
-var model = Toml.ToModel(toml);
-// Fetch the string
+var model = TomlSerializer.Deserialize<TomlTable>(toml)!;
 var global = (string)model["global"]!;
-// Prints: found global = "this is a string"
-Console.WriteLine($"found global = \"{global}\"");
-// Generates a TOML string from the model
-var tomlOut = Toml.FromModel(model);
-// Output the generated TOML
-Console.WriteLine(tomlOut);
+
+Console.WriteLine(global);
+Console.WriteLine(TomlSerializer.Serialize(model));
 ```
 
-This will print the original TOML by preserving most the comments:
+### Source-generated POCO mapping (`TomlSerializerContext`)
 
-```toml
-global = "this is a string"
-# This is a comment of a table
-[my_table]
-key = 1 # Comment a key
-value = true
-list = [4, 5, 6]
+```csharp
+using System.Text.Json.Serialization;
+using Tomlyn.Serialization;
+
+public sealed class MyConfig
+{
+    public string? Global { get; set; }
+}
+
+#pragma warning disable SYSLIB1224
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(MyConfig))]
+internal partial class MyTomlContext : TomlSerializerContext
+{
+}
+#pragma warning restore SYSLIB1224
+
+var config = TomlSerializer.Deserialize(toml, MyTomlContext.Default.MyConfig);
+var tomlOut = TomlSerializer.Serialize(config, MyTomlContext.Default.MyConfig);
 ```
 
-> NOTICE: By default, when mapping to a custom model, Tomlyn is using the PascalToSnakeCase naming convention (e.g `ThisIsFine` to `this_is_fine`).
-> This behavior can be changed by overriding the `TomlModelOptions.ConvertPropertyName` delegate.
+See `doc/readme.md` for details (reflection mapping, attribute support, metadata/trivia, parsing APIs).
 
 ## License
 
 This software is released under the [BSD-Clause 2 license](https://opensource.org/licenses/BSD-2-Clause). 
-
-## Credits
-
-Modified version of the logo `Thor` by [Mike Rowe](https://thenounproject.com/itsmikerowe/) from the Noun Project (Creative Commons)
 
 ## Author
 
