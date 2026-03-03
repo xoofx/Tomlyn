@@ -1,6 +1,8 @@
 # Changelog
 
-> This changelog is no longer used for newer version. Please visits https://github.com/xoofx/Tomlyn/releases
+> This file is historical (Tomlyn 0.x). Tomlyn 1.0 is a major redesign (TOML 1.1 + System.Text.Json-style API).
+>
+> For current versions and release notes, see https://github.com/xoofx/Tomlyn/releases
 
 ## 0.11.0 (14 Feb 2022)
 - Improve error message when PropertyName is not found (PR #22) by @TylerReid
