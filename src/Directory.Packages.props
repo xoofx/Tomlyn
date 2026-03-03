@@ -14,6 +14,9 @@
     <PackageVersion Include="nunit" Version="4.4.0" />
     <PackageVersion Include="NUnit3TestAdapter" Version="6.1.0" />
     <PackageVersion Include="Portable.System.DateTimeOnly" Version="9.0.1" />
+    <PackageVersion Include="Tommy" Version="3.1.2" />
+    <PackageVersion Include="Samboy063.Tomlet" Version="6.2.0" />
+    <PackageVersion Include="CsToml" Version="1.8.2" />
     <PackageVersion Include="System.Collections.Immutable" Version="9.0.0" />
     <PackageVersion Include="System.Buffers" Version="4.6.1" />
     <PackageVersion Include="System.Text.Json" Version="10.0.2" />

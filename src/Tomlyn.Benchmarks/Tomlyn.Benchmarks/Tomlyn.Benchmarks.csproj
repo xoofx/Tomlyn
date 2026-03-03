@@ -6,14 +6,23 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
+        <LangVersion>latest</LangVersion>
+        <NoWarn>$(NoWarn);SYSLIB1224</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
       <PackageReference Include="BenchmarkDotNet" />
+      <PackageReference Include="Tommy" />
+      <PackageReference Include="Samboy063.Tomlet" />
+      <PackageReference Include="CsToml" />
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\..\Tomlyn\Tomlyn.csproj" />
+      <ProjectReference Include="..\..\Tomlyn.SourceGeneration\Tomlyn.SourceGeneration.csproj"
+                        OutputItemType="Analyzer"
+                        ReferenceOutputAssembly="false"
+                        PrivateAssets="all" />
     </ItemGroup>
 
     <ItemGroup>
