@@ -80,11 +80,6 @@ internal static class TomlModelTextWriter
             // 2) named tables
             for (var i = 0; i < tableKeys.Count; i++)
             {
-                if (scalarKeys.Count > 0 || i > 0 || headerKind != HeaderKind.None || tableArrayKeys.Count > 0)
-                {
-                    WriteNewLine();
-                }
-
                 var (key, value) = tableKeys[i];
                 var childPath = AppendPath(path, key);
                 WriteTableBody(value, childPath, HeaderKind.Table);
@@ -93,11 +88,6 @@ internal static class TomlModelTextWriter
             // 3) table arrays
             for (var i = 0; i < tableArrayKeys.Count; i++)
             {
-                if (scalarKeys.Count > 0 || tableKeys.Count > 0 || i > 0 || headerKind != HeaderKind.None)
-                {
-                    WriteNewLine();
-                }
-
                 var (key, value) = tableArrayKeys[i];
                 WriteTableArray(value, AppendPath(path, key));
             }
@@ -170,7 +160,7 @@ internal static class TomlModelTextWriter
                     return false;
                 }
 
-                if (pair.Value is TomlTable child && child.Kind != ObjectKind.InlineTable)
+                if (pair.Value is TomlTable child && !IsInlineableTable(child, maxMemberCount: int.MaxValue))
                 {
                     return false;
                 }
@@ -251,7 +241,7 @@ internal static class TomlModelTextWriter
 
         private void WriteInlineTable(TomlTable table)
         {
-            _writer.Write("{ ");
+            _writer.Write("{");
 
             var first = true;
             foreach (var pair in table)
@@ -264,10 +254,22 @@ internal static class TomlModelTextWriter
                 first = false;
                 WriteKey(pair.Key);
                 _writer.Write(" = ");
+
+                if (pair.Value is TomlTable nestedTable)
+                {
+                    if (!IsInlineableTable(nestedTable, maxMemberCount: int.MaxValue))
+                    {
+                        throw new TomlException("Inline tables cannot contain non-inline tables or table arrays.");
+                    }
+
+                    WriteInlineTable(nestedTable);
+                    continue;
+                }
+
                 WriteValue(pair.Value, TomlPropertyDisplayKind.Default);
             }
 
-            _writer.Write(" }");
+            _writer.Write("}");
         }
 
         private void WriteValue(object value, TomlPropertyDisplayKind displayKind)
@@ -366,7 +368,19 @@ internal static class TomlModelTextWriter
                     _writer.Write(", ");
                 }
 
-                WriteValue(array[i]!, TomlPropertyDisplayKind.Default);
+                var value = array[i]!;
+                if (value is TomlTable nestedTable)
+                {
+                    if (!IsInlineableTable(nestedTable, maxMemberCount: int.MaxValue))
+                    {
+                        throw new TomlException("Arrays cannot contain non-inline tables or table arrays.");
+                    }
+
+                    WriteInlineTable(nestedTable);
+                    continue;
+                }
+
+                WriteValue(value, TomlPropertyDisplayKind.Default);
             }
             _writer.Write("]");
         }

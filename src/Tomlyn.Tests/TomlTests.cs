@@ -8,23 +8,16 @@ using System.Text;
 using NUnit.Framework;
 using Tomlyn.Helpers;
 using Tomlyn.Model;
+using Tomlyn.Parsing;
 using Tomlyn.Syntax;
 
 namespace Tomlyn.Tests;
 
 /// <summary>
-/// Tests for the <see cref="Toml"/> frontend
+/// Tests for the syntax parsing frontend.
 /// </summary>
 public class TomlTests
 {
-
-    [Test]
-    public void TestVersion()
-    {
-        Assert.False(string.IsNullOrEmpty(Toml.Version));
-    }
-
-
     [Test]
     public void TestDescendants()
     {
@@ -107,7 +100,7 @@ hello = true
     private static void AssertDocumentSyntax(string expected, string input)
     {
         input = input.ReplaceLineEndings("\r\n");
-        var doc = Toml.Parse(input);
+        var doc = SyntaxParser.Parse(input);
         var tokens = doc.Tokens().ToList();
         var builder = new StringBuilder();
         foreach (var node in tokens)

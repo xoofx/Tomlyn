@@ -113,9 +113,33 @@ public sealed class TomlWriter
     /// </summary>
     public void WriteStartTable()
     {
-        var table = new TomlTable();
+        var inline = _stack.Count > 0 && _stack.Peek() is TomlArray;
+        var table = new TomlTable(inline);
         WriteValue(table);
         _stack.Push(table);
+    }
+
+    /// <summary>
+    /// Writes the start of an inline table value.
+    /// </summary>
+    public void WriteStartInlineTable()
+    {
+        var table = new TomlTable(inline: true);
+        WriteValue(table);
+        _stack.Push(table);
+    }
+
+    /// <summary>
+    /// Writes the end of an inline table value.
+    /// </summary>
+    public void WriteEndInlineTable()
+    {
+        if (_stack.Count == 0 || _stack.Peek() is not TomlTable { Kind: ObjectKind.InlineTable })
+        {
+            throw new InvalidOperationException("No inline table to end.");
+        }
+
+        _stack.Pop();
     }
 
     /// <summary>

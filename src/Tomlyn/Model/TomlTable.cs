@@ -4,7 +4,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using Tomlyn.Syntax;
 
 namespace Tomlyn.Model
 {
@@ -203,20 +202,6 @@ namespace Tomlyn.Model
                 }
                 return list;
             }
-        }
-
-        /// <summary>
-        /// Creates a <see cref="TomlTable"/> from a <see cref="DocumentSyntax"/>.
-        /// </summary>
-        /// <param name="documentSyntax">The parsed document syntax.</param>
-        /// <returns>A <see cref="TomlTable"/> representing the document.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when <paramref name="documentSyntax"/> is <c>null</c>.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when the document contains errors.</exception>
-        public static TomlTable From(DocumentSyntax documentSyntax)
-        {
-            if (documentSyntax == null) throw new ArgumentNullException(nameof(documentSyntax));
-            if (documentSyntax.HasErrors) throw new InvalidOperationException($"The document has errors: {documentSyntax.Diagnostics}");
-            return documentSyntax.ToModel<TomlTable>();
         }
 
         private class ValueHolder

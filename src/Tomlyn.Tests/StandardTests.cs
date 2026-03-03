@@ -14,6 +14,7 @@ using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using Tomlyn.Helpers;
 using Tomlyn.Model;
+using Tomlyn.Parsing;
 using Tomlyn.Syntax;
 
 namespace Tomlyn.Tests
@@ -57,7 +58,7 @@ namespace Tomlyn.Tests
 
         private static void ValidateSpec(string type, string inputName, string toml, string json)
         {
-            var doc = Toml.Parse(toml, inputName);
+            var doc = SyntaxParser.Parse(toml, inputName);
             var roundtrip = doc.ToString();
             switch (type)
             {
@@ -73,16 +74,16 @@ namespace Tomlyn.Tests
 
                     // Read the original json (toml-test encodes datetimes as strings; avoid Json.NET date coercion).
                     var expectedJson = (JObject)NormalizeJson(ParseTomlTestJson(json))!;
-                    // Convert the syntax tree into a model
-                    var model = doc.ToModel();
+                    // Convert to the untyped model.
+                    var model = TomlSerializer.Deserialize<TomlTable>(toml);
                     // Convert the model into the expected json
                     var computedJson = ModelHelper.ToJson(model);
                     AssertTomlTestJsonEquivalent(expectedJson, computedJson, inputName, toml, doc, roundtrip);
 
-                    var tomlFromModel = Toml.FromModel(model);
+                    var tomlFromModel = TomlSerializer.Serialize(model);
 
 
-                    var model2 = Toml.ToModel<TomlTable>(tomlFromModel);
+                    var model2 = TomlSerializer.Deserialize<TomlTable>(tomlFromModel);
                     var computedJson2 = ModelHelper.ToJson(model2);
                     AssertTomlTestJsonEquivalent(expectedJson, computedJson2, inputName, toml, doc, roundtrip, tomlFromModel);
                     break;
@@ -98,7 +99,7 @@ namespace Tomlyn.Tests
             }
 
             {
-                var docUtf8 = Toml.Parse(Encoding.UTF8.GetBytes(toml), inputName);
+                var docUtf8 = SyntaxParser.Parse(Encoding.UTF8.GetBytes(toml), inputName);
                 var roundtripUtf8 = docUtf8.ToString();
                 if (roundtrip != roundtripUtf8)
                 {

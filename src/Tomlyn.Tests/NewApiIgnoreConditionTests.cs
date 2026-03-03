@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using NUnit.Framework;
+using Tomlyn.Model;
 using Tomlyn.Serialization;
 
 namespace Tomlyn.Tests;
@@ -51,7 +52,7 @@ public class NewApiIgnoreConditionTests
         };
 
         var toml2 = TomlSerializer.Serialize(populated, context.IgnoreConditionModel);
-        var model = Toml.ToModel(toml2);
+        var model = TomlSerializer.Deserialize<TomlTable>(toml2);
 
         Assert.That(model.ContainsKey("optional"), Is.True);
         Assert.That(model.ContainsKey("defaultIgnored"), Is.True);
@@ -93,4 +94,3 @@ public class NewApiIgnoreConditionTests
         Assert.That(model.AlwaysIgnored, Is.EqualTo("ignored"));
     }
 }
-

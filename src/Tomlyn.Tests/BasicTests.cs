@@ -4,9 +4,9 @@
 
 using System;
 using System.Collections.Generic;
-using System.Runtime.Serialization;
 using NUnit.Framework;
 using Tomlyn.Model;
+using Tomlyn.Parsing;
 
 namespace Tomlyn.Tests
 {
@@ -19,10 +19,10 @@ namespace Tomlyn.Tests
 primitive_list = [4, 5, 6]
 ";
 
-            var model = Toml.ToModel(test);
-            var tomlOut = Toml.FromModel(model);
+            var model = TomlSerializer.Deserialize<TomlTable>(test);
+            var tomlOut = TomlSerializer.Serialize(model);
 
-            Assert.AreEqual(test, tomlOut);
+            Assert.AreEqual(test.ReplaceLineEndings("\n"), tomlOut.ReplaceLineEndings("\n"));
         }
 
         [Test]
@@ -36,7 +36,7 @@ value = true
 list = [4, 5, 6]
 ";
 
-            var model = Toml.ToModel(toml);
+            var model = TomlSerializer.Deserialize<TomlTable>(toml);
             // Prints "this is a string"
             var global = model["global"];
             Console.WriteLine($"found global = \"{global}\"");
@@ -58,7 +58,7 @@ list = [4, 5, 6]
         public void TestLocalTime(int hour, int minute, int second, int millisecond)
         {
             var toml = $@"time = {hour:D2}:{minute:D2}:{second:D2}.{millisecond:D3}";
-            var localTime = (TomlDateTime)Toml.ToModel(toml)["time"];
+            var localTime = (TomlDateTime)TomlSerializer.Deserialize<TomlTable>(toml)["time"];
 
             Assert.AreEqual(hour, localTime.DateTime.Hour);
             Assert.AreEqual(minute, localTime.DateTime.Minute);
@@ -70,7 +70,7 @@ list = [4, 5, 6]
         public void TestEmptyComment()
         {
             var input = "#\n";
-            var doc = Toml.Parse(input);
+            var doc = SyntaxParser.Parse(input);
             var docAsStr = doc.ToString();
             Assert.AreEqual(input, docAsStr);
         }
@@ -89,7 +89,7 @@ Key5 = +inf
 key1 = ""another string""
 key2 = 456
 ";
-            var doc = Toml.Parse(test);
+            var doc = SyntaxParser.Parse(test);
             Assert.AreEqual(test, doc.ToString());
         }
 
@@ -101,14 +101,14 @@ key2 = 456
 3
 ]
 ";
-            var model = Toml.ToModel(input);
+            var model = TomlSerializer.Deserialize<TomlTable>(input);
             var array = model["x"] as TomlArray;
             Assert.NotNull(array);
             var nonNullArray = array!;
             Assert.AreEqual(3, nonNullArray.Count);
-            Assert.AreEqual(1, nonNullArray[0]);
-            Assert.AreEqual(2, nonNullArray[1]);
-            Assert.AreEqual(3, nonNullArray[2]);
+            Assert.AreEqual(1L, nonNullArray[0]);
+            Assert.AreEqual(2L, nonNullArray[1]);
+            Assert.AreEqual(3L, nonNullArray[2]);
         }
     }
 }

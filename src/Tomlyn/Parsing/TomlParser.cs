@@ -701,6 +701,7 @@ public sealed class TomlParser
 
         private bool ProduceArray(ref ContainerFrame frame)
         {
+            var frameIndex = _containers.Count - 1;
             while (true)
             {
                 SkipNewLines(LexerState.Value);
@@ -727,7 +728,7 @@ public sealed class TomlParser
 
                     ProduceValueEvent(_token.Start, nextStateAfterScalar: LexerState.Value);
                     frame.ArrayState = ArrayState.AfterValue;
-                    _containers[_containers.Count - 1] = frame;
+                    _containers[frameIndex] = frame;
                     return true;
                 }
 
@@ -747,7 +748,7 @@ public sealed class TomlParser
                     }
 
                     frame.ArrayState = ArrayState.ExpectValueOrEnd;
-                    _containers[_containers.Count - 1] = frame;
+                    _containers[frameIndex] = frame;
                     continue;
                 }
 
@@ -765,6 +766,7 @@ public sealed class TomlParser
 
         private bool ProduceInlineTable(ref ContainerFrame frame)
         {
+            var frameIndex = _containers.Count - 1;
             while (true)
             {
                 if (frame.InlineTableState != InlineTableState.ExpectValue)
@@ -805,7 +807,7 @@ public sealed class TomlParser
 
                     BeginKeyValueEntry(implicitBaseIndex: frame.InlineImplicitBase);
                     frame.InlineTableState = InlineTableState.ExpectValue;
-                    _containers[_containers.Count - 1] = frame;
+                    _containers[frameIndex] = frame;
                     return true;
                 }
 
@@ -818,7 +820,7 @@ public sealed class TomlParser
 
                     ProduceValueEvent(_token.Start, nextStateAfterScalar: LexerState.Key);
                     frame.InlineTableState = InlineTableState.AfterValue;
-                    _containers[_containers.Count - 1] = frame;
+                    _containers[frameIndex] = frame;
                     return true;
                 }
 
@@ -828,14 +830,14 @@ public sealed class TomlParser
                 {
                     Consume(TokenKind.Comma, LexerState.Key);
                     frame.InlineTableState = InlineTableState.ExpectKeyOrEnd;
-                    _containers[_containers.Count - 1] = frame;
+                    _containers[frameIndex] = frame;
                     continue;
                 }
 
                 if (_token.Kind == TokenKind.CloseBrace)
                 {
                     frame.InlineTableState = InlineTableState.ExpectKeyOrEnd;
-                    _containers[_containers.Count - 1] = frame;
+                    _containers[frameIndex] = frame;
                     continue;
                 }
 

@@ -39,10 +39,10 @@ namespace Tomlyn.Tests
                 ["float"] = (float)number,
                 ["double"] = number
             };
-            var toml = Toml.FromModel(model);
-            var parsed = Toml.Parse(toml);
-            var parsedDouble = (double)parsed.ToModel()["double"];
-            var parsedFloat = (double)parsed.ToModel()["float"];
+            var toml = TomlSerializer.Serialize(model);
+            var parsed = TomlSerializer.Deserialize<TomlTable>(toml);
+            var parsedDouble = (double)parsed["double"];
+            var parsedFloat = (double)parsed["float"];
             Assert.True(number == parsedDouble || double.IsNaN(number),
                 $"(f64->str->f64) expected {number:g30} but got {parsedDouble:g30}. \nString form: \n{toml}");
             Assert.AreEqual(number, parsedDouble);
@@ -75,11 +75,11 @@ namespace Tomlyn.Tests
                 ["float"] = number,
                 ["double"] = (double)number
             };
-            var toml = Toml.FromModel(model);
+            var toml = TomlSerializer.Serialize(model);
 
-            var parsed = Toml.Parse(toml);
-            var parsedDouble = (double)parsed.ToModel()["double"];
-            var parsedFloatAsDouble = (double)parsed.ToModel()["float"];
+            var parsed = TomlSerializer.Deserialize<TomlTable>(toml);
+            var parsedDouble = (double)parsed["double"];
+            var parsedFloatAsDouble = (double)parsed["float"];
             Assert.True((double)number == parsedDouble || double.IsNaN(number),
                 $"(f32->f64->str->f64) expected double {(double)number:g64} but got double {parsedDouble:g64}. \nString form: \n{toml}");
             Assert.True(number == (float)parsedFloatAsDouble || double.IsNaN(number),

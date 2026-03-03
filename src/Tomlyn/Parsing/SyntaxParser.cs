@@ -28,7 +28,8 @@ public static class SyntaxParser
         var doc = parser.Run();
         if (validate && !doc.HasErrors)
         {
-            Toml.Validate(doc);
+            var validator = new SyntaxValidator(doc.Diagnostics);
+            validator.Visit(doc);
         }
 
         return doc;

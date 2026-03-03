@@ -2,6 +2,7 @@
 // Licensed under the BSD-Clause 2 license. 
 // See license.txt file in the project root for full license information.
 using NUnit.Framework;
+using Tomlyn.Parsing;
 
 namespace Tomlyn.Tests
 {
@@ -11,7 +12,7 @@ namespace Tomlyn.Tests
         public void TestNoErrors()
         {
             var input = @"a = 1";
-            var doc = Toml.Parse(input);
+            var doc = SyntaxParser.Parse(input);
             Assert.False(doc.HasErrors, "The document should not have any errors");
             var docAsStr = doc.ToString();
             Assert.AreEqual(input, docAsStr);
@@ -23,7 +24,7 @@ namespace Tomlyn.Tests
             var input = @"a = 1
 a = true
 ";
-            var doc = Toml.Parse(input);
+            var doc = SyntaxParser.Parse(input);
             var roundTrip = doc.ToString();
             StandardTests.Dump(input, doc, roundTrip);
             Assert.True(doc.HasErrors, "The document should have errors");
@@ -36,7 +37,7 @@ a = true
 [a]
 b = 1
 ";
-            var doc = Toml.Parse(input);
+            var doc = SyntaxParser.Parse(input);
             var roundTrip = doc.ToString();
             StandardTests.Dump(input, doc, roundTrip);
             Assert.True(doc.HasErrors, "The document should have errors");
@@ -51,7 +52,7 @@ b = 1
 [[a]]
 b = true
 ";
-            var doc = Toml.Parse(input);
+            var doc = SyntaxParser.Parse(input);
             var roundTrip = doc.ToString();
             StandardTests.Dump(input, doc, roundTrip);
             Assert.False(doc.HasErrors, "The document should not have any errors");
@@ -66,7 +67,7 @@ b = 1
 [[a.c]]
 b = true
 ";
-            var doc = Toml.Parse(input);
+            var doc = SyntaxParser.Parse(input);
             var roundTrip = doc.ToString();
             StandardTests.Dump(input, doc, roundTrip);
             Assert.False(doc.HasErrors, "The document should not have any errors");
@@ -83,7 +84,7 @@ c = true
 [a.b]
 d = true
 ";
-            var doc = Toml.Parse(input);
+            var doc = SyntaxParser.Parse(input);
             var roundTrip = doc.ToString();
             StandardTests.Dump(input, doc, roundTrip);
             Assert.True(doc.HasErrors, "The document should have errors");
@@ -96,7 +97,7 @@ d = true
             input += "tab_multiline_basic=\"\"\"\t\"\"\"\n";
             input += "tab_singleline_literal='\t'\n";
             input += "tab_multiline_literal='''\t'''\n";
-            var doc = Toml.Parse(input);
+            var doc = SyntaxParser.Parse(input);
             Assert.False(doc.HasErrors, "The document should not have errors");
         }
 

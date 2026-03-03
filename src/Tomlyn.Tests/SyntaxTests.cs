@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 using Tomlyn.Model;
+using Tomlyn.Parsing;
 using Tomlyn.Syntax;
 
 namespace Tomlyn.Tests
@@ -69,7 +70,7 @@ g = [""0"", ""1"", ""2""]
             AssertHelper.AreEqualNormalizeNewLine(expected, docStr);
 
             // Reparse the result and compare it again
-            var newDoc = Toml.Parse(docStr);
+            var newDoc = SyntaxParser.Parse(docStr);
             AssertHelper.AreEqualNormalizeNewLine(expected, newDoc.ToString());
         }
 
@@ -82,7 +83,7 @@ val = true
 ";
 
             // Gets a syntax tree of the TOML text
-            var doc = Toml.Parse(input); // returns a DocumentSyntax
+            var doc = SyntaxParser.Parse(input); // returns a DocumentSyntax
             // Check for parsing errors with doc.HasErrors and doc.Diagnostics
             // doc.HasErrors => throws an exception
 
@@ -91,7 +92,7 @@ val = true
             Console.WriteLine(docStr);
 
             // Gets a runtime representation of the syntax tree
-            var table = doc.ToModel();
+            var table = TomlSerializer.Deserialize<TomlTable>(input);
             var key = (long) ((TomlTable) table["mytable"]!)["key"]!;
             var value = (bool) ((TomlTable) table["mytable"]!)["val"]!;
             Console.WriteLine($"key = {key}, val = {value}");

@@ -24,7 +24,7 @@ public class SerializationTests
 
         model["property"] = "string\r\nwith\r\nnewlines";
 
-        var result = Toml.FromModel(model).Trim();
+        var result = TomlSerializer.Serialize(model).Trim();
         AssertHelper.AreEqualNormalizeNewLine("property = '''string\r\nwith\r\nnewlines'''", result);
     }
 
@@ -41,7 +41,7 @@ public class SerializationTests
             }
         };
 
-        var result = Toml.FromModel(model).ReplaceLineEndings("\n").Trim();
+        var result = TomlSerializer.Serialize(model).ReplaceLineEndings("\n").Trim();
         AssertHelper.AreEqualNormalizeNewLine("mixed-array = [{a = 1}, 2, 3]", result);
     }
 
@@ -90,7 +90,7 @@ public class SerializationTests
                         array3 = []
                         """.ReplaceLineEndings("\n");
         
-        var result = Toml.FromModel(outer).ReplaceLineEndings("\n").Trim();
+        var result = TomlSerializer.Serialize(outer).ReplaceLineEndings("\n").Trim();
         AssertHelper.AreEqualNormalizeNewLine(expecting, result);
     }
 }

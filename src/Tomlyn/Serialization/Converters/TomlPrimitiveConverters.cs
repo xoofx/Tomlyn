@@ -903,7 +903,18 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
             throw reader.CreateException($"Expected {TomlTokenType.StartTable} token but was {reader.TokenType}.");
         }
 
-        var table = new TomlTable();
+        var table = new TomlTable(inline: reader.CurrentSpan is not null);
+        ReadTableInto(reader, table);
+        return table;
+    }
+
+    private static void ReadTableInto(TomlReader reader, TomlTable table)
+    {
+        if (reader.TokenType != TomlTokenType.StartTable)
+        {
+            throw reader.CreateException($"Expected {TomlTokenType.StartTable} token but was {reader.TokenType}.");
+        }
+
         reader.Read();
         while (reader.TokenType != TomlTokenType.EndTable)
         {
@@ -914,11 +925,24 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
 
             var name = reader.PropertyName!;
             reader.Read();
+
+            if (reader.TokenType == TomlTokenType.StartTable &&
+                table.TryGetValue(name, out var existingValue) &&
+                existingValue is TomlTable existingTable)
+            {
+                if (existingTable.Kind == ObjectKind.InlineTable)
+                {
+                    throw reader.CreateException($"Cannot extend inline table '{name}' with a non-inline table definition.");
+                }
+
+                ReadTableInto(reader, existingTable);
+                continue;
+            }
+
             table[name] = ReadValue(reader);
         }
 
         reader.Read();
-        return table;
     }
 
     internal static object ReadArrayValue(TomlReader reader)
@@ -931,7 +955,7 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
         // Prefer preserving arrays-of-tables as TomlTableArray to match TOML semantics and writer expectations.
         // Note that empty arrays can't be distinguished and are treated as TomlArray.
         reader.Read();
-        if (reader.TokenType == TomlTokenType.StartTable)
+        if (reader.TokenType == TomlTokenType.StartTable && reader.CurrentSpan is null)
         {
             var tableArray = new TomlTableArray();
             while (reader.TokenType != TomlTokenType.EndArray)
@@ -978,14 +1002,34 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
 
     private static void WriteTable(TomlWriter writer, TomlTable table)
     {
-        writer.WriteStartTable();
+        if (table.Kind == ObjectKind.InlineTable)
+        {
+            writer.WriteStartInlineTable();
+        }
+        else
+        {
+            writer.WriteStartTable();
+        }
+
+        if (table.PropertiesMetadata is { } metadata && writer.CurrentTable is { } current)
+        {
+            current.PropertiesMetadata = metadata;
+        }
+
         foreach (var pair in table)
         {
             writer.WritePropertyName(pair.Key);
             Instance.Write(writer, pair.Value);
         }
 
-        writer.WriteEndTable();
+        if (table.Kind == ObjectKind.InlineTable)
+        {
+            writer.WriteEndInlineTable();
+        }
+        else
+        {
+            writer.WriteEndTable();
+        }
     }
 
     private static void WriteArray(TomlWriter writer, TomlArray array)
@@ -1001,13 +1045,13 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
 
     private static void WriteTableArray(TomlWriter writer, TomlTableArray array)
     {
-        writer.WriteStartArray();
+        writer.WriteStartTableArray();
         foreach (var item in array)
         {
             WriteTable(writer, item);
         }
 
-        writer.WriteEndArray();
+        writer.WriteEndTableArray();
     }
 }
 
