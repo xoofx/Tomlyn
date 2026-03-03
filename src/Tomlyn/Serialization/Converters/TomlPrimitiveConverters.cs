@@ -326,6 +326,67 @@ internal sealed class TomlUInt64Converter : TomlConverter<ulong>
     }
 }
 
+#if NET7_0_OR_GREATER
+internal sealed class TomlInt128Converter : TomlConverter<Int128>
+{
+    public static TomlInt128Converter Instance { get; } = new();
+
+    public override Int128 Read(TomlReader reader)
+    {
+        if (reader.TokenType != TomlTokenType.Integer)
+        {
+            throw reader.CreateException($"Expected {TomlTokenType.Integer} token but was {reader.TokenType}.");
+        }
+
+        var raw = reader.GetInt64();
+        reader.Read();
+        return raw;
+    }
+
+    public override void Write(TomlWriter writer, Int128 value)
+    {
+        if (value < long.MinValue || value > long.MaxValue)
+        {
+            throw new TomlException($"TOML integers are limited to signed 64-bit. Value {value} cannot be written.");
+        }
+
+        writer.WriteIntegerValue((long)value);
+    }
+}
+
+internal sealed class TomlUInt128Converter : TomlConverter<UInt128>
+{
+    public static TomlUInt128Converter Instance { get; } = new();
+
+    public override UInt128 Read(TomlReader reader)
+    {
+        if (reader.TokenType != TomlTokenType.Integer)
+        {
+            throw reader.CreateException($"Expected {TomlTokenType.Integer} token but was {reader.TokenType}.");
+        }
+
+        var raw = reader.GetInt64();
+        if (raw < 0)
+        {
+            throw reader.CreateException($"TOML integer value {raw} is out of range.");
+        }
+
+        reader.Read();
+        return unchecked((ulong)raw);
+    }
+
+    public override void Write(TomlWriter writer, UInt128 value)
+    {
+        if (value > (UInt128)long.MaxValue)
+        {
+            throw new TomlException($"TOML integers are limited to signed 64-bit. Value {value} cannot be written.");
+        }
+
+        writer.WriteIntegerValue(unchecked((long)(ulong)value));
+    }
+}
+#endif
+
 internal sealed class TomlNIntConverter : TomlConverter<nint>
 {
     public static TomlNIntConverter Instance { get; } = new();
@@ -411,6 +472,32 @@ internal sealed class TomlSingleConverter : TomlConverter<float>
 
     public override void Write(TomlWriter writer, float value) => writer.WriteFloatValue(value);
 }
+
+#if NET5_0_OR_GREATER
+internal sealed class TomlHalfConverter : TomlConverter<Half>
+{
+    public static TomlHalfConverter Instance { get; } = new();
+
+    public override Half Read(TomlReader reader)
+    {
+        if (reader.TokenType != TomlTokenType.Float && reader.TokenType != TomlTokenType.Integer)
+        {
+            throw reader.CreateException($"Expected {TomlTokenType.Float} token but was {reader.TokenType}.");
+        }
+
+        var raw = reader.GetDouble();
+        if (!double.IsNaN(raw) && !double.IsInfinity(raw) && Math.Abs(raw) > (double)Half.MaxValue)
+        {
+            throw reader.CreateException($"TOML numeric value {raw} is out of range.");
+        }
+
+        reader.Read();
+        return (Half)raw;
+    }
+
+    public override void Write(TomlWriter writer, Half value) => writer.WriteFloatValue((double)value);
+}
+#endif
 
 internal sealed class TomlDecimalConverter : TomlConverter<decimal>
 {

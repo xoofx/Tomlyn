@@ -38,6 +38,15 @@ internal static class TomlBuiltInTypeInfoResolver
         if (type == typeof(double)) return new BuiltInTomlTypeInfo<double>(options, TomlDoubleConverter.Instance);
         if (type == typeof(decimal)) return new BuiltInTomlTypeInfo<decimal>(options, TomlDecimalConverter.Instance);
 
+#if NET5_0_OR_GREATER
+        if (type == typeof(Half)) return new BuiltInTomlTypeInfo<Half>(options, TomlHalfConverter.Instance);
+#endif
+
+#if NET7_0_OR_GREATER
+        if (type == typeof(Int128)) return new BuiltInTomlTypeInfo<Int128>(options, TomlInt128Converter.Instance);
+        if (type == typeof(UInt128)) return new BuiltInTomlTypeInfo<UInt128>(options, TomlUInt128Converter.Instance);
+#endif
+
         if (type == typeof(DateTime)) return new BuiltInTomlTypeInfo<DateTime>(options, TomlDateTimeConverter.Instance);
         if (type == typeof(DateTimeOffset)) return new BuiltInTomlTypeInfo<DateTimeOffset>(options, TomlDateTimeOffsetConverter.Instance);
         if (type == typeof(TomlDateTime)) return new BuiltInTomlTypeInfo<TomlDateTime>(options, TomlTomlDateTimeConverter.Instance);

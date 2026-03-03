@@ -85,6 +85,15 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
         if (type == typeof(double)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<double>(options, TomlDoubleConverter.Instance);
         if (type == typeof(decimal)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<decimal>(options, TomlDecimalConverter.Instance);
 
+#if NET5_0_OR_GREATER
+        if (type == typeof(Half)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<Half>(options, TomlHalfConverter.Instance);
+#endif
+
+#if NET7_0_OR_GREATER
+        if (type == typeof(Int128)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<Int128>(options, TomlInt128Converter.Instance);
+        if (type == typeof(UInt128)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<UInt128>(options, TomlUInt128Converter.Instance);
+#endif
+
         if (type == typeof(DateTime)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<DateTime>(options, TomlDateTimeConverter.Instance);
         if (type == typeof(DateTimeOffset)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<DateTimeOffset>(options, TomlDateTimeOffsetConverter.Instance);
         if (type == typeof(TomlDateTime)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<TomlDateTime>(options, TomlTomlDateTimeConverter.Instance);

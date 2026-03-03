@@ -1215,6 +1215,9 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             "global::System.TimeSpan" or
             "global::System.Uri" or
             "global::System.Version" or
+            "global::System.Half" or
+            "global::System.Int128" or
+            "global::System.UInt128" or
             "global::Tomlyn.TomlDateTime" or
             "global::System.DateOnly" or
             "global::System.TimeOnly" or
