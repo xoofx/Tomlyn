@@ -4,6 +4,7 @@ using System.IO;
 using Tomlyn;
 using Tomlyn.Helpers;
 using Tomlyn.Model;
+using Tomlyn.Serialization.Internal;
 
 namespace Tomlyn.Serialization;
 
@@ -103,8 +104,7 @@ public sealed class TomlWriter
             throw new TomlException($"The root value must be a TOML table, but was `{_root.GetType().FullName}`.");
         }
 
-        var toml = Toml.FromModel(rootTable);
-        Writer.Write(toml);
+        TomlModelTextWriter.WriteDocument(Writer, rootTable, Options);
         _documentEnded = true;
     }
 
