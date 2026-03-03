@@ -288,7 +288,9 @@ namespace Tomlyn.Parsing
                     datetime = Open(new DateTimeValueSyntax(SyntaxKind.LocalTime));
                     break;
                 default:
-                    throw new InvalidOperationException("The datetime kind `{_token.Kind}` is not supported");
+                    LogError($"Unsupported datetime token kind `{_token.Kind}`. Treating it as a local-date-time.");
+                    datetime = Open(new DateTimeValueSyntax(SyntaxKind.LocalDateTime));
+                    break;
             }
 
             var literal = _token.StringValue ?? _token.GetText(_lexer.Source) ?? string.Empty;

@@ -68,7 +68,8 @@ namespace Tomlyn.Syntax
                             kind = ObjectKind.LocalTime;
                             break;
                         default:
-                            throw new NotSupportedException($"Unsupported datetime kind `{time.Kind}` for the key-value `{keyValue}`");
+                            _diagnostics.Error(keyValue.Span, $"Unsupported datetime kind `{time.Kind}` for the key-value `{keyValue}`");
+                            return;
                     }
                     break;
                 case FloatValueSyntax _:
