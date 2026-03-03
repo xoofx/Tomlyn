@@ -1011,6 +1011,7 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
             writer.WriteStartTable();
         }
 
+        writer.TryAttachMetadata(table);
         if (table.PropertiesMetadata is { } metadata && writer.CurrentTable is { } current)
         {
             current.PropertiesMetadata = metadata;

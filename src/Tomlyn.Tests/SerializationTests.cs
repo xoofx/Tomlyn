@@ -5,6 +5,7 @@
 using System;
 using NUnit.Framework;
 using Tomlyn.Model;
+using Tomlyn.Serialization;
 
 namespace Tomlyn.Tests;
 
@@ -13,18 +14,20 @@ public class SerializationTests
     [Test]
     public void TestCrlfInMultilineString()
     {
-        var model = new TomlTable
-        {
-            PropertiesMetadata = new TomlPropertiesMetadata()
-        };
-        model.PropertiesMetadata.SetProperty("property", new TomlPropertyMetadata
+        var store = new TomlMetadataStore();
+        var options = new TomlSerializerOptions { MetadataStore = store };
+
+        var model = new TomlTable();
+        var metadata = new TomlPropertiesMetadata();
+        metadata.SetProperty("property", new TomlPropertyMetadata
         {
             DisplayKind = TomlPropertyDisplayKind.StringLiteralMulti
         });
+        store.SetProperties(model, metadata);
 
         model["property"] = "string\r\nwith\r\nnewlines";
 
-        var result = TomlSerializer.Serialize(model).Trim();
+        var result = TomlSerializer.Serialize(model, options).Trim();
         AssertHelper.AreEqualNormalizeNewLine("property = '''string\r\nwith\r\nnewlines'''", result);
     }
 

@@ -13,7 +13,7 @@ namespace Tomlyn.Model
     /// <remarks>
     /// This object keep the order of the inserted key=values
     /// </remarks>
-    public sealed class TomlTable : TomlObject, IDictionary<string, object>, ITomlMetadataProvider
+    public sealed class TomlTable : TomlObject, IDictionary<string, object>
     {
         private readonly List<KeyValuePair<string, ValueHolder>> _order;
         private readonly Dictionary<string, ValueHolder> _map;
@@ -35,8 +35,7 @@ namespace Tomlyn.Model
             _map = new Dictionary<string, ValueHolder>();
         }
 
-        /// <inheritdoc/>
-        public TomlPropertiesMetadata? PropertiesMetadata { get; set; }
+        internal TomlPropertiesMetadata? PropertiesMetadata { get; set; }
 
         /// <inheritdoc />
         public IEnumerator<KeyValuePair<string, object>> GetEnumerator()
