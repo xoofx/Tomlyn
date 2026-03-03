@@ -93,8 +93,10 @@ val = true
 
             // Gets a runtime representation of the syntax tree
             var table = TomlSerializer.Deserialize<TomlTable>(input);
-            var key = (long) ((TomlTable) table["mytable"]!)["key"]!;
-            var value = (bool) ((TomlTable) table["mytable"]!)["val"]!;
+            Assert.That(table, Is.Not.Null);
+            var nonNullTable = table!;
+            var key = (long)((TomlTable)nonNullTable["mytable"]!)["key"]!;
+            var value = (bool)((TomlTable)nonNullTable["mytable"]!)["val"]!;
             Console.WriteLine($"key = {key}, val = {value}");
         }
 

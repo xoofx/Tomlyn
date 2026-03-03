@@ -496,6 +496,8 @@ internal static class TomlReflectionTypeInfoResolver
         };
     }
 
+    [RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
+    [RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
     private sealed class ReflectionObjectTomlTypeInfo : TomlTypeInfo
     {
         private readonly List<MemberModel> _members;

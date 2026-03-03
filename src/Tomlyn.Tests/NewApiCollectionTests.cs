@@ -94,7 +94,9 @@ public class NewApiCollectionTests
         var toml = TomlSerializer.Serialize(value, context.DottedKeyDictionaryHolder);
         var model = TomlSerializer.Deserialize<TomlTable>(toml);
 
-        Assert.That(model.TryGetValue("map", out var mapValue), Is.True);
+        Assert.That(model, Is.Not.Null);
+        var nonNullModel = model!;
+        Assert.That(nonNullModel.TryGetValue("map", out var mapValue), Is.True);
         Assert.That(mapValue, Is.InstanceOf<TomlTable>());
         var map = (TomlTable)mapValue!;
 

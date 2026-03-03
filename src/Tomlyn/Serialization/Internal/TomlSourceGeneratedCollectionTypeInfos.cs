@@ -1,20 +1,19 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using Tomlyn.Helpers;
 
 namespace Tomlyn.Serialization.Internal;
 
-[RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
-[RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
-internal sealed class TomlArrayTypeInfo<TElement> : TomlTypeInfo<TElement[]>
+internal sealed class TomlSourceGeneratedArrayTypeInfo<TElement> : TomlTypeInfo<TElement[]>
 {
+    private readonly TomlSerializerContext _context;
     private TomlTypeInfo? _elementTypeInfo;
     private TomlTypeInfo<TElement>? _typedElementTypeInfo;
 
-    public TomlArrayTypeInfo(TomlSerializerOptions options)
-        : base(options)
+    public TomlSourceGeneratedArrayTypeInfo(TomlSerializerContext context)
+        : base(context.Options)
     {
+        _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
     public override void Write(TomlWriter writer, TElement[] value)
@@ -57,7 +56,14 @@ internal sealed class TomlArrayTypeInfo<TElement> : TomlTypeInfo<TElement[]>
             return;
         }
 
-        var resolved = TomlTypeInfoResolverPipeline.Resolve(Options, typeof(TElement));
+        var fromConverters = TomlTypeInfoResolverPipeline.TryResolveFromConverters(Options, typeof(TElement));
+        var resolved = fromConverters ?? _context.GetTypeInfo(typeof(TElement), Options);
+        if (resolved is null)
+        {
+            throw new InvalidOperationException(
+                $"No generated metadata is available for type '{typeof(TElement).FullName}' in the provided context.");
+        }
+
         _elementTypeInfo = resolved;
         _typedElementTypeInfo = resolved as TomlTypeInfo<TElement>;
     }
@@ -93,16 +99,16 @@ internal sealed class TomlArrayTypeInfo<TElement> : TomlTypeInfo<TElement[]>
     }
 }
 
-[RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
-[RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
-internal sealed class TomlListTypeInfo<TElement> : TomlTypeInfo<List<TElement>>
+internal sealed class TomlSourceGeneratedListTypeInfo<TElement> : TomlTypeInfo<List<TElement>>
 {
+    private readonly TomlSerializerContext _context;
     private TomlTypeInfo? _elementTypeInfo;
     private TomlTypeInfo<TElement>? _typedElementTypeInfo;
 
-    public TomlListTypeInfo(TomlSerializerOptions options)
-        : base(options)
+    public TomlSourceGeneratedListTypeInfo(TomlSerializerContext context)
+        : base(context.Options)
     {
+        _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
     public override void Write(TomlWriter writer, List<TElement> value)
@@ -145,7 +151,14 @@ internal sealed class TomlListTypeInfo<TElement> : TomlTypeInfo<List<TElement>>
             return;
         }
 
-        var resolved = TomlTypeInfoResolverPipeline.Resolve(Options, typeof(TElement));
+        var fromConverters = TomlTypeInfoResolverPipeline.TryResolveFromConverters(Options, typeof(TElement));
+        var resolved = fromConverters ?? _context.GetTypeInfo(typeof(TElement), Options);
+        if (resolved is null)
+        {
+            throw new InvalidOperationException(
+                $"No generated metadata is available for type '{typeof(TElement).FullName}' in the provided context.");
+        }
+
         _elementTypeInfo = resolved;
         _typedElementTypeInfo = resolved as TomlTypeInfo<TElement>;
     }
@@ -181,17 +194,17 @@ internal sealed class TomlListTypeInfo<TElement> : TomlTypeInfo<List<TElement>>
     }
 }
 
-[RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
-[RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
-internal sealed class TomlListBackedEnumerableTypeInfo<TEnumerable, TElement> : TomlTypeInfo<TEnumerable>
+internal sealed class TomlSourceGeneratedListBackedEnumerableTypeInfo<TEnumerable, TElement> : TomlTypeInfo<TEnumerable>
     where TEnumerable : IEnumerable<TElement>
 {
+    private readonly TomlSerializerContext _context;
     private TomlTypeInfo? _elementTypeInfo;
     private TomlTypeInfo<TElement>? _typedElementTypeInfo;
 
-    public TomlListBackedEnumerableTypeInfo(TomlSerializerOptions options)
-        : base(options)
+    public TomlSourceGeneratedListBackedEnumerableTypeInfo(TomlSerializerContext context)
+        : base(context.Options)
     {
+        _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
     public override void Write(TomlWriter writer, TEnumerable value)
@@ -200,9 +213,9 @@ internal sealed class TomlListBackedEnumerableTypeInfo<TEnumerable, TElement> : 
         ArgumentGuard.ThrowIfNull(value, nameof(value));
 
         writer.WriteStartArray();
-        foreach (var element in value)
+        foreach (var item in value)
         {
-            WriteElement(writer, element);
+            WriteElement(writer, item);
         }
 
         writer.WriteEndArray();
@@ -234,7 +247,14 @@ internal sealed class TomlListBackedEnumerableTypeInfo<TEnumerable, TElement> : 
             return;
         }
 
-        var resolved = TomlTypeInfoResolverPipeline.Resolve(Options, typeof(TElement));
+        var fromConverters = TomlTypeInfoResolverPipeline.TryResolveFromConverters(Options, typeof(TElement));
+        var resolved = fromConverters ?? _context.GetTypeInfo(typeof(TElement), Options);
+        if (resolved is null)
+        {
+            throw new InvalidOperationException(
+                $"No generated metadata is available for type '{typeof(TElement).FullName}' in the provided context.");
+        }
+
         _elementTypeInfo = resolved;
         _typedElementTypeInfo = resolved as TomlTypeInfo<TElement>;
     }
@@ -270,17 +290,17 @@ internal sealed class TomlListBackedEnumerableTypeInfo<TEnumerable, TElement> : 
     }
 }
 
-[RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
-[RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
-internal sealed class TomlDictionaryTypeInfo<TDictionary, TValue> : TomlTypeInfo<TDictionary>
+internal sealed class TomlSourceGeneratedDictionaryTypeInfo<TDictionary, TValue> : TomlTypeInfo<TDictionary>
     where TDictionary : IEnumerable<KeyValuePair<string, TValue>>
 {
+    private readonly TomlSerializerContext _context;
     private TomlTypeInfo? _valueTypeInfo;
     private TomlTypeInfo<TValue>? _typedValueTypeInfo;
 
-    public TomlDictionaryTypeInfo(TomlSerializerOptions options)
-        : base(options)
+    public TomlSourceGeneratedDictionaryTypeInfo(TomlSerializerContext context)
+        : base(context.Options)
     {
+        _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
     public override void Write(TomlWriter writer, TDictionary value)
@@ -347,7 +367,14 @@ internal sealed class TomlDictionaryTypeInfo<TDictionary, TValue> : TomlTypeInfo
             return;
         }
 
-        var resolved = TomlTypeInfoResolverPipeline.Resolve(Options, typeof(TValue));
+        var fromConverters = TomlTypeInfoResolverPipeline.TryResolveFromConverters(Options, typeof(TValue));
+        var resolved = fromConverters ?? _context.GetTypeInfo(typeof(TValue), Options);
+        if (resolved is null)
+        {
+            throw new InvalidOperationException(
+                $"No generated metadata is available for type '{typeof(TValue).FullName}' in the provided context.");
+        }
+
         _valueTypeInfo = resolved;
         _typedValueTypeInfo = resolved as TomlTypeInfo<TValue>;
     }
@@ -382,3 +409,4 @@ internal sealed class TomlDictionaryTypeInfo<TDictionary, TValue> : TomlTypeInfo
         return (TValue)_valueTypeInfo!.ReadAsObject(reader)!;
     }
 }
+

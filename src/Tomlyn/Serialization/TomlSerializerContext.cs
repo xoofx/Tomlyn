@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using Tomlyn;
 using Tomlyn.Helpers;
+using Tomlyn.Model;
+using Tomlyn.Serialization.Converters;
 using Tomlyn.Serialization.Internal;
 
 namespace Tomlyn.Serialization;
@@ -62,18 +65,54 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     {
         ArgumentGuard.ThrowIfNull(options, nameof(options));
 
-        var typeInfo = TomlBuiltInTypeInfoResolver.GetTypeInfo(typeof(T), options);
-        if (typeInfo is TomlTypeInfo<T> typed)
-        {
-            return typed;
-        }
+        var type = typeof(T);
 
-        throw new InvalidOperationException($"No built-in TOML metadata is available for type '{typeof(T).FullName}'.");
+        if (type == typeof(char)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<char>(options, TomlCharConverter.Instance);
+        if (type == typeof(string)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<string>(options, TomlStringConverter.Instance);
+        if (type == typeof(bool)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<bool>(options, TomlBooleanConverter.Instance);
+        if (type == typeof(sbyte)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<sbyte>(options, TomlSByteConverter.Instance);
+        if (type == typeof(byte)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<byte>(options, TomlByteConverter.Instance);
+        if (type == typeof(short)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<short>(options, TomlInt16Converter.Instance);
+        if (type == typeof(ushort)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<ushort>(options, TomlUInt16Converter.Instance);
+        if (type == typeof(int)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<int>(options, TomlInt32Converter.Instance);
+        if (type == typeof(uint)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<uint>(options, TomlUInt32Converter.Instance);
+        if (type == typeof(long)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<long>(options, TomlInt64Converter.Instance);
+        if (type == typeof(ulong)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<ulong>(options, TomlUInt64Converter.Instance);
+        if (type == typeof(nint)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<nint>(options, TomlNIntConverter.Instance);
+        if (type == typeof(nuint)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<nuint>(options, TomlNUIntConverter.Instance);
+        if (type == typeof(float)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<float>(options, TomlSingleConverter.Instance);
+        if (type == typeof(double)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<double>(options, TomlDoubleConverter.Instance);
+        if (type == typeof(decimal)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<decimal>(options, TomlDecimalConverter.Instance);
+
+        if (type == typeof(DateTime)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<DateTime>(options, TomlDateTimeConverter.Instance);
+        if (type == typeof(DateTimeOffset)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<DateTimeOffset>(options, TomlDateTimeOffsetConverter.Instance);
+        if (type == typeof(TomlDateTime)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<TomlDateTime>(options, TomlTomlDateTimeConverter.Instance);
+
+#if NET6_0_OR_GREATER
+        if (type == typeof(DateOnly)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<DateOnly>(options, TomlDateOnlyConverter.Instance);
+        if (type == typeof(TimeOnly)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<TimeOnly>(options, TomlTimeOnlyConverter.Instance);
+#endif
+
+        if (type == typeof(Guid)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<Guid>(options, TomlGuidConverter.Instance);
+        if (type == typeof(TimeSpan)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<TimeSpan>(options, TomlTimeSpanConverter.Instance);
+        if (type == typeof(Uri)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<Uri>(options, TomlUriConverter.Instance);
+        if (type == typeof(Version)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<Version>(options, TomlVersionConverter.Instance);
+
+        if (type == typeof(TomlTable)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<TomlTable>(options, TomlTomlTableConverter.Instance);
+        if (type == typeof(TomlArray)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<TomlArray>(options, TomlTomlArrayConverter.Instance);
+        if (type == typeof(TomlTableArray)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<TomlTableArray>(options, TomlTomlTableArrayConverter.Instance);
+
+        if (type == typeof(object)) return (TomlTypeInfo<T>)(object)new TomlUntypedConverterTypeInfo<object>(options, TomlUntypedObjectConverter.Instance);
+        if (type.IsEnum) return new TomlUntypedConverterTypeInfo<T>(options, TomlEnumConverter.Instance);
+
+        throw new InvalidOperationException($"No built-in TOML metadata is available for type '{type.FullName}'.");
     }
 
     /// <summary>
     /// Creates metadata for a single-dimensional array type.
     /// </summary>
+    [RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
+    [RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
     protected static TomlTypeInfo<TElement[]> CreateArrayTypeInfo<TElement>(TomlSerializerContext context)
     {
         ArgumentGuard.ThrowIfNull(context, nameof(context));
@@ -81,8 +120,22 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     }
 
     /// <summary>
+    /// Creates metadata for a single-dimensional array type using source-generated resolution for nested elements.
+    /// </summary>
+    /// <remarks>
+    /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
+    /// </remarks>
+    protected static TomlTypeInfo<TElement[]> CreateSourceGeneratedArrayTypeInfo<TElement>(TomlSerializerContext context)
+    {
+        ArgumentGuard.ThrowIfNull(context, nameof(context));
+        return new TomlSourceGeneratedArrayTypeInfo<TElement>(context);
+    }
+
+    /// <summary>
     /// Creates metadata for a <see cref="List{T}"/>.
     /// </summary>
+    [RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
+    [RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
     protected static TomlTypeInfo<List<TElement>> CreateListTypeInfo<TElement>(TomlSerializerContext context)
     {
         ArgumentGuard.ThrowIfNull(context, nameof(context));
@@ -90,8 +143,22 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     }
 
     /// <summary>
+    /// Creates metadata for a <see cref="List{T}"/> using source-generated resolution for nested elements.
+    /// </summary>
+    /// <remarks>
+    /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
+    /// </remarks>
+    protected static TomlTypeInfo<List<TElement>> CreateSourceGeneratedListTypeInfo<TElement>(TomlSerializerContext context)
+    {
+        ArgumentGuard.ThrowIfNull(context, nameof(context));
+        return new TomlSourceGeneratedListTypeInfo<TElement>(context);
+    }
+
+    /// <summary>
     /// Creates metadata for an enumerable interface type backed by <see cref="List{T}"/>.
     /// </summary>
+    [RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
+    [RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
     protected static TomlTypeInfo<TEnumerable> CreateListBackedEnumerableTypeInfo<TEnumerable, TElement>(TomlSerializerContext context)
         where TEnumerable : IEnumerable<TElement>
     {
@@ -100,12 +167,40 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     }
 
     /// <summary>
+    /// Creates metadata for an enumerable interface type backed by <see cref="List{T}"/> using source-generated resolution for nested elements.
+    /// </summary>
+    /// <remarks>
+    /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
+    /// </remarks>
+    protected static TomlTypeInfo<TEnumerable> CreateSourceGeneratedListBackedEnumerableTypeInfo<TEnumerable, TElement>(TomlSerializerContext context)
+        where TEnumerable : IEnumerable<TElement>
+    {
+        ArgumentGuard.ThrowIfNull(context, nameof(context));
+        return new TomlSourceGeneratedListBackedEnumerableTypeInfo<TEnumerable, TElement>(context);
+    }
+
+    /// <summary>
     /// Creates metadata for a dictionary-like type with string keys.
     /// </summary>
+    [RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
+    [RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
     protected static TomlTypeInfo<TDictionary> CreateDictionaryTypeInfo<TDictionary, TValue>(TomlSerializerContext context)
         where TDictionary : IEnumerable<KeyValuePair<string, TValue>>
     {
         ArgumentGuard.ThrowIfNull(context, nameof(context));
         return new TomlDictionaryTypeInfo<TDictionary, TValue>(context.Options);
+    }
+
+    /// <summary>
+    /// Creates metadata for a dictionary-like type with string keys using source-generated resolution for nested values.
+    /// </summary>
+    /// <remarks>
+    /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
+    /// </remarks>
+    protected static TomlTypeInfo<TDictionary> CreateSourceGeneratedDictionaryTypeInfo<TDictionary, TValue>(TomlSerializerContext context)
+        where TDictionary : IEnumerable<KeyValuePair<string, TValue>>
+    {
+        ArgumentGuard.ThrowIfNull(context, nameof(context));
+        return new TomlSourceGeneratedDictionaryTypeInfo<TDictionary, TValue>(context);
     }
 }

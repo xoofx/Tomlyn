@@ -12,8 +12,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Tomlyn\Tomlyn.csproj" />
-    <ProjectReference Include="..\Tomlyn.SourceGeneration\Tomlyn.SourceGeneration.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Tomlyn\Tomlyn.csproj"
+                      GlobalPropertiesToRemove="PublishAot" />
+    <ProjectReference Include="..\Tomlyn.SourceGeneration\Tomlyn.SourceGeneration.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"
+                      GlobalPropertiesToRemove="PublishAot" />
   </ItemGroup>
 
   <ItemGroup>

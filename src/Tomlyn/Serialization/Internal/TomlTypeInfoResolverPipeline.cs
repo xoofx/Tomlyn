@@ -131,7 +131,7 @@ internal static class TomlTypeInfoResolverPipeline
         return converter;
     }
 
-    private static TomlTypeInfo? TryResolveFromConverters(TomlSerializerOptions options, Type type)
+    internal static TomlTypeInfo? TryResolveFromConverters(TomlSerializerOptions options, Type type)
     {
         var converters = options.Converters;
         if (converters.Count == 0)

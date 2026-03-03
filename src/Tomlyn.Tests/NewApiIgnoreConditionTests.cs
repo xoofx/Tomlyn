@@ -54,9 +54,11 @@ public class NewApiIgnoreConditionTests
         var toml2 = TomlSerializer.Serialize(populated, context.IgnoreConditionModel);
         var model = TomlSerializer.Deserialize<TomlTable>(toml2);
 
-        Assert.That(model.ContainsKey("optional"), Is.True);
-        Assert.That(model.ContainsKey("defaultIgnored"), Is.True);
-        Assert.That(model.ContainsKey("alwaysIgnored"), Is.False);
+        Assert.That(model, Is.Not.Null);
+        var nonNullModel = model!;
+        Assert.That(nonNullModel.ContainsKey("optional"), Is.True);
+        Assert.That(nonNullModel.ContainsKey("defaultIgnored"), Is.True);
+        Assert.That(nonNullModel.ContainsKey("alwaysIgnored"), Is.False);
     }
 
     [Test]

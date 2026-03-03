@@ -20,7 +20,8 @@ primitive_list = [4, 5, 6]
 ";
 
             var model = TomlSerializer.Deserialize<TomlTable>(test);
-            var tomlOut = TomlSerializer.Serialize(model);
+            Assert.That(model, Is.Not.Null);
+            var tomlOut = TomlSerializer.Serialize(model!);
 
             Assert.AreEqual(test.ReplaceLineEndings("\n"), tomlOut.ReplaceLineEndings("\n"));
         }
@@ -33,20 +34,22 @@ primitive_list = [4, 5, 6]
 [my_table]
 key = 1 # Comment a key
 value = true
-list = [4, 5, 6]
+ list = [4, 5, 6]
 ";
 
             var model = TomlSerializer.Deserialize<TomlTable>(toml);
+            Assert.That(model, Is.Not.Null);
+            var nonNullModel = model!;
             // Prints "this is a string"
-            var global = model["global"];
+            var global = nonNullModel["global"];
             Console.WriteLine($"found global = \"{global}\"");
             Assert.AreEqual("this is a string", global);
             // Prints 1
-            var key = ((TomlTable)model["my_table"]!)["key"];
+            var key = ((TomlTable)nonNullModel["my_table"]!)["key"];
             Console.WriteLine($"found key = {key}");
             Assert.AreEqual(1L, key);
             // Check list
-            var list = (TomlArray)((TomlTable)model["my_table"]!)["list"]!;
+            var list = (TomlArray)((TomlTable)nonNullModel["my_table"]!)["list"]!;
             Console.WriteLine($"found list = {string.Join(", ", list)}");
             Assert.AreEqual(new TomlArray() { 4, 5, 6 }, list);
         }
@@ -58,7 +61,9 @@ list = [4, 5, 6]
         public void TestLocalTime(int hour, int minute, int second, int millisecond)
         {
             var toml = $@"time = {hour:D2}:{minute:D2}:{second:D2}.{millisecond:D3}";
-            var localTime = (TomlDateTime)TomlSerializer.Deserialize<TomlTable>(toml)["time"];
+            var model = TomlSerializer.Deserialize<TomlTable>(toml);
+            Assert.That(model, Is.Not.Null);
+            var localTime = (TomlDateTime)model!["time"];
 
             Assert.AreEqual(hour, localTime.DateTime.Hour);
             Assert.AreEqual(minute, localTime.DateTime.Minute);
@@ -102,7 +107,8 @@ key2 = 456
 ]
 ";
             var model = TomlSerializer.Deserialize<TomlTable>(input);
-            var array = model["x"] as TomlArray;
+            Assert.That(model, Is.Not.Null);
+            var array = model!["x"] as TomlArray;
             Assert.NotNull(array);
             var nonNullArray = array!;
             Assert.AreEqual(3, nonNullArray.Count);

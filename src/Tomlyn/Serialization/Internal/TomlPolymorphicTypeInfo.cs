@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -12,6 +13,8 @@ using Tomlyn.Text;
 
 namespace Tomlyn.Serialization.Internal;
 
+[RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
+[RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
 internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
 {
     private readonly TomlTypeInfo? _baseTypeInfo;

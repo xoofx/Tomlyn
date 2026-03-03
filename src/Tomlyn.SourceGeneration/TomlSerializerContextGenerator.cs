@@ -394,7 +394,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
         else if (TryGetArrayElementType(type, out var arrayElementType))
         {
-            builder.Append("        return CreateArrayTypeInfo<")
+            builder.Append("        return CreateSourceGeneratedArrayTypeInfo<")
                 .Append(arrayElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
                 .AppendLine(">(this);");
         }
@@ -402,13 +402,13 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         {
             if (isConcreteList)
             {
-                builder.Append("        return CreateListTypeInfo<")
+                builder.Append("        return CreateSourceGeneratedListTypeInfo<")
                     .Append(enumerableElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
                     .AppendLine(">(this);");
             }
             else
             {
-                builder.Append("        return CreateListBackedEnumerableTypeInfo<")
+                builder.Append("        return CreateSourceGeneratedListBackedEnumerableTypeInfo<")
                     .Append(typeName)
                     .Append(", ")
                     .Append(enumerableElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
@@ -417,7 +417,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
         else if (TryGetDictionaryValueType(type, out var dictionaryValueType))
         {
-            builder.Append("        return CreateDictionaryTypeInfo<")
+            builder.Append("        return CreateSourceGeneratedDictionaryTypeInfo<")
                 .Append(typeName)
                 .Append(", ")
                 .Append(dictionaryValueType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
@@ -518,6 +518,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
     private static void EmitWriteMember(StringBuilder builder, PocoMember member, int index, string memberTypeName, bool canBeNull)
     {
         var localName = "__member" + index.ToString(CultureInfo.InvariantCulture);
+        var writeArgument = canBeNull ? localName + "!" : localName;
         var writeIndent = "                ";
         var openIndent = "            ";
         var defaultLiteral = member.Type.IsReferenceType ? "default!" : "default";
@@ -550,7 +551,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 .AppendLine("))");
             builder.Append(openIndent).AppendLine("{");
             builder.Append(writeIndent).Append("writer.WritePropertyName(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
-            builder.Append(writeIndent).Append("_context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".Write(writer, ").Append(localName).AppendLine(");");
+            builder.Append(writeIndent).Append("_context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".Write(writer, ").Append(writeArgument).AppendLine(");");
             builder.Append(openIndent).AppendLine("}");
             return;
         }
@@ -576,7 +577,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.AppendLine("))");
         builder.Append(openIndent).AppendLine("{");
         builder.Append(writeIndent).Append("writer.WritePropertyName(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
-        builder.Append(writeIndent).Append("_context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".Write(writer, ").Append(localName).AppendLine(");");
+        builder.Append(writeIndent).Append("_context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".Write(writer, ").Append(writeArgument).AppendLine(");");
         builder.Append(openIndent).AppendLine("}");
     }
 
