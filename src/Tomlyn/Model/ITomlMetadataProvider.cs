@@ -7,7 +7,7 @@ namespace Tomlyn.Model;
 /// <summary>
 /// Allow to attach metadata to properties
 /// </summary>
-public interface ITomlMetadataProvider
+internal interface ITomlMetadataProvider
 {
     /// <summary>
     /// Gets or sets the attached metadata for properties

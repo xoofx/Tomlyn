@@ -97,43 +97,6 @@ val = true
             Console.WriteLine($"key = {key}, val = {value}");
         }
 
-      class PropMetaTestDoc : ITomlMetadataProvider{
-            public PropMetaTestTable? Mytable {get; set;}
-            public TomlPropertiesMetadata? PropertiesMetadata { get; set; }
-        }
-        class PropMetaTestTable : ITomlMetadataProvider{
-            public int Key {get; set;}
-            public bool Val {get; set;}
-            public TomlPropertiesMetadata? PropertiesMetadata { get; set; }
-        }
 
-        [Test]
-        public void TestPropertySpan()
-        {
-            var input = """
-                        [mytable]
-                        key = 15
-                        val = true
-                        """;
-            var doc = Toml.Parse(input);
-
-            var instance = doc.ToModel<PropMetaTestDoc>();
-            Assert.True(instance.Mytable?.PropertiesMetadata?.ContainsProperty("key"));
-            if (instance.Mytable?.PropertiesMetadata?.TryGetProperty("key", out var keyMeta) == true){
-                Assert.That(keyMeta.Span.Start.Line, Is.EqualTo(1));
-                Assert.That(keyMeta.Span.Start.Column, Is.EqualTo(0));
-                Assert.That(keyMeta.Span.End.Line, Is.EqualTo(1));
-                // End of line may differ depending on line endings in source control, don't assert
-            }
-
-            var table = doc.ToModel();
-            var myTable = (TomlTable) table["mytable"]!;
-            var myTableProperties = myTable.PropertiesMetadata;
-
-            Assert.True(myTableProperties?.ContainsProperty("key"));
-            if (myTableProperties?.TryGetProperty("key", out var keyMeta2) == true){
-                Assert.That(keyMeta2.Span.ToString().StartsWith("(2,1)-(2,"));
-            }
-        }
     }
 }
