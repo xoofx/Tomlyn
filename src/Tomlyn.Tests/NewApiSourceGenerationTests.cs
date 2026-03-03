@@ -51,6 +51,19 @@ public sealed class GeneratedNullablePayload
     public DateTimeOffset? When { get; set; }
 }
 
+public enum GeneratedEnumKind
+{
+    A = 0,
+    B = 1,
+}
+
+public sealed class GeneratedEnumAndObjectPayload
+{
+    public GeneratedEnumKind Kind { get; set; }
+
+    public object? Value { get; set; }
+}
+
 public sealed class GeneratedOptionsConverter : TomlConverter<string>
 {
     public override string? Read(TomlReader reader) => reader.GetString();
@@ -107,6 +120,12 @@ internal partial class TestTomlSerializerContextCollections : TomlSerializerCont
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(GeneratedNullablePayload))]
 internal partial class TestTomlSerializerContextNullables : TomlSerializerContext
+{
+}
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(GeneratedEnumAndObjectPayload))]
+internal partial class TestTomlSerializerContextEnumsAndObjects : TomlSerializerContext
 {
 }
 #pragma warning restore SYSLIB1224
@@ -252,5 +271,29 @@ public class NewApiSourceGenerationTests
         Assert.That(roundtrip, Is.Not.Null);
         Assert.That(roundtrip!.Count, Is.EqualTo(payload.Count));
         Assert.That(roundtrip.When, Is.EqualTo(payload.When));
+    }
+
+    [Test]
+    public void GeneratedContext_CanHandleEnumsAndUntypedObjects()
+    {
+        var context = TestTomlSerializerContextEnumsAndObjects.Default;
+        var toml = """
+            kind = "a"
+            value = 1
+            """;
+
+        var payload = TomlSerializer.Deserialize(toml, context.GeneratedEnumAndObjectPayload);
+
+        Assert.That(payload, Is.Not.Null);
+        Assert.That(payload!.Kind, Is.EqualTo(GeneratedEnumKind.A));
+        Assert.That(payload.Value, Is.InstanceOf<long>());
+        Assert.That((long)payload.Value!, Is.EqualTo(1));
+
+        var roundtripToml = TomlSerializer.Serialize(payload, context.GeneratedEnumAndObjectPayload);
+        var roundtrip = TomlSerializer.Deserialize(roundtripToml, context.GeneratedEnumAndObjectPayload);
+
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.Kind, Is.EqualTo(payload.Kind));
+        Assert.That(roundtrip.Value, Is.EqualTo(payload.Value));
     }
 }

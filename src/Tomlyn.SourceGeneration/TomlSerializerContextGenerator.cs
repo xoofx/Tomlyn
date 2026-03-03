@@ -1234,6 +1234,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private static bool IsBuiltInType(ITypeSymbol type)
     {
+        if (type.TypeKind == TypeKind.Enum)
+        {
+            return true;
+        }
+
         switch (type.SpecialType)
         {
             case SpecialType.System_Char:
@@ -1253,6 +1258,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             case SpecialType.System_Double:
             case SpecialType.System_Decimal:
             case SpecialType.System_DateTime:
+            case SpecialType.System_Object:
                 return true;
         }
 
