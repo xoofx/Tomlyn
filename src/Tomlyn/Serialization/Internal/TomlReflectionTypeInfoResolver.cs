@@ -340,15 +340,12 @@ internal static class TomlReflectionTypeInfoResolver
     {
         valueType = typeof(object);
 
-        if (!typeof(IDictionary).IsAssignableFrom(dictionaryType))
-        {
-            return false;
-        }
-
+        // Extension data requires string keys (System.Text.Json parity).
+        // We intentionally do not accept non-generic IDictionary since it cannot express a string-key invariant.
         var interfaces = dictionaryType.GetInterfaces();
-        for (var i = 0; i < interfaces.Length; i++)
+        for (var i = -1; i < interfaces.Length; i++)
         {
-            var iface = interfaces[i];
+            var iface = i < 0 ? dictionaryType : interfaces[i];
             if (!iface.IsGenericType)
             {
                 continue;
@@ -368,7 +365,7 @@ internal static class TomlReflectionTypeInfoResolver
             }
         }
 
-        return true;
+        return false;
     }
 
     private readonly record struct IgnoreBehavior(bool IgnoreAlways, TomlIgnoreCondition? WriteIgnoreCondition);
@@ -541,12 +538,12 @@ internal static class TomlReflectionTypeInfoResolver
 
                 if (_extensionDataIndex != -1)
                 {
-                    throw new InvalidOperationException($"Multiple extension data members are not supported on type '{type.FullName}'.");
+                    throw new TomlException($"Multiple extension data members are not supported on type '{type.FullName}'.");
                 }
 
                 if (!TryGetExtensionDataValueType(_members[i].MemberType, out var valueType))
                 {
-                    throw new InvalidOperationException($"Extension data member '{_members[i].Member.Name}' on '{type.FullName}' must be a dictionary-like type with string keys.");
+                    throw new TomlException($"Extension data member '{_members[i].Member.Name}' on '{type.FullName}' must be a dictionary-like type with string keys.");
                 }
 
                 _extensionDataIndex = i;
