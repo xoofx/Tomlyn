@@ -739,9 +739,10 @@ internal static class TomlReflectionTypeInfoResolver
                 }
 
                 var leadingTrivia = reader.CurrentLeadingTrivia;
+                var nameSpan = reader.CurrentSpan;
                 var name = reader.PropertyName!;
                 reader.Read(); // value
-                CapturePropertyMetadata(propertiesMetadata, name, leadingTrivia, reader.CurrentTrailingTrivia, GetDisplayKind(reader));
+                CapturePropertyMetadata(propertiesMetadata, name, nameSpan, leadingTrivia, reader.CurrentTrailingTrivia, GetDisplayKind(reader));
 
                 if (_indexByName.TryGetValue(name, out var memberIndex))
                 {
@@ -905,9 +906,10 @@ internal static class TomlReflectionTypeInfoResolver
                 }
 
                 var leadingTrivia = reader.CurrentLeadingTrivia;
+                var nameSpan = reader.CurrentSpan;
                 var name = reader.PropertyName!;
                 reader.Read(); // value
-                CapturePropertyMetadata(propertiesMetadata, name, leadingTrivia, reader.CurrentTrailingTrivia, GetDisplayKind(reader));
+                CapturePropertyMetadata(propertiesMetadata, name, nameSpan, leadingTrivia, reader.CurrentTrailingTrivia, GetDisplayKind(reader));
 
                 if (_parameterIndexByName is not null && _parameterIndexByName.TryGetValue(name, out var parameterIndex))
                 {
@@ -1057,6 +1059,7 @@ internal static class TomlReflectionTypeInfoResolver
         private static void CapturePropertyMetadata(
             TomlPropertiesMetadata? propertiesMetadata,
             string name,
+            TomlSourceSpan? span,
             TomlSyntaxTriviaMetadata[]? leadingTrivia,
             TomlSyntaxTriviaMetadata[]? trailingTrivia,
             TomlPropertyDisplayKind displayKind)
@@ -1068,7 +1071,7 @@ internal static class TomlReflectionTypeInfoResolver
 
             var hasLeading = leadingTrivia is { Length: > 0 };
             var hasTrailing = trailingTrivia is { Length: > 0 };
-            if (!hasLeading && !hasTrailing && displayKind == TomlPropertyDisplayKind.Default)
+            if (span is null && !hasLeading && !hasTrailing && displayKind == TomlPropertyDisplayKind.Default)
             {
                 return;
             }
@@ -1077,6 +1080,14 @@ internal static class TomlReflectionTypeInfoResolver
             {
                 DisplayKind = displayKind,
             };
+
+            if (span is { } locatedSpan)
+            {
+                propertyMetadata.Span = new SourceSpan(
+                    locatedSpan.SourceName,
+                    new TextPosition(locatedSpan.Start.Offset, locatedSpan.Start.Line, locatedSpan.Start.Column),
+                    new TextPosition(locatedSpan.End.Offset, locatedSpan.End.Line, locatedSpan.End.Column));
+            }
 
             if (hasLeading)
             {

@@ -41,6 +41,9 @@ public sealed class NewApiMetadataStoreTests
         Assert.That(properties!.TryGetProperty("a", out var propertyMetadata), Is.True);
         Assert.That(propertyMetadata, Is.Not.Null);
         Assert.That(propertyMetadata!.DisplayKind, Is.EqualTo(TomlPropertyDisplayKind.IntegerHexadecimal));
+        Assert.That(propertyMetadata.Span.FileName, Is.Not.Null);
+        Assert.That(propertyMetadata.Span.Start.Line, Is.EqualTo(0));
+        Assert.That(propertyMetadata.Span.Start.Column, Is.EqualTo(0));
         Assert.That(propertyMetadata.TrailingTrivia, Is.Not.Null);
         Assert.That(propertyMetadata.TrailingTrivia!.Count, Is.GreaterThan(0));
     }

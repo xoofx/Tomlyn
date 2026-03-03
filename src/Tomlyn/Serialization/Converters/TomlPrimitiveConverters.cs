@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using Tomlyn.Model;
 using Tomlyn.Syntax;
+using Tomlyn.Text;
 
 namespace Tomlyn.Serialization.Converters;
 
@@ -942,11 +943,12 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
             }
 
             var name = reader.PropertyName!;
+            var nameSpan = reader.CurrentSpan;
             var leadingTrivia = reader.CurrentLeadingTrivia;
             reader.Read();
             if (propertiesMetadata is not null)
             {
-                capturedAnyMetadata |= CapturePropertyMetadata(propertiesMetadata, name, leadingTrivia, reader.CurrentTrailingTrivia, GetDisplayKind(reader));
+                capturedAnyMetadata |= CapturePropertyMetadata(propertiesMetadata, name, nameSpan, leadingTrivia, reader.CurrentTrailingTrivia, GetDisplayKind(reader));
             }
 
             if (reader.TokenType == TomlTokenType.StartTable &&
@@ -975,13 +977,14 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
     private static bool CapturePropertyMetadata(
         TomlPropertiesMetadata propertiesMetadata,
         string name,
+        TomlSourceSpan? span,
         TomlSyntaxTriviaMetadata[]? leadingTrivia,
         TomlSyntaxTriviaMetadata[]? trailingTrivia,
         TomlPropertyDisplayKind displayKind)
     {
         var hasLeading = leadingTrivia is { Length: > 0 };
         var hasTrailing = trailingTrivia is { Length: > 0 };
-        if (!hasLeading && !hasTrailing && displayKind == TomlPropertyDisplayKind.Default)
+        if (span is null && !hasLeading && !hasTrailing && displayKind == TomlPropertyDisplayKind.Default)
         {
             return false;
         }
@@ -990,6 +993,14 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
         {
             DisplayKind = displayKind,
         };
+
+        if (span is { } locatedSpan)
+        {
+            propertyMetadata.Span = new SourceSpan(
+                locatedSpan.SourceName,
+                new TextPosition(locatedSpan.Start.Offset, locatedSpan.Start.Line, locatedSpan.Start.Column),
+                new TextPosition(locatedSpan.End.Offset, locatedSpan.End.Line, locatedSpan.End.Column));
+        }
 
         if (hasLeading)
         {
