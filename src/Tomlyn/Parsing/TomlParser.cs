@@ -646,7 +646,7 @@ public sealed class TomlParser
                     CloseImplicitFrames(baseIndex: 0);
                     CloseExplicitFrames(targetPrefixLength: 0);
 
-                    EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
+                    EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
                     EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndDocument, span: null, propertyName: null, stringValue: null, data: 0));
                     _state = DocumentState.Ended;
                     return true;
@@ -717,7 +717,7 @@ public sealed class TomlParser
                     {
                         Consume(TokenKind.CloseBracket, DetermineLexerStateAfterContainerClose());
                         _containers.RemoveAt(_containers.Count - 1);
-                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndArray, span: null, propertyName: null, stringValue: null, data: 0));
+                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndArray, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
                         return true;
                     }
 
@@ -743,7 +743,7 @@ public sealed class TomlParser
                     {
                         Consume(TokenKind.CloseBracket, DetermineLexerStateAfterContainerClose());
                         _containers.RemoveAt(_containers.Count - 1);
-                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndArray, span: null, propertyName: null, stringValue: null, data: 0));
+                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndArray, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
                         return true;
                     }
 
@@ -756,7 +756,7 @@ public sealed class TomlParser
                 {
                     Consume(TokenKind.CloseBracket, DetermineLexerStateAfterContainerClose());
                     _containers.RemoveAt(_containers.Count - 1);
-                    EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndArray, span: null, propertyName: null, stringValue: null, data: 0));
+                    EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndArray, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
                     return true;
                 }
 
@@ -790,13 +790,13 @@ public sealed class TomlParser
                         if (_implicitFrames.Count > frame.InlineImplicitBase)
                         {
                             _implicitFrames.RemoveAt(_implicitFrames.Count - 1);
-                            EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
+                            EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
                             return true;
                         }
 
                         Consume(TokenKind.CloseBrace, DetermineLexerStateAfterContainerClose());
                         _containers.RemoveAt(_containers.Count - 1);
-                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
+                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
                         return true;
                     }
 
@@ -922,7 +922,7 @@ public sealed class TomlParser
             for (var i = _implicitFrames.Count - 1; i >= baseIndex; i--)
             {
                 _implicitFrames.RemoveAt(i);
-                EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
+                EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
             }
         }
 
@@ -935,10 +935,10 @@ public sealed class TomlParser
                 {
                     case ExplicitFrameKind.Table:
                     case ExplicitFrameKind.TableArrayElement:
-                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
+                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
                         break;
                     case ExplicitFrameKind.Array:
-                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndArray, span: null, propertyName: null, stringValue: null, data: 0));
+                        EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndArray, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
                         break;
                 }
 
@@ -1249,7 +1249,7 @@ public sealed class TomlParser
             for (var i = currentCount - 1; i >= common; i--)
             {
                 _implicitFrames.RemoveAt(baseIndex + i);
-                EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
+                EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
             }
 
             for (var i = common; i < prefixLength; i++)
@@ -1448,20 +1448,20 @@ public sealed class TomlParser
                 if (frame.Kind == ContainerKind.InlineTable && _implicitFrames.Count > frame.InlineImplicitBase)
                 {
                     _implicitFrames.RemoveAt(_implicitFrames.Count - 1);
-                    EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
+                    EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
                     continue;
                 }
 
                 _containers.RemoveAt(_containers.Count - 1);
                 EnqueueEvent(frame.Kind == ContainerKind.Array
-                    ? new TomlParseEvent(TomlParseEventKind.EndArray, span: null, propertyName: null, stringValue: null, data: 0)
-                    : new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
+                    ? new TomlParseEvent(TomlParseEventKind.EndArray, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0)
+                    : new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
             }
 
             CloseImplicitFrames(baseIndex: 0);
             CloseExplicitFrames(targetPrefixLength: 0);
 
-            EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: null, propertyName: null, stringValue: null, data: 0));
+            EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndTable, span: CurrentSpan(), propertyName: null, stringValue: null, data: 0));
             EnqueueEvent(new TomlParseEvent(TomlParseEventKind.EndDocument, span: null, propertyName: null, stringValue: null, data: 0));
             _state = DocumentState.Ended;
         }

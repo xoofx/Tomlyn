@@ -353,7 +353,7 @@ public static class TomlSerializer
                 reader.Skip();
             }
 
-            throw new TomlException($"The root value key '{options.RootValueKeyName}' was not found.");
+            throw reader.CreateException($"The root value key '{options.RootValueKeyName}' was not found.");
         }
 
         return typeInfo.ReadAsObject(reader);
