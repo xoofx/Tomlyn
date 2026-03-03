@@ -32,21 +32,21 @@ namespace Tomlyn.Tests
         private static readonly string[] Toml11ValidButTomlTestMarksInvalid =
         [
             // TOML v1.1.0 additions (toml-test suite still marks them invalid).
-            @"\invalid\datetime\no-secs.toml",            // minute-only times
-            @"\invalid\local-datetime\no-secs.toml",
-            @"\invalid\local-time\no-secs.toml",
-            @"\invalid\string\basic-byte-escapes.toml",   // \xHH basic string escape
-            @"\invalid\inline-table\trailing-comma.toml", // trailing commas in inline tables
-            @"\invalid\inline-table\linebreak-01.toml",   // TOML 1.1 allows newlines in inline tables
-            @"\invalid\inline-table\linebreak-02.toml",
-            @"\invalid\inline-table\linebreak-03.toml",
-            @"\invalid\inline-table\linebreak-04.toml",
+            "/invalid/datetime/no-secs.toml",            // minute-only times
+            "/invalid/local-datetime/no-secs.toml",
+            "/invalid/local-time/no-secs.toml",
+            "/invalid/string/basic-byte-escapes.toml",   // \xHH basic string escape
+            "/invalid/inline-table/trailing-comma.toml", // trailing commas in inline tables
+            "/invalid/inline-table/linebreak-01.toml",   // TOML 1.1 allows newlines in inline tables
+            "/invalid/inline-table/linebreak-02.toml",
+            "/invalid/inline-table/linebreak-03.toml",
+            "/invalid/inline-table/linebreak-04.toml",
         ];
 
         private static readonly string[] Toml10SpecFolders =
         [
-            @"\valid\spec-1.0.0\",
-            @"\invalid\spec-1.0.0\",
+            "/valid/spec-1.0.0/",
+            "/invalid/spec-1.0.0/",
         ];
 
         [TestCaseSource("ListTomlFiles", new object[] { ValidSpec }, Category = "toml-test")]
@@ -199,9 +199,11 @@ namespace Tomlyn.Tests
             var tests = new List<TestCaseData>();
             foreach (var file in Directory.EnumerateFiles(directory, "*.toml", SearchOption.AllDirectories))
             {
+                var normalizedFile = file.Replace('\\', '/');
+
                 for (var i = 0; i < Toml10SpecFolders.Length; i++)
                 {
-                    if (file.IndexOf(Toml10SpecFolders[i], StringComparison.OrdinalIgnoreCase) >= 0)
+                    if (normalizedFile.IndexOf(Toml10SpecFolders[i], StringComparison.OrdinalIgnoreCase) >= 0)
                     {
                         goto next_file;
                     }
@@ -211,7 +213,7 @@ namespace Tomlyn.Tests
                 {
                     for (var i = 0; i < Toml11ValidButTomlTestMarksInvalid.Length; i++)
                     {
-                        if (file.EndsWith(Toml11ValidButTomlTestMarksInvalid[i], StringComparison.OrdinalIgnoreCase))
+                        if (normalizedFile.EndsWith(Toml11ValidButTomlTestMarksInvalid[i], StringComparison.OrdinalIgnoreCase))
                         {
                             goto next_file;
                         }
