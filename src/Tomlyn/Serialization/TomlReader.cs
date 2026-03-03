@@ -131,6 +131,11 @@ public sealed class TomlReader
     public string? SourceName => _options.SourceName;
 
     /// <summary>
+    /// Gets the serializer options associated with this reader instance.
+    /// </summary>
+    public TomlSerializerOptions Options => _options;
+
+    /// <summary>
     /// Gets the current line number (1-based).
     /// </summary>
     public int Line => _currentSpan?.Start.Line + 1 ?? 0;

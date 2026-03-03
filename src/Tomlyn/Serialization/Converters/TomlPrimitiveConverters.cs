@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using Tomlyn.Model;
+using Tomlyn.Syntax;
 
 namespace Tomlyn.Serialization.Converters;
 
@@ -915,6 +917,22 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
             throw reader.CreateException($"Expected {TomlTokenType.StartTable} token but was {reader.TokenType}.");
         }
 
+        var store = reader.Options.MetadataStore;
+        var hasStore = store is not null;
+        TomlPropertiesMetadata? propertiesMetadata = null;
+        var capturedAnyMetadata = false;
+        if (hasStore)
+        {
+            if (store!.TryGetProperties(table, out var existingMetadata) && existingMetadata is not null)
+            {
+                propertiesMetadata = existingMetadata;
+            }
+            else
+            {
+                propertiesMetadata = new TomlPropertiesMetadata();
+            }
+        }
+
         reader.Read();
         while (reader.TokenType != TomlTokenType.EndTable)
         {
@@ -924,7 +942,12 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
             }
 
             var name = reader.PropertyName!;
+            var leadingTrivia = reader.CurrentLeadingTrivia;
             reader.Read();
+            if (propertiesMetadata is not null)
+            {
+                capturedAnyMetadata |= CapturePropertyMetadata(propertiesMetadata, name, leadingTrivia, reader.CurrentTrailingTrivia, GetDisplayKind(reader));
+            }
 
             if (reader.TokenType == TomlTokenType.StartTable &&
                 table.TryGetValue(name, out var existingValue) &&
@@ -943,6 +966,85 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
         }
 
         reader.Read();
+        if (hasStore && propertiesMetadata is not null && capturedAnyMetadata)
+        {
+            store!.SetProperties(table, propertiesMetadata);
+        }
+    }
+
+    private static bool CapturePropertyMetadata(
+        TomlPropertiesMetadata propertiesMetadata,
+        string name,
+        TomlSyntaxTriviaMetadata[]? leadingTrivia,
+        TomlSyntaxTriviaMetadata[]? trailingTrivia,
+        TomlPropertyDisplayKind displayKind)
+    {
+        var hasLeading = leadingTrivia is { Length: > 0 };
+        var hasTrailing = trailingTrivia is { Length: > 0 };
+        if (!hasLeading && !hasTrailing && displayKind == TomlPropertyDisplayKind.Default)
+        {
+            return false;
+        }
+
+        var propertyMetadata = new TomlPropertyMetadata
+        {
+            DisplayKind = displayKind,
+        };
+
+        if (hasLeading)
+        {
+            propertyMetadata.LeadingTrivia = new List<TomlSyntaxTriviaMetadata>(leadingTrivia!);
+        }
+
+        if (hasTrailing)
+        {
+            propertyMetadata.TrailingTrivia = new List<TomlSyntaxTriviaMetadata>(trailingTrivia!);
+        }
+
+        propertiesMetadata.SetProperty(name, propertyMetadata);
+        return true;
+    }
+
+    private static TomlPropertyDisplayKind GetDisplayKind(TomlReader reader)
+    {
+        switch (reader.TokenType)
+        {
+            case TomlTokenType.Integer:
+            {
+                var raw = reader.GetRawText();
+                if (raw.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) return TomlPropertyDisplayKind.IntegerHexadecimal;
+                if (raw.StartsWith("0o", StringComparison.OrdinalIgnoreCase)) return TomlPropertyDisplayKind.IntegerOctal;
+                if (raw.StartsWith("0b", StringComparison.OrdinalIgnoreCase)) return TomlPropertyDisplayKind.IntegerBinary;
+                return TomlPropertyDisplayKind.Default;
+            }
+            case TomlTokenType.String:
+            {
+                return reader.CurrentStringTokenKind switch
+                {
+                    TokenKind.StringMulti => TomlPropertyDisplayKind.StringMulti,
+                    TokenKind.StringLiteral => TomlPropertyDisplayKind.StringLiteral,
+                    TokenKind.StringLiteralMulti => TomlPropertyDisplayKind.StringLiteralMulti,
+                    _ => TomlPropertyDisplayKind.Default,
+                };
+            }
+            case TomlTokenType.DateTime:
+            {
+                var value = reader.GetTomlDateTime();
+                return value.Kind switch
+                {
+                    TomlDateTimeKind.OffsetDateTimeByZ => TomlPropertyDisplayKind.OffsetDateTimeByZ,
+                    TomlDateTimeKind.OffsetDateTimeByNumber => TomlPropertyDisplayKind.OffsetDateTimeByNumber,
+                    TomlDateTimeKind.LocalDateTime => TomlPropertyDisplayKind.LocalDateTime,
+                    TomlDateTimeKind.LocalDate => TomlPropertyDisplayKind.LocalDate,
+                    TomlDateTimeKind.LocalTime => TomlPropertyDisplayKind.LocalTime,
+                    _ => TomlPropertyDisplayKind.Default,
+                };
+            }
+            case TomlTokenType.StartTable:
+                return reader.CurrentSpan is not null ? TomlPropertyDisplayKind.InlineTable : TomlPropertyDisplayKind.Default;
+            default:
+                return TomlPropertyDisplayKind.Default;
+        }
     }
 
     internal static object ReadArrayValue(TomlReader reader)
