@@ -43,6 +43,12 @@ namespace Tomlyn.Tests
             @"\invalid\inline-table\linebreak-04.toml",
         ];
 
+        private static readonly string[] Toml10SpecFolders =
+        [
+            @"\valid\spec-1.0.0\",
+            @"\invalid\spec-1.0.0\",
+        ];
+
         [TestCaseSource("ListTomlFiles", new object[] { ValidSpec }, Category = "toml-test")]
         public static void SpecValid(string inputName, string toml, string json)
         {
@@ -193,6 +199,14 @@ namespace Tomlyn.Tests
             var tests = new List<TestCaseData>();
             foreach (var file in Directory.EnumerateFiles(directory, "*.toml", SearchOption.AllDirectories))
             {
+                for (var i = 0; i < Toml10SpecFolders.Length; i++)
+                {
+                    if (file.IndexOf(Toml10SpecFolders[i], StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        goto next_file;
+                    }
+                }
+
                 if (type == InvalidSpec)
                 {
                     for (var i = 0; i < Toml11ValidButTomlTestMarksInvalid.Length; i++)
