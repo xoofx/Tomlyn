@@ -60,6 +60,10 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
     private const string JsonSourceGenerationOptionsAttributeMetadataName = "System.Text.Json.Serialization.JsonSourceGenerationOptionsAttribute";
     private const string TomlSourceGenerationOptionsAttributeMetadataName = "Tomlyn.Serialization.TomlSourceGenerationOptionsAttribute";
     private const string TomlConverterMetadataName = "Tomlyn.Serialization.TomlConverter";
+    private const string TomlOnSerializingMetadataName = "Tomlyn.Serialization.ITomlOnSerializing";
+    private const string TomlOnSerializedMetadataName = "Tomlyn.Serialization.ITomlOnSerialized";
+    private const string TomlOnDeserializingMetadataName = "Tomlyn.Serialization.ITomlOnDeserializing";
+    private const string TomlOnDeserializedMetadataName = "Tomlyn.Serialization.ITomlOnDeserialized";
 
     private sealed class ContextModel
     {
@@ -479,6 +483,10 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         var propertyName = GetTypeInfoPropertyName(type);
         var typeName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var readReturnType = type.IsValueType ? typeName : typeName + "?";
+        var callsOnSerializing = ImplementsInterface(type, TomlOnSerializingMetadataName);
+        var callsOnSerialized = ImplementsInterface(type, TomlOnSerializedMetadataName);
+        var callsOnDeserializing = ImplementsInterface(type, TomlOnDeserializingMetadataName);
+        var callsOnDeserialized = ImplementsInterface(type, TomlOnDeserializedMetadataName);
 
         builder.AppendLine();
         builder.Append("    private sealed class __TomlTypeInfo_").Append(propertyName).Append(" : TomlTypeInfo<").Append(typeName).AppendLine(">");
@@ -494,6 +502,10 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.Append("        public override void Write(TomlWriter writer, ").Append(typeName).AppendLine(" value)");
         builder.AppendLine("        {");
         builder.AppendLine("            if (value is null) throw new TomlException(\"TOML does not support null values.\");");
+        if (callsOnSerializing)
+        {
+            builder.AppendLine("            ((global::Tomlyn.Serialization.ITomlOnSerializing)value).OnTomlSerializing();");
+        }
         builder.AppendLine("            writer.WriteStartTable();");
         for (var i = 0; i < poco.Members.Length; i++)
         {
@@ -505,6 +517,10 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             EmitWriteMember(builder, member, i, memberTypeName, canBeNull);
         }
         builder.AppendLine("            writer.WriteEndTable();");
+        if (callsOnSerialized)
+        {
+            builder.AppendLine("            ((global::Tomlyn.Serialization.ITomlOnSerialized)value).OnTomlSerialized();");
+        }
         builder.AppendLine("        }");
         builder.AppendLine();
 
@@ -512,6 +528,10 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.AppendLine("        {");
         builder.AppendLine("            if (reader.TokenType != TomlTokenType.StartTable) throw reader.CreateException($\"Expected {TomlTokenType.StartTable} token but was {reader.TokenType}.\");");
         builder.Append("            var value = new ").Append(typeName).AppendLine("();");
+        if (callsOnDeserializing)
+        {
+            builder.AppendLine("            ((global::Tomlyn.Serialization.ITomlOnDeserializing)value).OnTomlDeserializing();");
+        }
         builder.AppendLine("            var seenMask = 0;");
         builder.AppendLine("            reader.Read();");
         builder.AppendLine("            while (reader.TokenType != TomlTokenType.EndTable)");
@@ -529,6 +549,10 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.AppendLine("                }");
         builder.AppendLine("            }");
         builder.AppendLine("            reader.Read();");
+        if (callsOnDeserialized)
+        {
+            builder.AppendLine("            ((global::Tomlyn.Serialization.ITomlOnDeserialized)value).OnTomlDeserialized();");
+        }
         builder.AppendLine("            return value;");
         builder.AppendLine("        }");
 
@@ -1135,6 +1159,24 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         foreach (var attr in symbol.GetAttributes())
         {
             if (attr.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::" + attributeMetadataName)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool ImplementsInterface(ITypeSymbol type, string interfaceMetadataName)
+    {
+        if (type is not INamedTypeSymbol named)
+        {
+            return false;
+        }
+
+        foreach (var iface in named.AllInterfaces)
+        {
+            if (iface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::" + interfaceMetadataName)
             {
                 return true;
             }

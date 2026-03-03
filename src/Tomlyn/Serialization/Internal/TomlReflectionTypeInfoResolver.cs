@@ -514,6 +514,10 @@ internal static class TomlReflectionTypeInfoResolver
         private readonly int _extensionDataIndex;
         private readonly Type? _extensionDataValueType;
         private readonly StringComparer _nameComparer;
+        private readonly bool _invokeOnSerializing;
+        private readonly bool _invokeOnSerialized;
+        private readonly bool _invokeOnDeserializing;
+        private readonly bool _invokeOnDeserialized;
 
         public ReflectionObjectTomlTypeInfo(Type type, TomlSerializerOptions options, List<MemberModel> members, ConstructorInfo? constructor)
             : base(type, options)
@@ -521,6 +525,10 @@ internal static class TomlReflectionTypeInfoResolver
             _members = members ?? throw new ArgumentNullException(nameof(members));
             _constructor = constructor;
             _nameComparer = options.PropertyNameCaseInsensitive ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+            _invokeOnSerializing = typeof(ITomlOnSerializing).IsAssignableFrom(type);
+            _invokeOnSerialized = typeof(ITomlOnSerialized).IsAssignableFrom(type);
+            _invokeOnDeserializing = typeof(ITomlOnDeserializing).IsAssignableFrom(type);
+            _invokeOnDeserialized = typeof(ITomlOnDeserialized).IsAssignableFrom(type);
             _indexByName = new Dictionary<string, int>(
                 _members.Count,
                 _nameComparer);
@@ -628,6 +636,11 @@ internal static class TomlReflectionTypeInfoResolver
                 throw new TomlException("TOML does not support null values.");
             }
 
+            if (_invokeOnSerializing)
+            {
+                ((ITomlOnSerializing)value).OnTomlSerializing();
+            }
+
             writer.WriteStartTable();
             writer.TryAttachMetadata(value);
             HashSet<string>? usedKeys = null;
@@ -703,6 +716,11 @@ internal static class TomlReflectionTypeInfoResolver
             }
 
             writer.WriteEndTable();
+
+            if (_invokeOnSerialized)
+            {
+                ((ITomlOnSerialized)value).OnTomlSerialized();
+            }
         }
 
         public override object? ReadAsObject(TomlReader reader)
@@ -722,6 +740,11 @@ internal static class TomlReflectionTypeInfoResolver
             }
 
             var instance = CreateInstance();
+            if (_invokeOnDeserializing)
+            {
+                ((ITomlOnDeserializing)instance).OnTomlDeserializing();
+            }
+
             TomlPropertiesMetadata? propertiesMetadata = null;
             if (Options.MetadataStore is not null && !Type.IsValueType)
             {
@@ -799,6 +822,11 @@ internal static class TomlReflectionTypeInfoResolver
             if (propertiesMetadata is not null)
             {
                 Options.MetadataStore!.SetProperties(instance, propertiesMetadata);
+            }
+
+            if (_invokeOnDeserialized)
+            {
+                ((ITomlOnDeserialized)instance).OnTomlDeserialized();
             }
 
             return instance;
@@ -1023,6 +1051,11 @@ internal static class TomlReflectionTypeInfoResolver
                 throw new TomlException($"Failed to create an instance of '{Type.FullName}'.", ex);
             }
 
+            if (_invokeOnDeserializing)
+            {
+                ((ITomlOnDeserializing)instance).OnTomlDeserializing();
+            }
+
             for (var i = 0; i < _members.Count; i++)
             {
                 if (!memberSeen[i])
@@ -1051,6 +1084,11 @@ internal static class TomlReflectionTypeInfoResolver
             if (propertiesMetadata is not null)
             {
                 Options.MetadataStore!.SetProperties(instance, propertiesMetadata);
+            }
+
+            if (_invokeOnDeserialized)
+            {
+                ((ITomlOnDeserialized)instance).OnTomlDeserialized();
             }
 
             return instance;

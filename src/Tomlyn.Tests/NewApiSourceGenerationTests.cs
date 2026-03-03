@@ -31,6 +31,46 @@ public sealed class GeneratedOptionsPerson
     public long Age { get; set; }
 }
 
+public sealed class GeneratedCallbackPerson : ITomlOnSerializing, ITomlOnSerialized, ITomlOnDeserializing, ITomlOnDeserialized
+{
+    public string Name { get; set; } = "";
+
+    [TomlIgnore]
+    public int OnSerializingCount { get; private set; }
+
+    [TomlIgnore]
+    public int OnSerializedCount { get; private set; }
+
+    [TomlIgnore]
+    public int OnDeserializingCount { get; private set; }
+
+    [TomlIgnore]
+    public int OnDeserializedCount { get; private set; }
+
+    [TomlIgnore]
+    public bool NameWasAlreadyAssignedInOnDeserializing { get; private set; }
+
+    [TomlIgnore]
+    public string? NameSeenInOnDeserialized { get; private set; }
+
+    public void OnTomlSerializing() => OnSerializingCount++;
+
+    public void OnTomlSerialized() => OnSerializedCount++;
+
+    public void OnTomlDeserializing()
+    {
+        OnDeserializingCount++;
+        NameWasAlreadyAssignedInOnDeserializing = Name == "Ada";
+        Name = "from-callback";
+    }
+
+    public void OnTomlDeserialized()
+    {
+        OnDeserializedCount++;
+        NameSeenInOnDeserialized = Name;
+    }
+}
+
 public sealed class GeneratedCollectionsPayload
 {
     public ImmutableArray<int> Numbers { get; set; }
@@ -128,6 +168,12 @@ internal partial class TestTomlSerializerContextNullables : TomlSerializerContex
 internal partial class TestTomlSerializerContextEnumsAndObjects : TomlSerializerContext
 {
 }
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(GeneratedCallbackPerson))]
+internal partial class TestTomlSerializerContextCallbacks : TomlSerializerContext
+{
+}
 #pragma warning restore SYSLIB1224
 
 public class NewApiSourceGenerationTests
@@ -158,6 +204,28 @@ public class NewApiSourceGenerationTests
         Assert.That(roundtrip, Is.Not.Null);
         Assert.That(roundtrip!.Name, Is.EqualTo("Ada"));
         Assert.That(roundtrip.Age, Is.EqualTo(37));
+    }
+
+    [Test]
+    public void GeneratedContext_InvokesLifecycleCallbacks()
+    {
+        var context = TestTomlSerializerContextCallbacks.Default;
+        var original = new GeneratedCallbackPerson { Name = "Ada" };
+        var toml = TomlSerializer.Serialize(original, context.GeneratedCallbackPerson);
+
+        Assert.That(original.OnSerializingCount, Is.EqualTo(1));
+        Assert.That(original.OnSerializedCount, Is.EqualTo(1));
+        Assert.That(original.OnDeserializingCount, Is.EqualTo(0));
+        Assert.That(original.OnDeserializedCount, Is.EqualTo(0));
+
+        var roundtrip = TomlSerializer.Deserialize(toml, context.GeneratedCallbackPerson);
+
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.Name, Is.EqualTo("Ada"));
+        Assert.That(roundtrip.OnDeserializingCount, Is.EqualTo(1));
+        Assert.That(roundtrip.OnDeserializedCount, Is.EqualTo(1));
+        Assert.That(roundtrip.NameWasAlreadyAssignedInOnDeserializing, Is.False);
+        Assert.That(roundtrip.NameSeenInOnDeserialized, Is.EqualTo("Ada"));
     }
 
     [Test]
