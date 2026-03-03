@@ -1,9 +1,9 @@
 home:
   - {path: readme.md, title: "<i class='bi bi-house-door' aria-hidden='true'></i> Home", self: true}
   - {path: docs/readme.md, title: "<i class='bi bi-book' aria-hidden='true'></i> Docs", folder: true}
+  - {path: migration.md, title: "<i class='bi bi-arrow-left-right' aria-hidden='true'></i> Migration"}
   - {path: api/readme.md, title: "<i class='bi bi-filetype-cs' aria-hidden='true'></i> API", folder: true}
 
 home2:
   - {url: "https://www.nuget.org/packages/Tomlyn/", title: '<i class="bi bi-box-seam"></i> NuGet', link_class: btn btn-outline-secondary }
   - {url: "https://github.com/xoofx/Tomlyn/", title: '<i class="bi bi-github"></i> GitHub', link_class: btn btn-info}
-

@@ -1,0 +1,8 @@
+docs:
+  - { path: getting-started.md, title: "Getting started" }
+  - { path: serialization/readme.md, title: "Serialization", folder: true }
+  - { path: source-generation.md, title: "Source generation" }
+  - { path: model/readme.md, title: "DOM model", folder: true }
+  - { path: low-level/readme.md, title: "Low-level APIs", folder: true }
+  - { path: performance.md, title: "Performance" }
+  - { path: compatibility.md, title: "Compatibility" }

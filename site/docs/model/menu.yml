@@ -1,0 +1,5 @@
+model:
+  - { path: readme.md, title: "Overview", self: true }
+  - { path: dom-types.md, title: "TomlTable / TomlArray" }
+  - { path: metadata.md, title: "Metadata store" }
+  - { path: trivia.md, title: "Trivia and roundtrip" }

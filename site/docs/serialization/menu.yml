@@ -1,0 +1,10 @@
+serialization:
+  - { path: readme.md, title: "Overview", self: true }
+  - { path: overview.md, title: "Mapping overview" }
+  - { path: supported-types.md, title: "Supported types" }
+  - { path: converters.md, title: "Converters" }
+  - { path: toml-attributes.md, title: "Tomlyn attributes" }
+  - { path: json-attributes.md, title: "System.Text.Json attributes" }
+  - { path: error-handling.md, title: "Error handling" }
+  - { path: polymorphism.md, title: "Polymorphism" }
+  - { path: extension-data.md, title: "Extension data" }
