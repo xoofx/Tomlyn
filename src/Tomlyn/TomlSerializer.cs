@@ -374,7 +374,7 @@ public static class TomlSerializer
         if (options.RootValueHandling == TomlRootValueHandling.WrapInRootKey)
         {
             tomlWriter.WriteStartTable();
-            tomlWriter.WritePropertyName(options.RootValueKeyName);
+            tomlWriter.WritePropertyNameLiteral(options.RootValueKeyName);
             typeInfo.Write(tomlWriter, value);
             tomlWriter.WriteEndTable();
         }

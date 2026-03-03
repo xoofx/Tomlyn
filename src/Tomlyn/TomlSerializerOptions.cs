@@ -144,7 +144,20 @@ public sealed record TomlSerializerOptions
     /// <summary>
     /// Gets the root key name used when <see cref="RootValueHandling"/> is <see cref="TomlRootValueHandling.WrapInRootKey"/>.
     /// </summary>
-    public string RootValueKeyName { get; init; } = "value";
+    public string RootValueKeyName
+    {
+        get;
+        init
+        {
+            ArgumentGuard.ThrowIfNull(value, nameof(value));
+            if (!TomlKeyValidation.IsValidKeyName(value))
+            {
+                throw new ArgumentException("Root value key name must be non-empty and contain valid Unicode characters.", nameof(value));
+            }
+
+            field = value;
+        }
+    } = "value";
 
     /// <summary>
     /// Gets scalar string style preferences for serialization.
@@ -371,4 +384,3 @@ public sealed record TomlPolymorphismOptions
     /// </summary>
     public TomlUnknownDerivedTypeHandling UnknownDerivedTypeHandling { get; init; } = TomlUnknownDerivedTypeHandling.Fail;
 }
-

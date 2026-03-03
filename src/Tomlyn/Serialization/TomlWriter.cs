@@ -16,6 +16,7 @@ public sealed class TomlWriter
     private readonly Stack<object> _stack;
     private object? _root;
     private string? _pendingPropertyName;
+    private bool _pendingPropertyNameIsLiteral;
     private bool _documentStarted;
     private bool _documentEnded;
 
@@ -161,6 +162,16 @@ public sealed class TomlWriter
     /// <param name="name">The property name.</param>
     public void WritePropertyName(string name)
     {
+        WritePropertyNameCore(name, isLiteral: false);
+    }
+
+    internal void WritePropertyNameLiteral(string name)
+    {
+        WritePropertyNameCore(name, isLiteral: true);
+    }
+
+    private void WritePropertyNameCore(string name, bool isLiteral)
+    {
         ArgumentGuard.ThrowIfNull(name, nameof(name));
         if (_stack.Count == 0 || _stack.Peek() is not TomlTable)
         {
@@ -168,6 +179,7 @@ public sealed class TomlWriter
         }
 
         _pendingPropertyName = name;
+        _pendingPropertyNameIsLiteral = isLiteral;
     }
 
     /// <summary>
@@ -291,8 +303,9 @@ public sealed class TomlWriter
                 throw new InvalidOperationException("A property name must be written before writing a value into a table.");
             }
 
-            WriteTableValue(table, _pendingPropertyName, value);
+            WriteTableValue(table, _pendingPropertyName, value, _pendingPropertyNameIsLiteral);
             _pendingPropertyName = null;
+            _pendingPropertyNameIsLiteral = false;
             return;
         }
 
@@ -316,9 +329,9 @@ public sealed class TomlWriter
         throw new InvalidOperationException($"Unsupported container type `{parent.GetType().FullName}`.");
     }
 
-    private void WriteTableValue(TomlTable table, string propertyName, object value)
+    private void WriteTableValue(TomlTable table, string propertyName, object value, bool isLiteralPropertyName)
     {
-        if (Options.DottedKeyHandling != TomlDottedKeyHandling.Expand || propertyName.IndexOf('.') < 0)
+        if (isLiteralPropertyName || Options.DottedKeyHandling != TomlDottedKeyHandling.Expand || propertyName.IndexOf('.') < 0)
         {
             table[propertyName] = value;
             return;
