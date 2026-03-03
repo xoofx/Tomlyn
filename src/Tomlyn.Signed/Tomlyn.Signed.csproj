@@ -27,6 +27,7 @@
   <ItemGroup>
     <PackageReference Include="System.Text.Json" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
     <PackageReference Include="System.Buffers" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
+    <PackageReference Include="System.Collections.Immutable" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="..\Tomlyn\ILLink.Substitutions.xml" LogicalName="ILLink.Substitutions.xml" />
