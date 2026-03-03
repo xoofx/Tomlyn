@@ -1585,18 +1585,23 @@ public sealed class TomlParser
                 }
 
                 var c = next.Value.Code;
-                value = (value << 4) | HexValue(c);
+                var digit = c switch
+                {
+                    >= '0' and <= '9' => c - '0',
+                    >= 'a' and <= 'f' => 10 + (c - 'a'),
+                    >= 'A' and <= 'F' => 10 + (c - 'A'),
+                    _ => -1,
+                };
+
+                if (digit < 0)
+                {
+                    throw CreateException(CurrentSpan(), $"Invalid hex digit `{(char)c}` in key escape sequence.");
+                }
+
+                value = (value << 4) | digit;
             }
 
             return value;
-        }
-
-        private static int HexValue(int c)
-        {
-            if (c is >= '0' and <= '9') return c - '0';
-            if (c is >= 'a' and <= 'f') return 10 + (c - 'a');
-            if (c is >= 'A' and <= 'F') return 10 + (c - 'A');
-            throw new InvalidOperationException($"Invalid hex digit `{(char)c}`.");
         }
 
         private static ulong HashAdd(ulong hash, int codePoint)
