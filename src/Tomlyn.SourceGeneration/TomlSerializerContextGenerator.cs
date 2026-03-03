@@ -1285,6 +1285,15 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private static string GetTypeInfoPropertyName(ITypeSymbol type)
     {
+        if (type is IArrayTypeSymbol array)
+        {
+            var suffix = array.Rank == 1
+                ? "Array"
+                : "Array" + array.Rank.ToString(CultureInfo.InvariantCulture);
+
+            return SanitizeIdentifier(GetTypeInfoPropertyName(array.ElementType) + suffix);
+        }
+
         if (type is INamedTypeSymbol named && named.IsGenericType)
         {
             var baseName = named.Name;
