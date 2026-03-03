@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using NUnit.Framework;
+using Tomlyn.Serialization;
 
 namespace Tomlyn.Tests;
 
@@ -77,6 +78,42 @@ public class NewApiReflectionPocoTests
     {
         [JsonRequired]
         public int Value { get; set; }
+    }
+
+    private sealed class EmptyModel
+    {
+    }
+
+    private sealed class MultipleAnnotatedConstructorsModel
+    {
+        [JsonConstructor]
+        public MultipleAnnotatedConstructorsModel(int value)
+        {
+            Value = value;
+        }
+
+        [TomlConstructor]
+        public MultipleAnnotatedConstructorsModel(string value)
+        {
+            Value = int.Parse(value);
+        }
+
+        public int Value { get; }
+    }
+
+    private sealed class AmbiguousConstructorsModel
+    {
+        public AmbiguousConstructorsModel(int value)
+        {
+            Value = value;
+        }
+
+        public AmbiguousConstructorsModel(string value)
+        {
+            Value = int.Parse(value);
+        }
+
+        public int Value { get; }
     }
 
     [Test]
@@ -160,5 +197,27 @@ public class NewApiReflectionPocoTests
     public void Deserialize_ThrowsWhenRequiredMemberMissing()
     {
         Assert.Throws<TomlException>(() => TomlSerializer.Deserialize<RequiredModel>("Other = 1\n"));
+    }
+
+    [Test]
+    public void SerializeDeserialize_EmptyPoco_NoMembers_Works()
+    {
+        var toml = TomlSerializer.Serialize(new EmptyModel());
+        var model = TomlSerializer.Deserialize<EmptyModel>(toml);
+        Assert.That(model, Is.Not.Null);
+    }
+
+    [Test]
+    public void Deserialize_MultipleAnnotatedConstructors_ThrowsTomlException()
+    {
+        var ex = Assert.Throws<TomlException>(() => TomlSerializer.Deserialize<MultipleAnnotatedConstructorsModel>("Value = 1\n"));
+        Assert.That(ex!.Message, Does.Contain("Multiple constructors"));
+    }
+
+    [Test]
+    public void Deserialize_AmbiguousConstructors_ThrowsTomlException()
+    {
+        var ex = Assert.Throws<TomlException>(() => TomlSerializer.Deserialize<AmbiguousConstructorsModel>("Value = 1\n"));
+        Assert.That(ex!.Message, Does.Contain("No suitable constructor"));
     }
 }

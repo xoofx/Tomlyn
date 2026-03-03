@@ -29,16 +29,8 @@ internal static class TomlReflectionTypeInfoResolver
         }
 
         var members = CollectMembers(type, options);
-        if (members.Count == 0)
-        {
-            return null;
-        }
 
         var constructor = SelectConstructor(type);
-        if (type.IsClass && constructor is null)
-        {
-            return null;
-        }
 
         return new ReflectionObjectTomlTypeInfo(type, options, members, constructor);
     }
@@ -47,6 +39,12 @@ internal static class TomlReflectionTypeInfoResolver
     {
         if (type.IsValueType)
         {
+            return null;
+        }
+
+        if (type.IsAbstract)
+        {
+            // Abstract base types can participate in polymorphic graphs even though they can't be instantiated.
             return null;
         }
 
@@ -64,7 +62,7 @@ internal static class TomlReflectionTypeInfoResolver
 
             if (annotated is not null)
             {
-                return null;
+                throw new TomlException($"Multiple constructors on type '{type.FullName}' are annotated with [TomlConstructor] or [JsonConstructor].");
             }
 
             annotated = ctor;
@@ -87,7 +85,7 @@ internal static class TomlReflectionTypeInfoResolver
             return publicCtors[0];
         }
 
-        return null;
+        throw new TomlException($"No suitable constructor could be selected for type '{type.FullName}'.");
     }
 
     private static bool IsSupportedPocoType(Type type)
