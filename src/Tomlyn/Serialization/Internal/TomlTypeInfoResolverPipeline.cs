@@ -161,17 +161,17 @@ internal static class TomlTypeInfoResolverPipeline
                 var created = factory.CreateConverter(type, options);
                 if (created is null)
                 {
-                    throw new InvalidOperationException($"The converter factory '{factory.GetType().FullName}' returned null.");
+                    throw new TomlException($"The converter factory '{factory.GetType().FullName}' returned null.");
                 }
 
                 if (created is TomlConverterFactory)
                 {
-                    throw new InvalidOperationException($"The converter factory '{factory.GetType().FullName}' returned another {nameof(TomlConverterFactory)}.");
+                    throw new TomlException($"The converter factory '{factory.GetType().FullName}' returned another {nameof(TomlConverterFactory)}.");
                 }
 
                 if (!created.CanConvert(type))
                 {
-                    throw new InvalidOperationException(
+                    throw new TomlException(
                         $"The converter factory '{factory.GetType().FullName}' returned a converter that cannot convert '{type.FullName}'.");
                 }
 
@@ -203,7 +203,7 @@ internal static class TomlTypeInfoResolverPipeline
                 return dispatch;
             }
 
-            throw new InvalidOperationException(
+            throw new TomlException(
                 $"No TOML metadata is available for type '{t.FullName}'. " +
                 $"Reflection-based metadata could not be generated for this type. " +
                 $"Provide {nameof(TomlSerializerOptions)}.{nameof(TomlSerializerOptions.TypeInfoResolver)} (source generation) or a custom resolver.");
