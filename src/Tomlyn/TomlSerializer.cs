@@ -19,6 +19,7 @@ public static class TomlSerializer
 
     private static readonly bool ReflectionEnabledByDefault = TomlSerializerFeatureSwitches.IsReflectionEnabledByDefaultCalculated;
     private static readonly Encoding DefaultStreamEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+    private static ReadOnlySpan<byte> Utf8Bom => [0xEF, 0xBB, 0xBF];
 
     /// <summary>
     /// Gets a value indicating whether reflection-based serialization is enabled by default.
@@ -246,8 +247,11 @@ public static class TomlSerializer
     public static T? Deserialize<T>(Stream utf8Stream, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
-        using var reader = new StreamReader(utf8Stream, DefaultStreamEncoding, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
-        return Deserialize<T>(reader, options);
+
+        var utf8Bytes = ReadUtf8Bytes(utf8Stream);
+        var effectiveOptions = options ?? TomlSerializerOptions.Default;
+        var typeInfo = ResolveTypeInfo(effectiveOptions, typeof(T));
+        return (T?)Deserialize(utf8Bytes, typeInfo);
     }
 
     /// <summary>
@@ -257,8 +261,8 @@ public static class TomlSerializer
     {
         ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
         ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
-        using var reader = new StreamReader(utf8Stream, DefaultStreamEncoding, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
-        return Deserialize<T>(reader, typeInfo);
+        var utf8Bytes = ReadUtf8Bytes(utf8Stream);
+        return (T?)Deserialize(utf8Bytes, (TomlTypeInfo)typeInfo);
     }
 
     /// <summary>
@@ -270,8 +274,11 @@ public static class TomlSerializer
     {
         ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
         ArgumentGuard.ThrowIfNull(returnType, nameof(returnType));
-        using var reader = new StreamReader(utf8Stream, DefaultStreamEncoding, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
-        return Deserialize(reader, returnType, options);
+
+        var utf8Bytes = ReadUtf8Bytes(utf8Stream);
+        var effectiveOptions = options ?? TomlSerializerOptions.Default;
+        var typeInfo = ResolveTypeInfo(effectiveOptions, returnType);
+        return Deserialize(utf8Bytes, typeInfo);
     }
 
     /// <summary>
@@ -325,6 +332,21 @@ public static class TomlSerializer
 
         var options = typeInfo.Options;
         var reader = TomlReader.Create(toml, options);
+        return DeserializeCore(reader, typeInfo, options);
+    }
+
+    private static object? Deserialize(byte[] utf8Toml, TomlTypeInfo typeInfo)
+    {
+        ArgumentGuard.ThrowIfNull(utf8Toml, nameof(utf8Toml));
+        ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
+
+        var options = typeInfo.Options;
+        var reader = TomlReader.Create(utf8Toml, options);
+        return DeserializeCore(reader, typeInfo, options);
+    }
+
+    private static object? DeserializeCore(TomlReader reader, TomlTypeInfo typeInfo, TomlSerializerOptions options)
+    {
         reader.Read(); // StartDocument
         reader.Read(); // value start
 
@@ -357,6 +379,34 @@ public static class TomlSerializer
         }
 
         return typeInfo.ReadAsObject(reader);
+    }
+
+    private static byte[] ReadUtf8Bytes(Stream utf8Stream)
+    {
+        if (utf8Stream is MemoryStream memoryStream && memoryStream.TryGetBuffer(out var buffer) &&
+            memoryStream.Position <= int.MaxValue && memoryStream.Length - memoryStream.Position <= int.MaxValue)
+        {
+            var start = buffer.Offset + (int)memoryStream.Position;
+            var length = (int)(memoryStream.Length - memoryStream.Position);
+            var data = new ReadOnlySpan<byte>(buffer.Array!, start, length);
+            return StripUtf8Bom(data).ToArray();
+        }
+
+        using var copy = new MemoryStream();
+        utf8Stream.CopyTo(copy);
+        var bytes = copy.ToArray();
+        var stripped = StripUtf8Bom(bytes);
+        return stripped.Length == bytes.Length ? bytes : stripped.ToArray();
+    }
+
+    private static ReadOnlySpan<byte> StripUtf8Bom(ReadOnlySpan<byte> data)
+    {
+        if (data.Length >= 3 && data[0] == Utf8Bom[0] && data[1] == Utf8Bom[1] && data[2] == Utf8Bom[2])
+        {
+            return data.Slice(3);
+        }
+
+        return data;
     }
 
     /// <summary>
