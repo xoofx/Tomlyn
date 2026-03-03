@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using Tomlyn;
 using Tomlyn.Helpers;
@@ -152,6 +153,123 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     {
         ArgumentGuard.ThrowIfNull(context, nameof(context));
         return new TomlSourceGeneratedListTypeInfo<TElement>(context);
+    }
+
+    /// <summary>
+    /// Creates metadata for a <see cref="HashSet{T}"/>.
+    /// </summary>
+    [RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
+    [RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
+    protected static TomlTypeInfo<HashSet<TElement>> CreateHashSetTypeInfo<TElement>(TomlSerializerContext context)
+    {
+        ArgumentGuard.ThrowIfNull(context, nameof(context));
+        return new TomlHashSetTypeInfo<TElement>(context.Options);
+    }
+
+    /// <summary>
+    /// Creates metadata for a <see cref="HashSet{T}"/> using source-generated resolution for nested elements.
+    /// </summary>
+    /// <remarks>
+    /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
+    /// </remarks>
+    protected static TomlTypeInfo<HashSet<TElement>> CreateSourceGeneratedHashSetTypeInfo<TElement>(TomlSerializerContext context)
+    {
+        ArgumentGuard.ThrowIfNull(context, nameof(context));
+        return new TomlSourceGeneratedHashSetTypeInfo<TElement>(context);
+    }
+
+    /// <summary>
+    /// Creates metadata for a set-like interface type backed by <see cref="HashSet{T}"/>.
+    /// </summary>
+    [RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
+    [RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
+    protected static TomlTypeInfo<TEnumerable> CreateHashSetBackedEnumerableTypeInfo<TEnumerable, TElement>(TomlSerializerContext context)
+        where TEnumerable : IEnumerable<TElement>
+    {
+        ArgumentGuard.ThrowIfNull(context, nameof(context));
+        return new TomlHashSetBackedEnumerableTypeInfo<TEnumerable, TElement>(context.Options);
+    }
+
+    /// <summary>
+    /// Creates metadata for a set-like interface type backed by <see cref="HashSet{T}"/> using source-generated resolution for nested elements.
+    /// </summary>
+    /// <remarks>
+    /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
+    /// </remarks>
+    protected static TomlTypeInfo<TEnumerable> CreateSourceGeneratedHashSetBackedEnumerableTypeInfo<TEnumerable, TElement>(TomlSerializerContext context)
+        where TEnumerable : IEnumerable<TElement>
+    {
+        ArgumentGuard.ThrowIfNull(context, nameof(context));
+        return new TomlSourceGeneratedHashSetBackedEnumerableTypeInfo<TEnumerable, TElement>(context);
+    }
+
+    /// <summary>
+    /// Creates metadata for <see cref="ImmutableArray{T}"/>.
+    /// </summary>
+    [RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
+    [RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
+    protected static TomlTypeInfo<ImmutableArray<TElement>> CreateImmutableArrayTypeInfo<TElement>(TomlSerializerContext context)
+    {
+        ArgumentGuard.ThrowIfNull(context, nameof(context));
+        return new TomlImmutableArrayTypeInfo<TElement>(context.Options);
+    }
+
+    /// <summary>
+    /// Creates metadata for <see cref="ImmutableArray{T}"/> using source-generated resolution for nested elements.
+    /// </summary>
+    /// <remarks>
+    /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
+    /// </remarks>
+    protected static TomlTypeInfo<ImmutableArray<TElement>> CreateSourceGeneratedImmutableArrayTypeInfo<TElement>(TomlSerializerContext context)
+    {
+        ArgumentGuard.ThrowIfNull(context, nameof(context));
+        return new TomlSourceGeneratedImmutableArrayTypeInfo<TElement>(context);
+    }
+
+    /// <summary>
+    /// Creates metadata for <see cref="ImmutableList{T}"/>.
+    /// </summary>
+    [RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
+    [RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
+    protected static TomlTypeInfo<ImmutableList<TElement>> CreateImmutableListTypeInfo<TElement>(TomlSerializerContext context)
+    {
+        ArgumentGuard.ThrowIfNull(context, nameof(context));
+        return new TomlImmutableListTypeInfo<TElement>(context.Options);
+    }
+
+    /// <summary>
+    /// Creates metadata for <see cref="ImmutableList{T}"/> using source-generated resolution for nested elements.
+    /// </summary>
+    /// <remarks>
+    /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
+    /// </remarks>
+    protected static TomlTypeInfo<ImmutableList<TElement>> CreateSourceGeneratedImmutableListTypeInfo<TElement>(TomlSerializerContext context)
+    {
+        ArgumentGuard.ThrowIfNull(context, nameof(context));
+        return new TomlSourceGeneratedImmutableListTypeInfo<TElement>(context);
+    }
+
+    /// <summary>
+    /// Creates metadata for <see cref="ImmutableHashSet{T}"/>.
+    /// </summary>
+    [RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
+    [RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
+    protected static TomlTypeInfo<ImmutableHashSet<TElement>> CreateImmutableHashSetTypeInfo<TElement>(TomlSerializerContext context)
+    {
+        ArgumentGuard.ThrowIfNull(context, nameof(context));
+        return new TomlImmutableHashSetTypeInfo<TElement>(context.Options);
+    }
+
+    /// <summary>
+    /// Creates metadata for <see cref="ImmutableHashSet{T}"/> using source-generated resolution for nested elements.
+    /// </summary>
+    /// <remarks>
+    /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
+    /// </remarks>
+    protected static TomlTypeInfo<ImmutableHashSet<TElement>> CreateSourceGeneratedImmutableHashSetTypeInfo<TElement>(TomlSerializerContext context)
+    {
+        ArgumentGuard.ThrowIfNull(context, nameof(context));
+        return new TomlSourceGeneratedImmutableHashSetTypeInfo<TElement>(context);
     }
 
     /// <summary>

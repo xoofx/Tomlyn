@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using Tomlyn.Helpers;
 
 namespace Tomlyn.Serialization.Internal;
@@ -410,3 +411,477 @@ internal sealed class TomlSourceGeneratedDictionaryTypeInfo<TDictionary, TValue>
     }
 }
 
+internal sealed class TomlSourceGeneratedHashSetTypeInfo<TElement> : TomlTypeInfo<HashSet<TElement>>
+{
+    private readonly TomlSerializerContext _context;
+    private TomlTypeInfo? _elementTypeInfo;
+    private TomlTypeInfo<TElement>? _typedElementTypeInfo;
+
+    public TomlSourceGeneratedHashSetTypeInfo(TomlSerializerContext context)
+        : base(context.Options)
+    {
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+    }
+
+    public override void Write(TomlWriter writer, HashSet<TElement> value)
+    {
+        ArgumentGuard.ThrowIfNull(writer, nameof(writer));
+        ArgumentGuard.ThrowIfNull(value, nameof(value));
+
+        writer.WriteStartArray();
+        foreach (var element in value)
+        {
+            WriteElement(writer, element);
+        }
+        writer.WriteEndArray();
+    }
+
+    public override HashSet<TElement>? Read(TomlReader reader)
+    {
+        ArgumentGuard.ThrowIfNull(reader, nameof(reader));
+        if (reader.TokenType != TomlTokenType.StartArray)
+        {
+            throw reader.CreateException($"Expected {TomlTokenType.StartArray} token but was {reader.TokenType}.");
+        }
+
+        var set = new HashSet<TElement>();
+        reader.Read();
+        while (reader.TokenType != TomlTokenType.EndArray)
+        {
+            set.Add(ReadElement(reader));
+        }
+
+        reader.Read();
+        return set;
+    }
+
+    private void EnsureElementTypeInfo()
+    {
+        if (_elementTypeInfo is not null)
+        {
+            return;
+        }
+
+        var fromConverters = TomlTypeInfoResolverPipeline.TryResolveFromConverters(Options, typeof(TElement));
+        var resolved = fromConverters ?? _context.GetTypeInfo(typeof(TElement), Options);
+        if (resolved is null)
+        {
+            throw new InvalidOperationException(
+                $"No generated metadata is available for type '{typeof(TElement).FullName}' in the provided context.");
+        }
+
+        _elementTypeInfo = resolved;
+        _typedElementTypeInfo = resolved as TomlTypeInfo<TElement>;
+    }
+
+    private void WriteElement(TomlWriter writer, TElement element)
+    {
+        EnsureElementTypeInfo();
+
+        if (element is null)
+        {
+            throw new TomlException("TOML does not support null values.");
+        }
+
+        if (_typedElementTypeInfo is not null)
+        {
+            _typedElementTypeInfo.Write(writer, element);
+            return;
+        }
+
+        _elementTypeInfo!.Write(writer, element);
+    }
+
+    private TElement ReadElement(TomlReader reader)
+    {
+        EnsureElementTypeInfo();
+
+        if (_typedElementTypeInfo is not null)
+        {
+            return _typedElementTypeInfo.Read(reader)!;
+        }
+
+        return (TElement)_elementTypeInfo!.ReadAsObject(reader)!;
+    }
+}
+
+internal sealed class TomlSourceGeneratedHashSetBackedEnumerableTypeInfo<TEnumerable, TElement> : TomlTypeInfo<TEnumerable>
+    where TEnumerable : IEnumerable<TElement>
+{
+    private readonly TomlSerializerContext _context;
+    private TomlTypeInfo? _elementTypeInfo;
+    private TomlTypeInfo<TElement>? _typedElementTypeInfo;
+
+    public TomlSourceGeneratedHashSetBackedEnumerableTypeInfo(TomlSerializerContext context)
+        : base(context.Options)
+    {
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+    }
+
+    public override void Write(TomlWriter writer, TEnumerable value)
+    {
+        ArgumentGuard.ThrowIfNull(writer, nameof(writer));
+        ArgumentGuard.ThrowIfNull(value, nameof(value));
+
+        writer.WriteStartArray();
+        foreach (var element in value)
+        {
+            WriteElement(writer, element);
+        }
+        writer.WriteEndArray();
+    }
+
+    public override TEnumerable? Read(TomlReader reader)
+    {
+        ArgumentGuard.ThrowIfNull(reader, nameof(reader));
+        if (reader.TokenType != TomlTokenType.StartArray)
+        {
+            throw reader.CreateException($"Expected {TomlTokenType.StartArray} token but was {reader.TokenType}.");
+        }
+
+        var set = new HashSet<TElement>();
+        reader.Read();
+        while (reader.TokenType != TomlTokenType.EndArray)
+        {
+            set.Add(ReadElement(reader));
+        }
+
+        reader.Read();
+        return (TEnumerable)(object)set;
+    }
+
+    private void EnsureElementTypeInfo()
+    {
+        if (_elementTypeInfo is not null)
+        {
+            return;
+        }
+
+        var fromConverters = TomlTypeInfoResolverPipeline.TryResolveFromConverters(Options, typeof(TElement));
+        var resolved = fromConverters ?? _context.GetTypeInfo(typeof(TElement), Options);
+        if (resolved is null)
+        {
+            throw new InvalidOperationException(
+                $"No generated metadata is available for type '{typeof(TElement).FullName}' in the provided context.");
+        }
+
+        _elementTypeInfo = resolved;
+        _typedElementTypeInfo = resolved as TomlTypeInfo<TElement>;
+    }
+
+    private void WriteElement(TomlWriter writer, TElement element)
+    {
+        EnsureElementTypeInfo();
+
+        if (element is null)
+        {
+            throw new TomlException("TOML does not support null values.");
+        }
+
+        if (_typedElementTypeInfo is not null)
+        {
+            _typedElementTypeInfo.Write(writer, element);
+            return;
+        }
+
+        _elementTypeInfo!.Write(writer, element);
+    }
+
+    private TElement ReadElement(TomlReader reader)
+    {
+        EnsureElementTypeInfo();
+
+        if (_typedElementTypeInfo is not null)
+        {
+            return _typedElementTypeInfo.Read(reader)!;
+        }
+
+        return (TElement)_elementTypeInfo!.ReadAsObject(reader)!;
+    }
+}
+
+internal sealed class TomlSourceGeneratedImmutableArrayTypeInfo<TElement> : TomlTypeInfo<ImmutableArray<TElement>>
+{
+    private readonly TomlSerializerContext _context;
+    private TomlTypeInfo? _elementTypeInfo;
+    private TomlTypeInfo<TElement>? _typedElementTypeInfo;
+
+    public TomlSourceGeneratedImmutableArrayTypeInfo(TomlSerializerContext context)
+        : base(context.Options)
+    {
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+    }
+
+    public override void Write(TomlWriter writer, ImmutableArray<TElement> value)
+    {
+        ArgumentGuard.ThrowIfNull(writer, nameof(writer));
+
+        if (value.IsDefault)
+        {
+            value = ImmutableArray<TElement>.Empty;
+        }
+
+        writer.WriteStartArray();
+        for (var i = 0; i < value.Length; i++)
+        {
+            WriteElement(writer, value[i]);
+        }
+        writer.WriteEndArray();
+    }
+
+    public override ImmutableArray<TElement> Read(TomlReader reader)
+    {
+        ArgumentGuard.ThrowIfNull(reader, nameof(reader));
+        if (reader.TokenType != TomlTokenType.StartArray)
+        {
+            throw reader.CreateException($"Expected {TomlTokenType.StartArray} token but was {reader.TokenType}.");
+        }
+
+        var builder = ImmutableArray.CreateBuilder<TElement>();
+        reader.Read();
+        while (reader.TokenType != TomlTokenType.EndArray)
+        {
+            builder.Add(ReadElement(reader));
+        }
+
+        reader.Read();
+        return builder.ToImmutable();
+    }
+
+    private void EnsureElementTypeInfo()
+    {
+        if (_elementTypeInfo is not null)
+        {
+            return;
+        }
+
+        var fromConverters = TomlTypeInfoResolverPipeline.TryResolveFromConverters(Options, typeof(TElement));
+        var resolved = fromConverters ?? _context.GetTypeInfo(typeof(TElement), Options);
+        if (resolved is null)
+        {
+            throw new InvalidOperationException(
+                $"No generated metadata is available for type '{typeof(TElement).FullName}' in the provided context.");
+        }
+
+        _elementTypeInfo = resolved;
+        _typedElementTypeInfo = resolved as TomlTypeInfo<TElement>;
+    }
+
+    private void WriteElement(TomlWriter writer, TElement element)
+    {
+        EnsureElementTypeInfo();
+
+        if (element is null)
+        {
+            throw new TomlException("TOML does not support null values.");
+        }
+
+        if (_typedElementTypeInfo is not null)
+        {
+            _typedElementTypeInfo.Write(writer, element);
+            return;
+        }
+
+        _elementTypeInfo!.Write(writer, element);
+    }
+
+    private TElement ReadElement(TomlReader reader)
+    {
+        EnsureElementTypeInfo();
+
+        if (_typedElementTypeInfo is not null)
+        {
+            return _typedElementTypeInfo.Read(reader)!;
+        }
+
+        return (TElement)_elementTypeInfo!.ReadAsObject(reader)!;
+    }
+}
+
+internal sealed class TomlSourceGeneratedImmutableListTypeInfo<TElement> : TomlTypeInfo<ImmutableList<TElement>>
+{
+    private readonly TomlSerializerContext _context;
+    private TomlTypeInfo? _elementTypeInfo;
+    private TomlTypeInfo<TElement>? _typedElementTypeInfo;
+
+    public TomlSourceGeneratedImmutableListTypeInfo(TomlSerializerContext context)
+        : base(context.Options)
+    {
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+    }
+
+    public override void Write(TomlWriter writer, ImmutableList<TElement> value)
+    {
+        ArgumentGuard.ThrowIfNull(writer, nameof(writer));
+        ArgumentGuard.ThrowIfNull(value, nameof(value));
+
+        writer.WriteStartArray();
+        for (var i = 0; i < value.Count; i++)
+        {
+            WriteElement(writer, value[i]);
+        }
+        writer.WriteEndArray();
+    }
+
+    public override ImmutableList<TElement>? Read(TomlReader reader)
+    {
+        ArgumentGuard.ThrowIfNull(reader, nameof(reader));
+        if (reader.TokenType != TomlTokenType.StartArray)
+        {
+            throw reader.CreateException($"Expected {TomlTokenType.StartArray} token but was {reader.TokenType}.");
+        }
+
+        var builder = ImmutableList.CreateBuilder<TElement>();
+        reader.Read();
+        while (reader.TokenType != TomlTokenType.EndArray)
+        {
+            builder.Add(ReadElement(reader));
+        }
+
+        reader.Read();
+        return builder.ToImmutable();
+    }
+
+    private void EnsureElementTypeInfo()
+    {
+        if (_elementTypeInfo is not null)
+        {
+            return;
+        }
+
+        var fromConverters = TomlTypeInfoResolverPipeline.TryResolveFromConverters(Options, typeof(TElement));
+        var resolved = fromConverters ?? _context.GetTypeInfo(typeof(TElement), Options);
+        if (resolved is null)
+        {
+            throw new InvalidOperationException(
+                $"No generated metadata is available for type '{typeof(TElement).FullName}' in the provided context.");
+        }
+
+        _elementTypeInfo = resolved;
+        _typedElementTypeInfo = resolved as TomlTypeInfo<TElement>;
+    }
+
+    private void WriteElement(TomlWriter writer, TElement element)
+    {
+        EnsureElementTypeInfo();
+
+        if (element is null)
+        {
+            throw new TomlException("TOML does not support null values.");
+        }
+
+        if (_typedElementTypeInfo is not null)
+        {
+            _typedElementTypeInfo.Write(writer, element);
+            return;
+        }
+
+        _elementTypeInfo!.Write(writer, element);
+    }
+
+    private TElement ReadElement(TomlReader reader)
+    {
+        EnsureElementTypeInfo();
+
+        if (_typedElementTypeInfo is not null)
+        {
+            return _typedElementTypeInfo.Read(reader)!;
+        }
+
+        return (TElement)_elementTypeInfo!.ReadAsObject(reader)!;
+    }
+}
+
+internal sealed class TomlSourceGeneratedImmutableHashSetTypeInfo<TElement> : TomlTypeInfo<ImmutableHashSet<TElement>>
+{
+    private readonly TomlSerializerContext _context;
+    private TomlTypeInfo? _elementTypeInfo;
+    private TomlTypeInfo<TElement>? _typedElementTypeInfo;
+
+    public TomlSourceGeneratedImmutableHashSetTypeInfo(TomlSerializerContext context)
+        : base(context.Options)
+    {
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+    }
+
+    public override void Write(TomlWriter writer, ImmutableHashSet<TElement> value)
+    {
+        ArgumentGuard.ThrowIfNull(writer, nameof(writer));
+        ArgumentGuard.ThrowIfNull(value, nameof(value));
+
+        writer.WriteStartArray();
+        foreach (var element in value)
+        {
+            WriteElement(writer, element);
+        }
+        writer.WriteEndArray();
+    }
+
+    public override ImmutableHashSet<TElement>? Read(TomlReader reader)
+    {
+        ArgumentGuard.ThrowIfNull(reader, nameof(reader));
+        if (reader.TokenType != TomlTokenType.StartArray)
+        {
+            throw reader.CreateException($"Expected {TomlTokenType.StartArray} token but was {reader.TokenType}.");
+        }
+
+        var builder = ImmutableHashSet.CreateBuilder<TElement>();
+        reader.Read();
+        while (reader.TokenType != TomlTokenType.EndArray)
+        {
+            builder.Add(ReadElement(reader));
+        }
+
+        reader.Read();
+        return builder.ToImmutable();
+    }
+
+    private void EnsureElementTypeInfo()
+    {
+        if (_elementTypeInfo is not null)
+        {
+            return;
+        }
+
+        var fromConverters = TomlTypeInfoResolverPipeline.TryResolveFromConverters(Options, typeof(TElement));
+        var resolved = fromConverters ?? _context.GetTypeInfo(typeof(TElement), Options);
+        if (resolved is null)
+        {
+            throw new InvalidOperationException(
+                $"No generated metadata is available for type '{typeof(TElement).FullName}' in the provided context.");
+        }
+
+        _elementTypeInfo = resolved;
+        _typedElementTypeInfo = resolved as TomlTypeInfo<TElement>;
+    }
+
+    private void WriteElement(TomlWriter writer, TElement element)
+    {
+        EnsureElementTypeInfo();
+
+        if (element is null)
+        {
+            throw new TomlException("TOML does not support null values.");
+        }
+
+        if (_typedElementTypeInfo is not null)
+        {
+            _typedElementTypeInfo.Write(writer, element);
+            return;
+        }
+
+        _elementTypeInfo!.Write(writer, element);
+    }
+
+    private TElement ReadElement(TomlReader reader)
+    {
+        EnsureElementTypeInfo();
+
+        if (_typedElementTypeInfo is not null)
+        {
+            return _typedElementTypeInfo.Read(reader)!;
+        }
+
+        return (TElement)_elementTypeInfo!.ReadAsObject(reader)!;
+    }
+}
