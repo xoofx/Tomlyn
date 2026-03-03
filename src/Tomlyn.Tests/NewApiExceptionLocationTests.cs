@@ -85,6 +85,24 @@ public class NewApiExceptionLocationTests
     }
 
     [Test]
+    public void Parse_InvalidDateTimeLiteral_IncludesLocation()
+    {
+        var options = new TomlSerializerOptions { SourceName = "dt.toml" };
+        var reader = TomlReader.Create("dt = 1979-05-27T07:32:00+24:00\n", options);
+
+        reader.Read(); // StartDocument
+        reader.Read(); // StartTable
+        reader.Read(); // PropertyName
+
+        var ex = Assert.Throws<TomlException>(() => reader.Read());
+        Assert.That(ex, Is.Not.Null);
+        Assert.That(ex!.Span.HasValue, Is.True);
+        Assert.That(ex.Line, Is.Not.Null.And.GreaterThan(0));
+        Assert.That(ex.Column, Is.Not.Null.And.GreaterThan(0));
+        Assert.That(ex.Message, Does.Contain("dt.toml("));
+    }
+
+    [Test]
     public void Deserialize_RootValueKeyNotFound_IncludesLocation()
     {
         var options = new TomlSerializerOptions

@@ -147,6 +147,12 @@ public readonly struct TomlParseEvent
             return time;
         }
 
-        throw new InvalidOperationException($"Invalid TOML datetime literal `{_stringValue}`.");
+        var message = $"Invalid TOML datetime literal `{_stringValue}`.";
+        if (Span is { } span)
+        {
+            throw new TomlException(span, message);
+        }
+
+        throw new TomlException(message);
     }
 }
