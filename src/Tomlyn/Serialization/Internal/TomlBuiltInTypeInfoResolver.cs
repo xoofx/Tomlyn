@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using Tomlyn.Helpers;
 using Tomlyn.Model;
@@ -94,6 +95,36 @@ internal static class TomlBuiltInTypeInfoResolver
         if (genericDefinition == typeof(List<>))
         {
             var typeInfoType = typeof(TomlListTypeInfo<>).MakeGenericType(args[0]);
+            return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
+        }
+
+        if (genericDefinition == typeof(HashSet<>))
+        {
+            var typeInfoType = typeof(TomlHashSetTypeInfo<>).MakeGenericType(args[0]);
+            return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
+        }
+
+        if (genericDefinition == typeof(ISet<>))
+        {
+            var typeInfoType = typeof(TomlHashSetBackedEnumerableTypeInfo<,>).MakeGenericType(type, args[0]);
+            return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
+        }
+
+        if (genericDefinition == typeof(ImmutableArray<>))
+        {
+            var typeInfoType = typeof(TomlImmutableArrayTypeInfo<>).MakeGenericType(args[0]);
+            return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
+        }
+
+        if (genericDefinition == typeof(ImmutableList<>))
+        {
+            var typeInfoType = typeof(TomlImmutableListTypeInfo<>).MakeGenericType(args[0]);
+            return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
+        }
+
+        if (genericDefinition == typeof(ImmutableHashSet<>))
+        {
+            var typeInfoType = typeof(TomlImmutableHashSetTypeInfo<>).MakeGenericType(args[0]);
             return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
         }
 
