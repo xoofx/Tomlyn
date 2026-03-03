@@ -74,7 +74,7 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
 
         if (string.IsNullOrEmpty(discriminatorPropertyName))
         {
-            throw new InvalidOperationException($"Polymorphic type '{type.FullName}' must specify a discriminator property name.");
+            throw new TomlException($"Polymorphic type '{type.FullName}' must specify a discriminator property name.");
         }
 
         var derivedByDiscriminator = new Dictionary<string, Type>(StringComparer.Ordinal);
@@ -131,22 +131,22 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
 
         if (discriminator.Length == 0)
         {
-            throw new InvalidOperationException($"Derived type discriminator for base '{baseType.FullName}' cannot be empty.");
+            throw new TomlException($"Derived type discriminator for base '{baseType.FullName}' cannot be empty.");
         }
 
         if (!baseType.IsAssignableFrom(derivedType))
         {
-            throw new InvalidOperationException($"Derived type '{derivedType.FullName}' is not assignable to base type '{baseType.FullName}'.");
+            throw new TomlException($"Derived type '{derivedType.FullName}' is not assignable to base type '{baseType.FullName}'.");
         }
 
         if (derivedTypeByDiscriminator.ContainsKey(discriminator))
         {
-            throw new InvalidOperationException($"Multiple derived types are registered with discriminator '{discriminator}' for base '{baseType.FullName}'.");
+            throw new TomlException($"Multiple derived types are registered with discriminator '{discriminator}' for base '{baseType.FullName}'.");
         }
 
         if (discriminatorByDerivedType.ContainsKey(derivedType))
         {
-            throw new InvalidOperationException($"Derived type '{derivedType.FullName}' is registered multiple times for base '{baseType.FullName}'.");
+            throw new TomlException($"Derived type '{derivedType.FullName}' is registered multiple times for base '{baseType.FullName}'.");
         }
 
         derivedTypeByDiscriminator.Add(discriminator, derivedType);
