@@ -291,6 +291,31 @@ internal partial class TestTomlSerializerContextConstructorSelection : TomlSeria
 internal partial class TestTomlSerializerContextPolymorphism : TomlSerializerContext
 {
 }
+
+[TomlPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[TomlDerivedType(typeof(GeneratedDefaultCircle))]
+[TomlDerivedType(typeof(GeneratedDefaultSquare), "square")]
+public abstract class GeneratedDefaultShape
+{
+}
+
+public sealed class GeneratedDefaultCircle : GeneratedDefaultShape
+{
+    public string Color { get; set; } = "";
+    public double Radius { get; set; }
+}
+
+public sealed class GeneratedDefaultSquare : GeneratedDefaultShape
+{
+    public string Color { get; set; } = "";
+    public double Side { get; set; }
+}
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(GeneratedDefaultShape))]
+internal partial class TestTomlSerializerContextDefaultDerivedType : TomlSerializerContext
+{
+}
 #pragma warning restore SYSLIB1224
 
 public class NewApiSourceGenerationTests
@@ -641,5 +666,77 @@ public class NewApiSourceGenerationTests
         Assert.That(roundtrip, Is.Not.Null);
         Assert.That(roundtrip!.Kind, Is.EqualTo(payload.Kind));
         Assert.That(roundtrip.Value, Is.EqualTo(payload.Value));
+    }
+
+    // --- Feature 1: Default Derived Type (source-gen) ---
+
+    [Test]
+    public void GeneratedContext_DefaultDerivedType_Serialize_OmitsDiscriminator()
+    {
+        var context = TestTomlSerializerContextDefaultDerivedType.Default;
+        GeneratedDefaultShape model = new GeneratedDefaultCircle { Color = "red", Radius = 5.0 };
+        var toml = TomlSerializer.Serialize(model, context.GeneratedDefaultShape);
+
+        Assert.That(toml, Does.Not.Contain("type"));
+        Assert.That(toml, Does.Contain("color = \"red\""));
+        Assert.That(toml, Does.Contain("radius = 5"));
+    }
+
+    [Test]
+    public void GeneratedContext_DefaultDerivedType_Serialize_WritesDiscriminator_ForNonDefault()
+    {
+        var context = TestTomlSerializerContextDefaultDerivedType.Default;
+        GeneratedDefaultShape model = new GeneratedDefaultSquare { Color = "blue", Side = 3.0 };
+        var toml = TomlSerializer.Serialize(model, context.GeneratedDefaultShape);
+
+        Assert.That(toml, Does.Contain("type = \"square\""));
+        Assert.That(toml, Does.Contain("color = \"blue\""));
+        Assert.That(toml, Does.Contain("side = 3"));
+    }
+
+    [Test]
+    public void GeneratedContext_DefaultDerivedType_Deserialize_MissingDiscriminator()
+    {
+        var context = TestTomlSerializerContextDefaultDerivedType.Default;
+        var toml = """
+            color = "red"
+            radius = 5.0
+            """;
+
+        var result = TomlSerializer.Deserialize(toml, context.GeneratedDefaultShape);
+
+        Assert.That(result, Is.TypeOf<GeneratedDefaultCircle>());
+        var circle = (GeneratedDefaultCircle)result!;
+        Assert.That(circle.Color, Is.EqualTo("red"));
+        Assert.That(circle.Radius, Is.EqualTo(5.0));
+    }
+
+    [Test]
+    public void GeneratedContext_DefaultDerivedType_Deserialize_UnknownDiscriminator()
+    {
+        var context = TestTomlSerializerContextDefaultDerivedType.Default;
+        var toml = """
+            type = "triangle"
+            color = "green"
+            """;
+
+        var result = TomlSerializer.Deserialize(toml, context.GeneratedDefaultShape);
+
+        Assert.That(result, Is.TypeOf<GeneratedDefaultCircle>());
+        Assert.That(((GeneratedDefaultCircle)result!).Color, Is.EqualTo("green"));
+    }
+
+    [Test]
+    public void GeneratedContext_DefaultDerivedType_Roundtrip()
+    {
+        var context = TestTomlSerializerContextDefaultDerivedType.Default;
+        GeneratedDefaultShape original = new GeneratedDefaultCircle { Color = "red", Radius = 5.0 };
+        var toml = TomlSerializer.Serialize(original, context.GeneratedDefaultShape);
+        var result = TomlSerializer.Deserialize(toml, context.GeneratedDefaultShape);
+
+        Assert.That(result, Is.TypeOf<GeneratedDefaultCircle>());
+        var circle = (GeneratedDefaultCircle)result!;
+        Assert.That(circle.Color, Is.EqualTo("red"));
+        Assert.That(circle.Radius, Is.EqualTo(5.0));
     }
 }

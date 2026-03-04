@@ -17,8 +17,9 @@ public sealed class TomlPolymorphicTypeInfo<TBase> : TomlTypeInfo<TBase>
     private readonly TomlTypeInfo<TBase>? _baseTypeInfo;
     private readonly string _discriminatorPropertyName;
     private readonly Dictionary<string, TomlTypeInfo> _derivedTypeInfoByDiscriminator;
-    private readonly Dictionary<Type, (string Discriminator, TomlTypeInfo TypeInfo)> _derivedTypeInfoByRuntimeType;
+    private readonly Dictionary<Type, (string? Discriminator, TomlTypeInfo TypeInfo)> _derivedTypeInfoByRuntimeType;
     private readonly TomlUnknownDerivedTypeHandling _unknownDerivedTypeHandling;
+    private readonly TomlTypeInfo? _defaultDerivedTypeInfo;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TomlPolymorphicTypeInfo{TBase}"/> class.
@@ -34,12 +35,33 @@ public sealed class TomlPolymorphicTypeInfo<TBase> : TomlTypeInfo<TBase>
         TomlTypeInfo<TBase>? baseTypeInfo,
         string? discriminatorPropertyName,
         IReadOnlyDictionary<string, TomlTypeInfo> derivedTypeInfoByDiscriminator)
+        : this(options, baseTypeInfo, discriminatorPropertyName, derivedTypeInfoByDiscriminator, null)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TomlPolymorphicTypeInfo{TBase}"/> class with an optional default derived type.
+    /// </summary>
+    /// <param name="options">The serializer options.</param>
+    /// <param name="baseTypeInfo">Optional base type metadata used when falling back to base types.</param>
+    /// <param name="discriminatorPropertyName">Optional discriminator key name. When <see langword="null"/> or empty, <see cref="TomlSerializerOptions.PolymorphismOptions"/> is used.</param>
+    /// <param name="derivedTypeInfoByDiscriminator">A mapping from discriminator values to derived type metadata.</param>
+    /// <param name="defaultDerivedTypeInfo">Optional default derived type metadata, used when the discriminator is missing or unrecognized.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="options"/> or <paramref name="derivedTypeInfoByDiscriminator"/> is <see langword="null"/>.</exception>
+    /// <exception cref="TomlException">Thrown when the mapping is invalid.</exception>
+    public TomlPolymorphicTypeInfo(
+        TomlSerializerOptions options,
+        TomlTypeInfo<TBase>? baseTypeInfo,
+        string? discriminatorPropertyName,
+        IReadOnlyDictionary<string, TomlTypeInfo> derivedTypeInfoByDiscriminator,
+        TomlTypeInfo? defaultDerivedTypeInfo)
         : base(options)
     {
         ArgumentGuard.ThrowIfNull(options, nameof(options));
         ArgumentGuard.ThrowIfNull(derivedTypeInfoByDiscriminator, nameof(derivedTypeInfoByDiscriminator));
 
         _baseTypeInfo = baseTypeInfo;
+        _defaultDerivedTypeInfo = defaultDerivedTypeInfo;
         _unknownDerivedTypeHandling = options.PolymorphismOptions.UnknownDerivedTypeHandling;
         _discriminatorPropertyName = string.IsNullOrEmpty(discriminatorPropertyName)
             ? options.PolymorphismOptions.TypeDiscriminatorPropertyName
@@ -51,7 +73,7 @@ public sealed class TomlPolymorphicTypeInfo<TBase> : TomlTypeInfo<TBase>
         }
 
         _derivedTypeInfoByDiscriminator = new Dictionary<string, TomlTypeInfo>(derivedTypeInfoByDiscriminator.Count, StringComparer.Ordinal);
-        _derivedTypeInfoByRuntimeType = new Dictionary<Type, (string, TomlTypeInfo)>(derivedTypeInfoByDiscriminator.Count);
+        _derivedTypeInfoByRuntimeType = new Dictionary<Type, (string?, TomlTypeInfo)>(derivedTypeInfoByDiscriminator.Count + (defaultDerivedTypeInfo is not null ? 1 : 0));
 
         foreach (var pair in derivedTypeInfoByDiscriminator)
         {
@@ -82,7 +104,18 @@ public sealed class TomlPolymorphicTypeInfo<TBase> : TomlTypeInfo<TBase>
             _derivedTypeInfoByRuntimeType.Add(runtimeType, (discriminator, typeInfo));
         }
 
-        if (_derivedTypeInfoByDiscriminator.Count == 0)
+        if (defaultDerivedTypeInfo is not null)
+        {
+            var defaultType = defaultDerivedTypeInfo.Type;
+            if (_derivedTypeInfoByRuntimeType.ContainsKey(defaultType))
+            {
+                throw new TomlException($"Polymorphic type '{typeof(TBase).FullName}' cannot register derived type '{defaultType.FullName}' more than once.");
+            }
+
+            _derivedTypeInfoByRuntimeType.Add(defaultType, (null, defaultDerivedTypeInfo));
+        }
+
+        if (_derivedTypeInfoByDiscriminator.Count == 0 && _defaultDerivedTypeInfo is null)
         {
             throw new TomlException($"Polymorphic type '{typeof(TBase).FullName}' must register at least one derived type.");
         }
@@ -110,6 +143,13 @@ public sealed class TomlPolymorphicTypeInfo<TBase> : TomlTypeInfo<TBase>
         }
 
         var (discriminator, runtimeTypeInfo) = dispatch;
+
+        // Default derived type (null discriminator) — serialize without discriminator
+        if (discriminator is null)
+        {
+            runtimeTypeInfo.Write(writer, value);
+            return;
+        }
 
         var tempWriter = new TomlWriter(TextWriter.Null, Options);
         tempWriter.WriteStartDocument();
@@ -149,6 +189,15 @@ public sealed class TomlPolymorphicTypeInfo<TBase> : TomlTypeInfo<TBase>
         var buffer = reader.CaptureCurrentValueToBuffer();
         if (!TryReadDiscriminator(buffer, out var discriminator, out var discriminatorSpan))
         {
+            // No discriminator found — try default derived type first
+            if (_defaultDerivedTypeInfo is not null)
+            {
+                var defaultReader = TomlReader.Create(buffer);
+                defaultReader.Read(); // StartDocument
+                defaultReader.Read(); // value start
+                return (TBase?)_defaultDerivedTypeInfo.ReadAsObject(defaultReader);
+            }
+
             var span = tableStartSpan ?? GetTableSpan(buffer);
             if (typeof(TBase).IsInterface || typeof(TBase).IsAbstract)
             {
@@ -181,6 +230,11 @@ public sealed class TomlPolymorphicTypeInfo<TBase> : TomlTypeInfo<TBase>
         if (_derivedTypeInfoByDiscriminator.TryGetValue(discriminator, out var derivedTypeInfo))
         {
             targetTypeInfo = derivedTypeInfo;
+        }
+        else if (_defaultDerivedTypeInfo is not null)
+        {
+            // Unknown discriminator — use default derived type
+            targetTypeInfo = _defaultDerivedTypeInfo;
         }
         else if (_unknownDerivedTypeHandling == TomlUnknownDerivedTypeHandling.FallBackToBaseType && _baseTypeInfo is not null && !typeof(TBase).IsInterface && !typeof(TBase).IsAbstract)
         {

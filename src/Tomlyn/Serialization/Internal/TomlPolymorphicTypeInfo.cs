@@ -21,7 +21,8 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
     private readonly string _discriminatorPropertyName;
     private readonly TomlUnknownDerivedTypeHandling _unknownDerivedTypeHandling;
     private readonly Dictionary<string, Type> _derivedTypeByDiscriminator;
-    private readonly Dictionary<Type, string> _discriminatorByDerivedType;
+    private readonly Dictionary<Type, string?> _discriminatorByDerivedType;
+    private readonly Type? _defaultDerivedType;
 
     private TomlPolymorphicTypeInfo(
         Type type,
@@ -30,7 +31,8 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
         string discriminatorPropertyName,
         TomlUnknownDerivedTypeHandling unknownDerivedTypeHandling,
         Dictionary<string, Type> derivedTypeByDiscriminator,
-        Dictionary<Type, string> discriminatorByDerivedType)
+        Dictionary<Type, string?> discriminatorByDerivedType,
+        Type? defaultDerivedType)
         : base(type, options)
     {
         _baseTypeInfo = baseTypeInfo;
@@ -38,6 +40,7 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
         _unknownDerivedTypeHandling = unknownDerivedTypeHandling;
         _derivedTypeByDiscriminator = derivedTypeByDiscriminator;
         _discriminatorByDerivedType = discriminatorByDerivedType;
+        _defaultDerivedType = defaultDerivedType;
     }
 
     public static TomlTypeInfo TryWrap(TomlTypeInfo typeInfo)
@@ -78,11 +81,19 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
         }
 
         var derivedByDiscriminator = new Dictionary<string, Type>(StringComparer.Ordinal);
-        var discriminatorByDerived = new Dictionary<Type, string>();
+        var discriminatorByDerived = new Dictionary<Type, string?>();
+        Type? defaultDerivedType = null;
 
         foreach (var attr in type.GetCustomAttributes<TomlDerivedTypeAttribute>(inherit: false))
         {
-            AddDerivedType(type, derivedByDiscriminator, discriminatorByDerived, attr.DerivedType, attr.Discriminator);
+            if (attr.Discriminator is null)
+            {
+                SetDefaultDerivedType(type, ref defaultDerivedType, discriminatorByDerived, attr.DerivedType);
+            }
+            else
+            {
+                AddDerivedType(type, derivedByDiscriminator, discriminatorByDerived, attr.DerivedType, attr.Discriminator);
+            }
         }
 
         foreach (var attr in type.GetCustomAttributes<JsonDerivedTypeAttribute>(inherit: false))
@@ -90,6 +101,7 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
             var discriminator = attr.TypeDiscriminator;
             if (discriminator is null)
             {
+                SetDefaultDerivedType(type, ref defaultDerivedType, discriminatorByDerived, attr.DerivedType);
                 continue;
             }
 
@@ -103,7 +115,7 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
             AddDerivedType(type, derivedByDiscriminator, discriminatorByDerived, attr.DerivedType, discriminatorText);
         }
 
-        if (derivedByDiscriminator.Count == 0)
+        if (derivedByDiscriminator.Count == 0 && defaultDerivedType is null)
         {
             return null;
         }
@@ -116,13 +128,14 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
             discriminatorPropertyName,
             unknownHandling,
             derivedByDiscriminator,
-            discriminatorByDerived);
+            discriminatorByDerived,
+            defaultDerivedType);
     }
 
     private static void AddDerivedType(
         Type baseType,
         Dictionary<string, Type> derivedTypeByDiscriminator,
-        Dictionary<Type, string> discriminatorByDerivedType,
+        Dictionary<Type, string?> discriminatorByDerivedType,
         Type derivedType,
         string discriminator)
     {
@@ -151,6 +164,33 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
 
         derivedTypeByDiscriminator.Add(discriminator, derivedType);
         discriminatorByDerivedType.Add(derivedType, discriminator);
+    }
+
+    private static void SetDefaultDerivedType(
+        Type baseType,
+        ref Type? defaultDerivedType,
+        Dictionary<Type, string?> discriminatorByDerivedType,
+        Type derivedType)
+    {
+        ArgumentGuard.ThrowIfNull(derivedType, nameof(derivedType));
+
+        if (!baseType.IsAssignableFrom(derivedType))
+        {
+            throw new TomlException($"Derived type '{derivedType.FullName}' is not assignable to base type '{baseType.FullName}'.");
+        }
+
+        if (defaultDerivedType is not null)
+        {
+            throw new TomlException($"Multiple default derived types are registered for base '{baseType.FullName}'.");
+        }
+
+        if (discriminatorByDerivedType.ContainsKey(derivedType))
+        {
+            throw new TomlException($"Derived type '{derivedType.FullName}' is registered multiple times for base '{baseType.FullName}'.");
+        }
+
+        defaultDerivedType = derivedType;
+        discriminatorByDerivedType.Add(derivedType, null);
     }
 
     public override void Write(TomlWriter writer, object? value)
@@ -190,6 +230,14 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
         }
 
         var runtimeTypeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, runtimeType);
+
+        // Default derived type (null discriminator) — serialize without discriminator
+        if (discriminator is null)
+        {
+            runtimeTypeInfo.Write(writer, value);
+            return;
+        }
+
         var tempWriter = new TomlWriter(TextWriter.Null, Options);
         tempWriter.WriteStartDocument();
         runtimeTypeInfo.Write(tempWriter, value);
@@ -225,6 +273,16 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
         var buffer = reader.CaptureCurrentValueToBuffer();
         if (!TryReadDiscriminator(buffer, out var discriminator, out var discriminatorSpan))
         {
+            // No discriminator found — try default derived type first
+            if (_defaultDerivedType is not null)
+            {
+                var defaultTypeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, _defaultDerivedType);
+                var defaultReader = TomlReader.Create(buffer);
+                defaultReader.Read(); // StartDocument
+                defaultReader.Read(); // value start
+                return defaultTypeInfo.ReadAsObject(defaultReader);
+            }
+
             if (Type.IsInterface || Type.IsAbstract)
             {
                 var span = GetTableStartSpan(buffer);
@@ -248,6 +306,11 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
         if (_derivedTypeByDiscriminator.TryGetValue(discriminator, out var derivedType))
         {
             targetTypeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, derivedType);
+        }
+        else if (_defaultDerivedType is not null)
+        {
+            // Unknown discriminator — use default derived type
+            targetTypeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, _defaultDerivedType);
         }
         else if (_unknownDerivedTypeHandling == TomlUnknownDerivedTypeHandling.FallBackToBaseType && !Type.IsInterface && !Type.IsAbstract)
         {

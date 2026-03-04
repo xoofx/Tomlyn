@@ -130,4 +130,173 @@ public class NewApiPolymorphismTests
         Assert.That(result, Is.TypeOf<JsonCat>());
         Assert.That(((JsonCat)result!).Lives, Is.EqualTo(9));
     }
+
+    // --- Feature 1: Default Derived Type (no discriminator) ---
+
+    [TomlPolymorphic(TypeDiscriminatorPropertyName = "type")]
+    [TomlDerivedType(typeof(DefaultCircle))]
+    [TomlDerivedType(typeof(DefaultSquare), "square")]
+    private abstract class DefaultShape
+    {
+        public string? Color { get; set; }
+    }
+
+    private sealed class DefaultCircle : DefaultShape
+    {
+        public double Radius { get; set; }
+    }
+
+    private sealed class DefaultSquare : DefaultShape
+    {
+        public double Side { get; set; }
+    }
+
+    [Test]
+    public void Serialize_DefaultDerivedType_OmitsDiscriminator()
+    {
+        DefaultShape value = new DefaultCircle { Color = "red", Radius = 5.0 };
+        var toml = TomlSerializer.Serialize(value);
+
+        Assert.That(toml, Does.Not.Contain("type"));
+        Assert.That(toml, Does.Contain("Color"));
+        Assert.That(toml, Does.Contain("red"));
+        Assert.That(toml, Does.Contain("Radius"));
+        Assert.That(toml, Does.Contain("5"));
+    }
+
+    [Test]
+    public void Serialize_NonDefaultDerivedType_WritesDiscriminator()
+    {
+        DefaultShape value = new DefaultSquare { Color = "blue", Side = 3.0 };
+        var toml = TomlSerializer.Serialize(value);
+
+        Assert.That(toml, Does.Contain("type = \"square\""));
+        Assert.That(toml, Does.Contain("Color"));
+        Assert.That(toml, Does.Contain("blue"));
+        Assert.That(toml, Does.Contain("Side"));
+        Assert.That(toml, Does.Contain("3"));
+    }
+
+    [Test]
+    public void Deserialize_DefaultDerivedType_WhenMissingDiscriminator()
+    {
+        var toml =
+            """
+            Color = "red"
+            Radius = 5.0
+            """;
+
+        var result = TomlSerializer.Deserialize<DefaultShape>(toml);
+
+        Assert.That(result, Is.TypeOf<DefaultCircle>());
+        var circle = (DefaultCircle)result!;
+        Assert.That(circle.Color, Is.EqualTo("red"));
+        Assert.That(circle.Radius, Is.EqualTo(5.0));
+    }
+
+    [Test]
+    public void Deserialize_DefaultDerivedType_WhenUnknownDiscriminator()
+    {
+        var toml =
+            """
+            type = "triangle"
+            Color = "green"
+            """;
+
+        var result = TomlSerializer.Deserialize<DefaultShape>(toml);
+
+        Assert.That(result, Is.TypeOf<DefaultCircle>());
+        var circle = (DefaultCircle)result!;
+        Assert.That(circle.Color, Is.EqualTo("green"));
+    }
+
+    [Test]
+    public void Deserialize_NonDefaultDerivedType_WithDiscriminator()
+    {
+        var toml =
+            """
+            type = "square"
+            Color = "blue"
+            Side = 3.0
+            """;
+
+        var result = TomlSerializer.Deserialize<DefaultShape>(toml);
+
+        Assert.That(result, Is.TypeOf<DefaultSquare>());
+        var square = (DefaultSquare)result!;
+        Assert.That(square.Color, Is.EqualTo("blue"));
+        Assert.That(square.Side, Is.EqualTo(3.0));
+    }
+
+    [Test]
+    public void Roundtrip_DefaultDerivedType()
+    {
+        DefaultShape original = new DefaultCircle { Color = "red", Radius = 5.0 };
+        var toml = TomlSerializer.Serialize(original);
+        var result = TomlSerializer.Deserialize<DefaultShape>(toml);
+
+        Assert.That(result, Is.TypeOf<DefaultCircle>());
+        var circle = (DefaultCircle)result!;
+        Assert.That(circle.Color, Is.EqualTo("red"));
+        Assert.That(circle.Radius, Is.EqualTo(5.0));
+    }
+
+    [Test]
+    public void Roundtrip_NonDefaultDerivedType()
+    {
+        DefaultShape original = new DefaultSquare { Color = "blue", Side = 3.0 };
+        var toml = TomlSerializer.Serialize(original);
+        var result = TomlSerializer.Deserialize<DefaultShape>(toml);
+
+        Assert.That(result, Is.TypeOf<DefaultSquare>());
+        var square = (DefaultSquare)result!;
+        Assert.That(square.Color, Is.EqualTo("blue"));
+        Assert.That(square.Side, Is.EqualTo(3.0));
+    }
+
+    // Default derived type with JsonDerivedType (no discriminator is 1-arg constructor)
+    [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
+    [JsonDerivedType(typeof(JsonDefaultCircle))]
+    [JsonDerivedType(typeof(JsonDefaultSquare), "square")]
+    private abstract class JsonDefaultShape
+    {
+        public string? Color { get; set; }
+    }
+
+    private sealed class JsonDefaultCircle : JsonDefaultShape
+    {
+        public double Radius { get; set; }
+    }
+
+    private sealed class JsonDefaultSquare : JsonDefaultShape
+    {
+        public double Side { get; set; }
+    }
+
+    [Test]
+    public void Serialize_JsonDefaultDerivedType_OmitsDiscriminator()
+    {
+        JsonDefaultShape value = new JsonDefaultCircle { Color = "red", Radius = 5.0 };
+        var toml = TomlSerializer.Serialize(value);
+
+        Assert.That(toml, Does.Not.Contain("kind"));
+        Assert.That(toml, Does.Contain("Color"));
+        Assert.That(toml, Does.Contain("Radius"));
+    }
+
+    [Test]
+    public void Deserialize_JsonDefaultDerivedType_WhenMissingDiscriminator()
+    {
+        var toml =
+            """
+            Color = "red"
+            Radius = 5.0
+            """;
+
+        var result = TomlSerializer.Deserialize<JsonDefaultShape>(toml);
+
+        Assert.That(result, Is.TypeOf<JsonDefaultCircle>());
+        Assert.That(((JsonDefaultCircle)result!).Color, Is.EqualTo("red"));
+        Assert.That(((JsonDefaultCircle)result).Radius, Is.EqualTo(5.0));
+    }
 }
