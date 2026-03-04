@@ -32,16 +32,19 @@ og_type: website
     <div class="card-body">
 
 ```csharp
+using System.Text.Json;
 using Tomlyn;
 
 public sealed record Person(string Name, int Age);
 
-var toml = TomlSerializer.Serialize(new Person("Ada", 37));
+var options = new TomlSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+var toml = TomlSerializer.Serialize(new Person("Ada", 37), options);
 
 // name = "Ada"
 // age = 37
 
-var person = TomlSerializer.Deserialize<Person>(toml);
+var person = TomlSerializer.Deserialize<Person>(toml, options);
 ```
 
 </div>

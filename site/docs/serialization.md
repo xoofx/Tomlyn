@@ -37,7 +37,7 @@ var config = TomlSerializer.Deserialize<MyConfig>(stream);
 using System.Text;
 using Tomlyn;
 
-var utf8 = Encoding.UTF8.GetBytes("name = \"Ada\"");
+var utf8 = Encoding.UTF8.GetBytes("Name = \"Ada\"");
 var person = TomlSerializer.Deserialize<Person>(utf8);
 ```
 
