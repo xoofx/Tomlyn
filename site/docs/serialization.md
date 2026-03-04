@@ -144,8 +144,8 @@ Type-level attributes:
 | Attribute | Reflection | Source generated | Notes |
 | --- | --- | --- | --- |
 | `TomlConstructorAttribute` / `JsonConstructorAttribute` | Yes | Yes | Selects which constructor to use. |
-| `TomlPolymorphicAttribute` / `JsonPolymorphicAttribute` | Yes | No | Enables discriminator-based polymorphism. |
-| `TomlDerivedTypeAttribute` / `JsonDerivedTypeAttribute` | Yes | No | Registers derived types and discriminators. |
+| `TomlPolymorphicAttribute` / `JsonPolymorphicAttribute` | Yes | Yes | Enables discriminator-based polymorphism. |
+| `TomlDerivedTypeAttribute` / `JsonDerivedTypeAttribute` | Yes | Yes | Registers derived types and discriminators. |
 
 Source generation support is intentionally strict: generated metadata only models the attributes it understands at compile time.
 For additional customization in source-generated scenarios, prefer:

@@ -100,8 +100,10 @@ The source generator currently supports a focused subset of mapping attributes a
 - `JsonRequiredAttribute` / `TomlRequiredAttribute`
 - `JsonExtensionDataAttribute` / `TomlExtensionDataAttribute`
 - `JsonConstructorAttribute` / `TomlConstructorAttribute`
+- `JsonPolymorphicAttribute` / `TomlPolymorphicAttribute`
+- `JsonDerivedTypeAttribute` / `TomlDerivedTypeAttribute`
 
-Other attributes (for example polymorphism attributes, etc.) are supported by the reflection resolver, but are not yet fully modeled by generated metadata.
+Other attributes (for example `JsonConverterAttribute`, converter-specific attributes, etc.) are supported by the reflection resolver, but are not yet fully modeled by generated metadata.
 If you rely on those features, keep reflection enabled or register a custom `ITomlTypeInfoResolver`.
 
 ## Troubleshooting

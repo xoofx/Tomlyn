@@ -87,6 +87,27 @@ public sealed class GeneratedCtorSelectionPerson
     public string Name { get; }
 }
 
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
+[JsonDerivedType(typeof(GeneratedCat), "cat")]
+[JsonDerivedType(typeof(GeneratedDog), "dog")]
+public interface IGeneratedAnimal
+{
+}
+
+public sealed class GeneratedCat : IGeneratedAnimal
+{
+    public string Name { get; set; } = "";
+
+    public int Lives { get; set; }
+}
+
+public sealed class GeneratedDog : IGeneratedAnimal
+{
+    public string Name { get; set; } = "";
+
+    public bool GoodBoy { get; set; }
+}
+
 public sealed class GeneratedCallbackPerson : ITomlOnSerializing, ITomlOnSerialized, ITomlOnDeserializing, ITomlOnDeserialized
 {
     public string Name { get; set; } = "";
@@ -264,6 +285,12 @@ internal partial class TestTomlSerializerContextConstructor : TomlSerializerCont
 internal partial class TestTomlSerializerContextConstructorSelection : TomlSerializerContext
 {
 }
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(IGeneratedAnimal))]
+internal partial class TestTomlSerializerContextPolymorphism : TomlSerializerContext
+{
+}
 #pragma warning restore SYSLIB1224
 
 public class NewApiSourceGenerationTests
@@ -394,6 +421,55 @@ public class NewApiSourceGenerationTests
 
         Assert.That(model, Is.Not.Null);
         Assert.That(model!.Name, Is.EqualTo("Ada"));
+    }
+
+    [Test]
+    public void GeneratedContext_CanDeserializePolymorphicInterface()
+    {
+        var context = TestTomlSerializerContextPolymorphism.Default;
+        var toml = """
+            kind = "cat"
+            name = "Ada"
+            lives = 9
+            """;
+
+        var model = TomlSerializer.Deserialize(toml, context.IGeneratedAnimal);
+
+        Assert.That(model, Is.Not.Null);
+        Assert.That(model, Is.InstanceOf<GeneratedCat>());
+        var cat = (GeneratedCat)model!;
+        Assert.That(cat.Name, Is.EqualTo("Ada"));
+        Assert.That(cat.Lives, Is.EqualTo(9));
+    }
+
+    [Test]
+    public void GeneratedContext_Throws_WhenPolymorphicDiscriminatorIsMissing()
+    {
+        var context = TestTomlSerializerContextPolymorphism.Default;
+        var toml = """
+            name = "Ada"
+            """;
+
+        var exception = Assert.Throws<TomlException>(() => TomlSerializer.Deserialize(toml, context.IGeneratedAnimal));
+
+        Assert.That(exception, Is.Not.Null);
+        Assert.That(exception!.Message, Does.Contain("Missing discriminator key 'kind'"));
+        Assert.That(exception.Message, Does.Contain(typeof(IGeneratedAnimal).FullName));
+        Assert.That(exception.Line, Is.GreaterThanOrEqualTo(1));
+        Assert.That(exception.Column, Is.GreaterThanOrEqualTo(1));
+    }
+
+    [Test]
+    public void GeneratedContext_CanSerializePolymorphicInterface()
+    {
+        var context = TestTomlSerializerContextPolymorphism.Default;
+        IGeneratedAnimal model = new GeneratedDog { Name = "Rex", GoodBoy = true };
+
+        var toml = TomlSerializer.Serialize(model, context.IGeneratedAnimal);
+
+        Assert.That(toml, Does.Contain("kind = \"dog\""));
+        Assert.That(toml, Does.Contain("name = \"Rex\""));
+        Assert.That(toml, Does.Contain("goodBoy = true"));
     }
 
     [Test]
