@@ -514,12 +514,18 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 ? GetTypeInfoPropertyName(polymorphic.DefaultDerivedType)
                 : "null";
 
+            var unknownHandlingExpression = polymorphic.UnknownDerivedTypeHandlingOverride is { } handlingValue
+                ? $"(global::Tomlyn.TomlUnknownDerivedTypeHandling){handlingValue}"
+                : "null";
+
             builder.Append("        return new global::Tomlyn.Serialization.TomlPolymorphicTypeInfo<")
                 .Append(typeName)
                 .Append(">(Options, __baseTypeInfo, ")
                 .Append(discriminatorExpression)
                 .Append(", __derivedTypeInfoByDiscriminator, ")
                 .Append(defaultDerivedTypeExpression)
+                .Append(", ")
+                .Append(unknownHandlingExpression)
                 .AppendLine(");");
         }
         else
@@ -1949,16 +1955,21 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private sealed class PolymorphicShape
     {
-        public PolymorphicShape(string? discriminatorPropertyName, ImmutableArray<PolymorphicDerivedType> derivedTypes, ITypeSymbol? defaultDerivedType)
+        public PolymorphicShape(string? discriminatorPropertyName, ImmutableArray<PolymorphicDerivedType> derivedTypes, ITypeSymbol? defaultDerivedType, int? unknownDerivedTypeHandlingOverride)
         {
             DiscriminatorPropertyName = discriminatorPropertyName;
             DerivedTypes = derivedTypes;
             DefaultDerivedType = defaultDerivedType;
+            UnknownDerivedTypeHandlingOverride = unknownDerivedTypeHandlingOverride;
         }
 
         public string? DiscriminatorPropertyName { get; }
         public ImmutableArray<PolymorphicDerivedType> DerivedTypes { get; }
         public ITypeSymbol? DefaultDerivedType { get; }
+        /// <summary>
+        /// Resolved unknown handling value (as int matching TomlUnknownDerivedTypeHandling enum), or null to use options default.
+        /// </summary>
+        public int? UnknownDerivedTypeHandlingOverride { get; }
     }
 
     private enum WriteIgnoreKind
@@ -2279,6 +2290,8 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         string? tomlDiscriminatorPropertyName = null;
         string? jsonDiscriminatorPropertyName = null;
+        int? tomlUnknownHandling = null;
+        int? jsonUnknownHandling = null;
         var hasPolymorphicMarker = false;
 
         foreach (var attr in named.GetAttributes())
@@ -2293,6 +2306,14 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     {
                         tomlDiscriminatorPropertyName = s;
                     }
+                    else if (kvp.Key == "UnknownDerivedTypeHandling" && kvp.Value.Value is int intVal)
+                    {
+                        // -1 = Unspecified, 0 = Fail, 1 = FallBackToBaseType
+                        if (intVal != -1)
+                        {
+                            tomlUnknownHandling = intVal;
+                        }
+                    }
                 }
             }
             else if (attrName == "global::System.Text.Json.Serialization.JsonPolymorphicAttribute")
@@ -2303,6 +2324,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     if (kvp.Key == "TypeDiscriminatorPropertyName" && kvp.Value.Value is string s && !string.IsNullOrEmpty(s))
                     {
                         jsonDiscriminatorPropertyName = s;
+                    }
+                    else if (kvp.Key == "UnknownDerivedTypeHandling" && kvp.Value.Value is int intVal)
+                    {
+                        // JsonUnknownDerivedTypeHandling: FailSerialization=0, FallBackToBaseType=1, FallBackToNearestAncestor=2
+                        jsonUnknownHandling = intVal == 1 ? 1 : 0; // 1 => FallBackToBaseType, anything else => Fail
                     }
                 }
             }
@@ -2468,7 +2494,9 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         var discriminatorPropertyName = tomlDiscriminatorPropertyName ?? jsonDiscriminatorPropertyName;
-        shape = new PolymorphicShape(discriminatorPropertyName, derived.ToImmutable(), defaultDerivedType);
+        // Priority chain: TomlPolymorphicAttribute → JsonPolymorphicAttribute → options (null = use options)
+        int? resolvedUnknownHandling = tomlUnknownHandling ?? jsonUnknownHandling;
+        shape = new PolymorphicShape(discriminatorPropertyName, derived.ToImmutable(), defaultDerivedType, resolvedUnknownHandling);
         return true;
 
         void AddDerivedType(

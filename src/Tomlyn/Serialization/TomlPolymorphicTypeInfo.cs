@@ -35,7 +35,7 @@ public sealed class TomlPolymorphicTypeInfo<TBase> : TomlTypeInfo<TBase>
         TomlTypeInfo<TBase>? baseTypeInfo,
         string? discriminatorPropertyName,
         IReadOnlyDictionary<string, TomlTypeInfo> derivedTypeInfoByDiscriminator)
-        : this(options, baseTypeInfo, discriminatorPropertyName, derivedTypeInfoByDiscriminator, null)
+        : this(options, baseTypeInfo, discriminatorPropertyName, derivedTypeInfoByDiscriminator, null, null)
     {
     }
 
@@ -55,6 +55,28 @@ public sealed class TomlPolymorphicTypeInfo<TBase> : TomlTypeInfo<TBase>
         string? discriminatorPropertyName,
         IReadOnlyDictionary<string, TomlTypeInfo> derivedTypeInfoByDiscriminator,
         TomlTypeInfo? defaultDerivedTypeInfo)
+        : this(options, baseTypeInfo, discriminatorPropertyName, derivedTypeInfoByDiscriminator, defaultDerivedTypeInfo, null)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TomlPolymorphicTypeInfo{TBase}"/> class with optional default derived type and unknown handling override.
+    /// </summary>
+    /// <param name="options">The serializer options.</param>
+    /// <param name="baseTypeInfo">Optional base type metadata used when falling back to base types.</param>
+    /// <param name="discriminatorPropertyName">Optional discriminator key name. When <see langword="null"/> or empty, <see cref="TomlSerializerOptions.PolymorphismOptions"/> is used.</param>
+    /// <param name="derivedTypeInfoByDiscriminator">A mapping from discriminator values to derived type metadata.</param>
+    /// <param name="defaultDerivedTypeInfo">Optional default derived type metadata, used when the discriminator is missing or unrecognized.</param>
+    /// <param name="unknownDerivedTypeHandling">Optional override for unknown discriminator handling. When <see langword="null"/>, uses options default.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="options"/> or <paramref name="derivedTypeInfoByDiscriminator"/> is <see langword="null"/>.</exception>
+    /// <exception cref="TomlException">Thrown when the mapping is invalid.</exception>
+    public TomlPolymorphicTypeInfo(
+        TomlSerializerOptions options,
+        TomlTypeInfo<TBase>? baseTypeInfo,
+        string? discriminatorPropertyName,
+        IReadOnlyDictionary<string, TomlTypeInfo> derivedTypeInfoByDiscriminator,
+        TomlTypeInfo? defaultDerivedTypeInfo,
+        TomlUnknownDerivedTypeHandling? unknownDerivedTypeHandling)
         : base(options)
     {
         ArgumentGuard.ThrowIfNull(options, nameof(options));
@@ -62,7 +84,7 @@ public sealed class TomlPolymorphicTypeInfo<TBase> : TomlTypeInfo<TBase>
 
         _baseTypeInfo = baseTypeInfo;
         _defaultDerivedTypeInfo = defaultDerivedTypeInfo;
-        _unknownDerivedTypeHandling = options.PolymorphismOptions.UnknownDerivedTypeHandling;
+        _unknownDerivedTypeHandling = unknownDerivedTypeHandling ?? options.PolymorphismOptions.UnknownDerivedTypeHandling;
         _discriminatorPropertyName = string.IsNullOrEmpty(discriminatorPropertyName)
             ? options.PolymorphismOptions.TypeDiscriminatorPropertyName
             : discriminatorPropertyName!;

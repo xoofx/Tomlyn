@@ -316,6 +316,42 @@ public sealed class GeneratedDefaultSquare : GeneratedDefaultShape
 internal partial class TestTomlSerializerContextDefaultDerivedType : TomlSerializerContext
 {
 }
+
+[TomlPolymorphic(TypeDiscriminatorPropertyName = "kind", UnknownDerivedTypeHandling = TomlUnknownDerivedTypeHandling.FallBackToBaseType)]
+[TomlDerivedType(typeof(GeneratedAttrFallbackDerived), "derived")]
+public class GeneratedAttrFallbackBase
+{
+    public string Name { get; set; } = "";
+}
+
+public sealed class GeneratedAttrFallbackDerived : GeneratedAttrFallbackBase
+{
+    public int Extra { get; set; }
+}
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(GeneratedAttrFallbackBase))]
+internal partial class TestTomlSerializerContextAttrFallback : TomlSerializerContext
+{
+}
+
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "kind", UnknownDerivedTypeHandling = JsonUnknownDerivedTypeHandling.FallBackToBaseType)]
+[JsonDerivedType(typeof(GeneratedJsonAttrFallbackDerived), "derived")]
+public class GeneratedJsonAttrFallbackBase
+{
+    public string Name { get; set; } = "";
+}
+
+public sealed class GeneratedJsonAttrFallbackDerived : GeneratedJsonAttrFallbackBase
+{
+    public int Extra { get; set; }
+}
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(GeneratedJsonAttrFallbackBase))]
+internal partial class TestTomlSerializerContextJsonAttrFallback : TomlSerializerContext
+{
+}
 #pragma warning restore SYSLIB1224
 
 public class NewApiSourceGenerationTests
@@ -738,5 +774,37 @@ public class NewApiSourceGenerationTests
         var circle = (GeneratedDefaultCircle)result!;
         Assert.That(circle.Color, Is.EqualTo("red"));
         Assert.That(circle.Radius, Is.EqualTo(5.0));
+    }
+
+    // --- Feature 2: UnknownDerivedTypeHandling on attribute (source-gen) ---
+
+    [Test]
+    public void GeneratedContext_UnknownDiscriminator_FallbackViaTomlAttribute()
+    {
+        var context = TestTomlSerializerContextAttrFallback.Default;
+        var toml = """
+            kind = "unknown"
+            name = "test"
+            """;
+
+        var result = TomlSerializer.Deserialize(toml, context.GeneratedAttrFallbackBase);
+
+        Assert.That(result, Is.TypeOf<GeneratedAttrFallbackBase>());
+        Assert.That(result!.Name, Is.EqualTo("test"));
+    }
+
+    [Test]
+    public void GeneratedContext_UnknownDiscriminator_FallbackViaJsonAttribute()
+    {
+        var context = TestTomlSerializerContextJsonAttrFallback.Default;
+        var toml = """
+            kind = "unknown"
+            name = "test"
+            """;
+
+        var result = TomlSerializer.Deserialize(toml, context.GeneratedJsonAttrFallbackBase);
+
+        Assert.That(result, Is.TypeOf<GeneratedJsonAttrFallbackBase>());
+        Assert.That(result!.Name, Is.EqualTo("test"));
     }
 }

@@ -363,6 +363,8 @@ public sealed record TomlStringStylePreferences
 /// </summary>
 public enum TomlUnknownDerivedTypeHandling
 {
+    /// <summary>Use the serializer options default. This value is only valid on attribute properties and must not be used on <see cref="TomlPolymorphismOptions"/>.</summary>
+    Unspecified = -1,
     /// <summary>Fail deserialization.</summary>
     Fail = 0,
     /// <summary>Fallback to the base type.</summary>
@@ -374,6 +376,8 @@ public enum TomlUnknownDerivedTypeHandling
 /// </summary>
 public sealed record TomlPolymorphismOptions
 {
+    private TomlUnknownDerivedTypeHandling _unknownDerivedTypeHandling = TomlUnknownDerivedTypeHandling.Fail;
+
     /// <summary>
     /// Gets the property name used for discriminator-based polymorphism.
     /// </summary>
@@ -382,5 +386,18 @@ public sealed record TomlPolymorphismOptions
     /// <summary>
     /// Gets behavior when an unknown discriminator is encountered.
     /// </summary>
-    public TomlUnknownDerivedTypeHandling UnknownDerivedTypeHandling { get; init; } = TomlUnknownDerivedTypeHandling.Fail;
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when set to <see cref="TomlUnknownDerivedTypeHandling.Unspecified"/>.</exception>
+    public TomlUnknownDerivedTypeHandling UnknownDerivedTypeHandling
+    {
+        get => _unknownDerivedTypeHandling;
+        init
+        {
+            if (value == TomlUnknownDerivedTypeHandling.Unspecified)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), value, $"{nameof(TomlUnknownDerivedTypeHandling.Unspecified)} is not a valid value for {nameof(TomlPolymorphismOptions)}.{nameof(UnknownDerivedTypeHandling)}.");
+            }
+
+            _unknownDerivedTypeHandling = value;
+        }
+    }
 }

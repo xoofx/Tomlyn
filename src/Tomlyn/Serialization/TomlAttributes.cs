@@ -137,6 +137,13 @@ public sealed class TomlPolymorphicAttribute : TomlAttribute
     /// Gets or sets the discriminator property name.
     /// </summary>
     public string? TypeDiscriminatorPropertyName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the behavior when an unknown discriminator is encountered.
+    /// When set to a value other than <see cref="TomlUnknownDerivedTypeHandling.Unspecified"/>,
+    /// this overrides the global <see cref="TomlPolymorphismOptions.UnknownDerivedTypeHandling"/>.
+    /// </summary>
+    public TomlUnknownDerivedTypeHandling UnknownDerivedTypeHandling { get; set; } = TomlUnknownDerivedTypeHandling.Unspecified;
 }
 
 /// <summary>

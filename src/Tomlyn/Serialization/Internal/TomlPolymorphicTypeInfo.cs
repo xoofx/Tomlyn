@@ -120,7 +120,21 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
             return null;
         }
 
+        // Priority chain: TomlPolymorphicAttribute → JsonPolymorphicAttribute → options
         var unknownHandling = options.PolymorphismOptions.UnknownDerivedTypeHandling;
+        if (tomlPolymorphicAttribute is not null &&
+            tomlPolymorphicAttribute.UnknownDerivedTypeHandling != TomlUnknownDerivedTypeHandling.Unspecified)
+        {
+            unknownHandling = tomlPolymorphicAttribute.UnknownDerivedTypeHandling;
+        }
+        else if (jsonPolymorphicAttribute is not null)
+        {
+            unknownHandling = jsonPolymorphicAttribute.UnknownDerivedTypeHandling switch
+            {
+                JsonUnknownDerivedTypeHandling.FallBackToBaseType => TomlUnknownDerivedTypeHandling.FallBackToBaseType,
+                _ => TomlUnknownDerivedTypeHandling.Fail,
+            };
+        }
         return new TomlPolymorphicTypeInfo(
             type,
             options,

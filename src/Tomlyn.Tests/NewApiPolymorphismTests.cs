@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json.Serialization;
 using NUnit.Framework;
 using Tomlyn.Serialization;
@@ -298,5 +299,159 @@ public class NewApiPolymorphismTests
         Assert.That(result, Is.TypeOf<JsonDefaultCircle>());
         Assert.That(((JsonDefaultCircle)result!).Color, Is.EqualTo("red"));
         Assert.That(((JsonDefaultCircle)result).Radius, Is.EqualTo(5.0));
+    }
+
+    // --- Feature 2: UnknownDerivedTypeHandling on attribute ---
+
+    [TomlPolymorphic(TypeDiscriminatorPropertyName = "kind", UnknownDerivedTypeHandling = TomlUnknownDerivedTypeHandling.FallBackToBaseType)]
+    [TomlDerivedType(typeof(AttrFallbackDerived), "derived")]
+    private class AttrFallbackBase
+    {
+        public string? Name { get; set; }
+    }
+
+    private sealed class AttrFallbackDerived : AttrFallbackBase
+    {
+        public int Extra { get; set; }
+    }
+
+    [Test]
+    public void Deserialize_UnknownDiscriminator_FallbackViaAttribute()
+    {
+        var toml =
+            """
+            kind = "unknown"
+            Name = "test"
+            """;
+
+        // No options override needed — attribute sets FallBackToBaseType
+        var result = TomlSerializer.Deserialize<AttrFallbackBase>(toml);
+
+        Assert.That(result, Is.TypeOf<AttrFallbackBase>());
+        Assert.That(result!.Name, Is.EqualTo("test"));
+    }
+
+    [Test]
+    public void Deserialize_UnknownDiscriminator_AttributeOverridesOptions()
+    {
+        var toml =
+            """
+            kind = "unknown"
+            Name = "test"
+            """;
+
+        // Options say Fail, but attribute says FallBackToBaseType — attribute wins
+        var options = new TomlSerializerOptions
+        {
+            PolymorphismOptions = new TomlPolymorphismOptions
+            {
+                UnknownDerivedTypeHandling = TomlUnknownDerivedTypeHandling.Fail,
+            },
+        };
+
+        var result = TomlSerializer.Deserialize<AttrFallbackBase>(toml, options);
+
+        Assert.That(result, Is.TypeOf<AttrFallbackBase>());
+        Assert.That(result!.Name, Is.EqualTo("test"));
+    }
+
+    // Test: attribute says Fail explicitly, options say FallBackToBaseType — attribute wins
+    [TomlPolymorphic(TypeDiscriminatorPropertyName = "kind", UnknownDerivedTypeHandling = TomlUnknownDerivedTypeHandling.Fail)]
+    [TomlDerivedType(typeof(AttrFailDerived), "derived")]
+    private class AttrFailBase
+    {
+        public string? Name { get; set; }
+    }
+
+    private sealed class AttrFailDerived : AttrFailBase
+    {
+        public int Extra { get; set; }
+    }
+
+    [Test]
+    public void Deserialize_UnknownDiscriminator_AttributeFailOverridesFallbackOptions()
+    {
+        var toml =
+            """
+            kind = "unknown"
+            Name = "test"
+            """;
+
+        var options = new TomlSerializerOptions
+        {
+            PolymorphismOptions = new TomlPolymorphismOptions
+            {
+                UnknownDerivedTypeHandling = TomlUnknownDerivedTypeHandling.FallBackToBaseType,
+            },
+        };
+
+        Assert.Throws<TomlException>(() => TomlSerializer.Deserialize<AttrFailBase>(toml, options));
+    }
+
+    // Test: JsonPolymorphic attribute sets FallBackToBaseType
+    [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind", UnknownDerivedTypeHandling = JsonUnknownDerivedTypeHandling.FallBackToBaseType)]
+    [JsonDerivedType(typeof(JsonAttrFallbackDerived), "derived")]
+    private class JsonAttrFallbackBase
+    {
+        public string? Name { get; set; }
+    }
+
+    private sealed class JsonAttrFallbackDerived : JsonAttrFallbackBase
+    {
+        public int Extra { get; set; }
+    }
+
+    [Test]
+    public void Deserialize_UnknownDiscriminator_JsonAttributeFallback()
+    {
+        var toml =
+            """
+            kind = "unknown"
+            Name = "test"
+            """;
+
+        var result = TomlSerializer.Deserialize<JsonAttrFallbackBase>(toml);
+
+        Assert.That(result, Is.TypeOf<JsonAttrFallbackBase>());
+        Assert.That(result!.Name, Is.EqualTo("test"));
+    }
+
+    // Test: TomlPolymorphic overrides JsonPolymorphic when both present
+    [TomlPolymorphic(TypeDiscriminatorPropertyName = "kind", UnknownDerivedTypeHandling = TomlUnknownDerivedTypeHandling.Fail)]
+    [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind", UnknownDerivedTypeHandling = JsonUnknownDerivedTypeHandling.FallBackToBaseType)]
+    [TomlDerivedType(typeof(TomlOverridesJsonDerived), "derived")]
+    private class TomlOverridesJsonBase
+    {
+        public string? Name { get; set; }
+    }
+
+    private sealed class TomlOverridesJsonDerived : TomlOverridesJsonBase
+    {
+        public int Extra { get; set; }
+    }
+
+    [Test]
+    public void Deserialize_UnknownDiscriminator_TomlAttributeOverridesJsonAttribute()
+    {
+        var toml =
+            """
+            kind = "unknown"
+            Name = "test"
+            """;
+
+        // TomlPolymorphic says Fail, JsonPolymorphic says FallBack — Toml wins
+        Assert.Throws<TomlException>(() => TomlSerializer.Deserialize<TomlOverridesJsonBase>(toml));
+    }
+
+    [Test]
+    public void Options_RejectsUnspecifiedUnknownDerivedTypeHandling()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+        {
+            _ = new TomlPolymorphismOptions
+            {
+                UnknownDerivedTypeHandling = TomlUnknownDerivedTypeHandling.Unspecified,
+            };
+        });
     }
 }
