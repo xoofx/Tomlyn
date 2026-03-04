@@ -143,7 +143,7 @@ Type-level attributes:
 
 | Attribute | Reflection | Source generated | Notes |
 | --- | --- | --- | --- |
-| `TomlConstructorAttribute` / `JsonConstructorAttribute` | Yes | No | Selects which constructor to use. |
+| `TomlConstructorAttribute` / `JsonConstructorAttribute` | Yes | Yes | Selects which constructor to use. |
 | `TomlPolymorphicAttribute` / `JsonPolymorphicAttribute` | Yes | No | Enables discriminator-based polymorphism. |
 | `TomlDerivedTypeAttribute` / `JsonDerivedTypeAttribute` | Yes | No | Registers derived types and discriminators. |
 

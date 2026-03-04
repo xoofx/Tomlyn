@@ -56,6 +56,37 @@ public sealed class GeneratedExtensionDataPerson
     public Dictionary<string, object?>? Extra { get; set; }
 }
 
+public sealed class GeneratedCtorPerson
+{
+    [JsonConstructor]
+    public GeneratedCtorPerson(string firstName, int age = 42)
+    {
+        FirstName = firstName;
+        Age = age;
+    }
+
+    [JsonPropertyName("first_name")]
+    public string FirstName { get; }
+
+    public int Age { get; }
+}
+
+public sealed class GeneratedCtorSelectionPerson
+{
+    public GeneratedCtorSelectionPerson()
+    {
+        Name = "default";
+    }
+
+    [JsonConstructor]
+    public GeneratedCtorSelectionPerson(string name)
+    {
+        Name = name;
+    }
+
+    public string Name { get; }
+}
+
 public sealed class GeneratedCallbackPerson : ITomlOnSerializing, ITomlOnSerialized, ITomlOnDeserializing, ITomlOnDeserialized
 {
     public string Name { get; set; } = "";
@@ -221,6 +252,18 @@ internal partial class TestTomlSerializerContextRequired : TomlSerializerContext
 internal partial class TestTomlSerializerContextExtensionData : TomlSerializerContext
 {
 }
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(GeneratedCtorPerson))]
+internal partial class TestTomlSerializerContextConstructor : TomlSerializerContext
+{
+}
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(GeneratedCtorSelectionPerson))]
+internal partial class TestTomlSerializerContextConstructorSelection : TomlSerializerContext
+{
+}
 #pragma warning restore SYSLIB1224
 
 public class NewApiSourceGenerationTests
@@ -305,6 +348,52 @@ public class NewApiSourceGenerationTests
         Assert.That(exception, Is.Not.Null);
         Assert.That(exception!.Message, Does.Contain("Extension data key"));
         Assert.That(exception.Message, Does.Contain("conflicts"));
+    }
+
+    [Test]
+    public void GeneratedContext_CanDeserializeUsingJsonConstructor_AndDefaultValues()
+    {
+        var context = TestTomlSerializerContextConstructor.Default;
+        var toml = """
+            first_name = "Ada"
+            """;
+
+        var model = TomlSerializer.Deserialize(toml, context.GeneratedCtorPerson);
+
+        Assert.That(model, Is.Not.Null);
+        Assert.That(model!.FirstName, Is.EqualTo("Ada"));
+        Assert.That(model.Age, Is.EqualTo(42));
+    }
+
+    [Test]
+    public void GeneratedContext_Throws_WhenRequiredConstructorParameterIsMissing()
+    {
+        var context = TestTomlSerializerContextConstructorSelection.Default;
+        var toml = """
+            other = 1
+            """;
+
+        var exception = Assert.Throws<TomlException>(() => TomlSerializer.Deserialize(toml, context.GeneratedCtorSelectionPerson));
+
+        Assert.That(exception, Is.Not.Null);
+        Assert.That(exception!.Message, Does.Contain("Missing required constructor parameter 'name'"));
+        Assert.That(exception.Message, Does.Contain(typeof(GeneratedCtorSelectionPerson).FullName));
+        Assert.That(exception.Line, Is.GreaterThanOrEqualTo(1));
+        Assert.That(exception.Column, Is.GreaterThanOrEqualTo(1));
+    }
+
+    [Test]
+    public void GeneratedContext_PrefersAnnotatedJsonConstructor_WhenMultipleAreAvailable()
+    {
+        var context = TestTomlSerializerContextConstructorSelection.Default;
+        var toml = """
+            name = "Ada"
+            """;
+
+        var model = TomlSerializer.Deserialize(toml, context.GeneratedCtorSelectionPerson);
+
+        Assert.That(model, Is.Not.Null);
+        Assert.That(model!.Name, Is.EqualTo("Ada"));
     }
 
     [Test]
