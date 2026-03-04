@@ -1,7 +1,6 @@
 home:
   - {path: readme.md, title: "<i class='bi bi-house-door' aria-hidden='true'></i> Home", self: true}
   - {path: docs/readme.md, title: "<i class='bi bi-book' aria-hidden='true'></i> Docs", folder: true}
-  - {path: migration.md, title: "<i class='bi bi-arrow-left-right' aria-hidden='true'></i> Migration"}
   - {path: api/readme.md, title: "<i class='bi bi-filetype-cs' aria-hidden='true'></i> API", folder: true}
 
 home2:

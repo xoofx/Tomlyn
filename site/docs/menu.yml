@@ -1,8 +1,10 @@
 docs:
+  - { path: readme.md, title: "Overview", self: true }
   - { path: getting-started.md, title: "Getting started" }
-  - { path: serialization/readme.md, title: "Serialization", folder: true }
-  - { path: source-generation.md, title: "Source generation" }
-  - { path: model/readme.md, title: "DOM model", folder: true }
-  - { path: low-level/readme.md, title: "Low-level APIs", folder: true }
+  - { path: serialization.md, title: "Serialization" }
+  - { path: source-generation.md, title: "Source generation and NativeAOT" }
+  - { path: dom.md, title: "DOM model" }
+  - { path: low-level.md, title: "Low-level APIs" }
+  - { path: compatibility.md, title: "Compatibility (TOML 1.1)" }
   - { path: performance.md, title: "Performance" }
-  - { path: compatibility.md, title: "Compatibility" }
+  - { path: migration.md, title: "Migration (v0.x to v1.0)" }

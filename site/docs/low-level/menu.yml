@@ -1,5 +1,0 @@
-low-level:
-  - { path: readme.md, title: "Overview", self: true }
-  - { path: lexer.md, title: "TomlLexer" }
-  - { path: parser.md, title: "TomlParser" }
-  - { path: syntax.md, title: "SyntaxParser" }

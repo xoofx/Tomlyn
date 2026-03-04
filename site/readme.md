@@ -13,7 +13,7 @@ og_type: website
       and a <strong>System.Text.Json-style</strong> object serializer.
     </p>
     <div class="d-flex justify-content-center gap-3 mt-4 flex-wrap">
-      <a href="{{site.basepath}}/docs/readme/" class="btn btn-primary btn-lg"><i class="bi bi-rocket-takeoff"></i> Get started</a>
+      <a href="{{site.basepath}}/docs/getting-started/" class="btn btn-primary btn-lg"><i class="bi bi-rocket-takeoff"></i> Get started</a>
       <a href="{{site.basepath}}/api/" class="btn btn-outline-secondary btn-lg"><i class="bi bi-filetype-cs"></i> API Reference</a>
       <a href="https://github.com/xoofx/Tomlyn" class="btn btn-info btn-lg"><i class="bi bi-github"></i> GitHub</a>
     </div>
@@ -33,9 +33,10 @@ og_type: website
 
 ```csharp
 using Tomlyn;
-using Tomlyn.Serialization;
 
-var toml = TomlSerializer.Serialize(new { Name = "Ada", Age = 37 });
+public sealed record Person(string Name, int Age);
+
+var toml = TomlSerializer.Serialize(new Person("Ada", 37));
 
 // name = "Ada"
 // age = 37
@@ -46,4 +47,3 @@ var person = TomlSerializer.Deserialize<Person>(toml);
 </div>
   </div>
 </section>
-
