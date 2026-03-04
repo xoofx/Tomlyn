@@ -136,7 +136,7 @@ Member-level attributes:
 | `TomlIncludeAttribute` / `JsonIncludeAttribute` | Yes | Yes | Enables non-public members in supported scenarios. |
 | `TomlPropertyOrderAttribute` / `JsonPropertyOrderAttribute` | Yes | Yes | Controls ordering within tables. |
 | `TomlRequiredAttribute` / `JsonRequiredAttribute` | Yes | Yes | Missing required members throw `TomlException`. |
-| `TomlExtensionDataAttribute` / `JsonExtensionDataAttribute` | Yes | No | Captures unmapped keys. |
+| `TomlExtensionDataAttribute` / `JsonExtensionDataAttribute` | Yes | Yes | Captures unmapped keys. |
 | `TomlConverterAttribute` / `JsonConverterAttribute` | Yes | No | Selects a converter for a type/member. |
 
 Type-level attributes:
@@ -213,6 +213,7 @@ Use extension data to capture unmapped keys during deserialization:
 - `TomlExtensionDataAttribute` / `JsonExtensionDataAttribute`
 
 Extension data is typically a dictionary-like member with string keys.
+Source-generated contexts support extension data when the member type is dictionary-like (for example `IDictionary<string, object?>` or `TomlTable`).
 
 ## Polymorphism
 

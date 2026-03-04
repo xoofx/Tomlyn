@@ -48,6 +48,14 @@ public sealed class GeneratedRequiredPerson
     public int Age { get; set; }
 }
 
+public sealed class GeneratedExtensionDataPerson
+{
+    public string Name { get; set; } = "";
+
+    [JsonExtensionData]
+    public Dictionary<string, object?>? Extra { get; set; }
+}
+
 public sealed class GeneratedCallbackPerson : ITomlOnSerializing, ITomlOnSerialized, ITomlOnDeserializing, ITomlOnDeserialized
 {
     public string Name { get; set; } = "";
@@ -205,6 +213,14 @@ internal partial class TestTomlSerializerContextCallbacks : TomlSerializerContex
 internal partial class TestTomlSerializerContextRequired : TomlSerializerContext
 {
 }
+
+[TomlSourceGenerationOptions(
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+    DictionaryKeyPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(GeneratedExtensionDataPerson))]
+internal partial class TestTomlSerializerContextExtensionData : TomlSerializerContext
+{
+}
 #pragma warning restore SYSLIB1224
 
 public class NewApiSourceGenerationTests
@@ -253,6 +269,42 @@ public class NewApiSourceGenerationTests
         Assert.That(exception.Message, Does.Contain(typeof(GeneratedRequiredPerson).FullName));
         Assert.That(exception.Line, Is.GreaterThanOrEqualTo(1));
         Assert.That(exception.Column, Is.GreaterThanOrEqualTo(1));
+    }
+
+    [Test]
+    public void GeneratedContext_CapturesJsonExtensionData_WhenReading()
+    {
+        var context = TestTomlSerializerContextExtensionData.Default;
+        var toml = """
+            name = "Ada"
+            unknown = 1
+            """;
+
+        var model = TomlSerializer.Deserialize(toml, context.GeneratedExtensionDataPerson);
+
+        Assert.That(model, Is.Not.Null);
+        Assert.That(model!.Name, Is.EqualTo("Ada"));
+        Assert.That(model.Extra, Is.Not.Null);
+        Assert.That(model.Extra!.ContainsKey("unknown"), Is.True);
+        Assert.That(model.Extra["unknown"], Is.InstanceOf<long>());
+        Assert.That((long)model.Extra["unknown"]!, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void GeneratedContext_Throws_WhenExtensionDataKeyConflictsWithMemberKey_OnWrite()
+    {
+        var context = TestTomlSerializerContextExtensionData.Default;
+        var model = new GeneratedExtensionDataPerson
+        {
+            Name = "Ada",
+            Extra = new Dictionary<string, object?> { ["name"] = "from-extra" },
+        };
+
+        var exception = Assert.Throws<TomlException>(() => TomlSerializer.Serialize(model, context.GeneratedExtensionDataPerson));
+
+        Assert.That(exception, Is.Not.Null);
+        Assert.That(exception!.Message, Does.Contain("Extension data key"));
+        Assert.That(exception.Message, Does.Contain("conflicts"));
     }
 
     [Test]

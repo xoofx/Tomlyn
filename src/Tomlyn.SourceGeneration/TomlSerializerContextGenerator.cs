@@ -55,6 +55,14 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    private static readonly DiagnosticDescriptor InvalidExtensionDataMember = new(
+        id: "TOMLYN006",
+        title: "Invalid extension data member",
+        messageFormat: "Type '{0}' extension data member '{1}' is invalid: {2}",
+        category: "Tomlyn.SourceGeneration",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     private const string TomlSerializerContextMetadataName = "Tomlyn.Serialization.TomlSerializerContext";
     private const string JsonSerializableAttributeMetadataName = "System.Text.Json.Serialization.JsonSerializableAttribute";
     private const string JsonSourceGenerationOptionsAttributeMetadataName = "System.Text.Json.Serialization.JsonSourceGenerationOptionsAttribute";
@@ -64,6 +72,10 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
     private const string TomlOnSerializedMetadataName = "Tomlyn.Serialization.ITomlOnSerialized";
     private const string TomlOnDeserializingMetadataName = "Tomlyn.Serialization.ITomlOnDeserializing";
     private const string TomlOnDeserializedMetadataName = "Tomlyn.Serialization.ITomlOnDeserialized";
+
+    private static readonly SymbolDisplayFormat FullyQualifiedNullableFormat =
+        SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
+            SymbolDisplayFormat.FullyQualifiedFormat.MiscellaneousOptions | SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
 
     private sealed class ContextModel
     {
@@ -275,7 +287,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         foreach (var type in ordered)
         {
-            if (TryGetPocoShape(type, model.Options, out var poco))
+            if (TryGetPocoShape(context, model, type, out var poco))
             {
                 EmitPocoTypeInfo(builder, model, type, poco);
             }
@@ -507,6 +519,17 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             builder.AppendLine("            ((global::Tomlyn.Serialization.ITomlOnSerializing)value).OnTomlSerializing();");
         }
         builder.AppendLine("            writer.WriteStartTable();");
+        string? usedKeysVariable = null;
+        if (poco.ExtensionData is { } extensionData)
+        {
+            usedKeysVariable = "__usedKeys";
+            builder.Append("            var __extensionData = value.").Append(extensionData.MemberName).AppendLine(";");
+            builder.AppendLine("            global::System.Collections.Generic.HashSet<string>? __usedKeys = null;");
+            builder.AppendLine("            if (__extensionData is not null)");
+            builder.AppendLine("            {");
+            builder.AppendLine("                __usedKeys = new global::System.Collections.Generic.HashSet<string>(Options.PropertyNameCaseInsensitive ? global::System.StringComparer.OrdinalIgnoreCase : global::System.StringComparer.Ordinal);");
+            builder.AppendLine("            }");
+        }
         for (var i = 0; i < poco.Members.Length; i++)
         {
             var member = poco.Members[i];
@@ -526,7 +549,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             .ThenBy(i => poco.Members[i].SerializedName, StringComparer.Ordinal)
             .ToArray();
 
-        static void EmitWriteSequence(StringBuilder builder, PocoShape poco, int[] indices)
+        static void EmitWriteSequence(StringBuilder builder, PocoShape poco, int[] indices, string? usedKeysVariable)
         {
             for (var sequenceIndex = 0; sequenceIndex < indices.Length; sequenceIndex++)
             {
@@ -534,28 +557,48 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 var member = poco.Members[i];
                 var memberTypeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 var canBeNull = CanBeNull(member.Type);
-                EmitWriteMember(builder, member, i, memberTypeName, canBeNull);
+                EmitWriteMember(builder, member, i, memberTypeName, canBeNull, usedKeysVariable);
             }
         }
 
         builder.AppendLine("            switch (Options.MappingOrder)");
         builder.AppendLine("            {");
         builder.AppendLine("                case TomlMappingOrderPolicy.Declaration:");
-        EmitWriteSequence(builder, poco, declarationOrder);
+        EmitWriteSequence(builder, poco, declarationOrder, usedKeysVariable);
         builder.AppendLine("                    break;");
         builder.AppendLine("                case TomlMappingOrderPolicy.Alphabetical:");
-        EmitWriteSequence(builder, poco, alphabeticalOrder);
+        EmitWriteSequence(builder, poco, alphabeticalOrder, usedKeysVariable);
         builder.AppendLine("                    break;");
         builder.AppendLine("                case TomlMappingOrderPolicy.OrderThenDeclaration:");
-        EmitWriteSequence(builder, poco, orderThenDeclaration);
+        EmitWriteSequence(builder, poco, orderThenDeclaration, usedKeysVariable);
         builder.AppendLine("                    break;");
         builder.AppendLine("                case TomlMappingOrderPolicy.OrderThenAlphabetical:");
-        EmitWriteSequence(builder, poco, orderThenAlphabetical);
+        EmitWriteSequence(builder, poco, orderThenAlphabetical, usedKeysVariable);
         builder.AppendLine("                    break;");
         builder.AppendLine("                default:");
-        EmitWriteSequence(builder, poco, declarationOrder);
+        EmitWriteSequence(builder, poco, declarationOrder, usedKeysVariable);
         builder.AppendLine("                    break;");
         builder.AppendLine("            }");
+        if (poco.ExtensionData is { } extensionDataWrite)
+        {
+            var extensionValueTypeInfo = GetTypeInfoPropertyName(extensionDataWrite.ValueType);
+            var writeValueArgument = CanBeNull(extensionDataWrite.ValueType) ? "__pair.Value!" : "__pair.Value";
+
+            builder.AppendLine("            if (__extensionData is not null)");
+            builder.AppendLine("            {");
+            builder.AppendLine("                foreach (var __pair in __extensionData)");
+            builder.AppendLine("                {");
+            builder.AppendLine("                    var __key = __pair.Key;");
+            builder.AppendLine("                    if (Options.DictionaryKeyPolicy is { } __keyPolicy)");
+            builder.AppendLine("                    {");
+            builder.AppendLine("                        __key = __keyPolicy.ConvertName(__key);");
+            builder.AppendLine("                    }");
+            builder.AppendLine("                    if (__usedKeys is not null && __usedKeys.Contains(__key)) throw new TomlException($\"Extension data key '{__key}' conflicts with an existing member key.\");");
+            builder.AppendLine("                    writer.WritePropertyName(__key);");
+            builder.Append("                    _context.").Append(extensionValueTypeInfo).Append(".Write(writer, ").Append(writeValueArgument).AppendLine(");");
+            builder.AppendLine("                }");
+            builder.AppendLine("            }");
+        }
         builder.AppendLine("            writer.WriteEndTable();");
         if (callsOnSerialized)
         {
@@ -748,6 +791,20 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 builder.AppendLine("                    }");
             }
 
+            if (poco.ExtensionData is { } extensionData)
+            {
+                var extensionValueTypeInfo = GetTypeInfoPropertyName(extensionData.ValueType);
+                builder.Append("                    var __extensionData = value.").Append(extensionData.MemberName).AppendLine(";");
+                builder.AppendLine("                    if (__extensionData is null)");
+                builder.AppendLine("                    {");
+                builder.Append("                        __extensionData = ").Append(extensionData.CreateExpression).AppendLine(";");
+                builder.Append("                        value.").Append(extensionData.MemberName).AppendLine(" = __extensionData;");
+                builder.AppendLine("                    }");
+                builder.Append("                    __extensionData[name] = _context.").Append(extensionValueTypeInfo).AppendLine(".Read(reader)!;");
+                builder.AppendLine("                    continue;");
+                return;
+            }
+
             builder.AppendLine("                    reader.Skip();");
             return;
         }
@@ -835,11 +892,28 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         builder.AppendLine("                        }");
         builder.AppendLine("                    }");
+        if (poco.ExtensionData is { } extensionDataRead)
+        {
+            var extensionValueTypeInfo = GetTypeInfoPropertyName(extensionDataRead.ValueType);
+            builder.AppendLine("                    {");
+            builder.AppendLine("                        var name = reader.PropertyName!;");
+            builder.AppendLine("                        reader.Read();");
+            builder.Append("                        var __extensionData = value.").Append(extensionDataRead.MemberName).AppendLine(";");
+            builder.AppendLine("                        if (__extensionData is null)");
+            builder.AppendLine("                        {");
+            builder.Append("                            __extensionData = ").Append(extensionDataRead.CreateExpression).AppendLine(";");
+            builder.Append("                            value.").Append(extensionDataRead.MemberName).AppendLine(" = __extensionData;");
+            builder.AppendLine("                        }");
+            builder.Append("                        __extensionData[name] = _context.").Append(extensionValueTypeInfo).AppendLine(".Read(reader)!;");
+            builder.AppendLine("                        continue;");
+            builder.AppendLine("                    }");
+            return;
+        }
         builder.AppendLine("                    reader.Read();");
         builder.AppendLine("                    reader.Skip();");
     }
 
-    private static void EmitWriteMember(StringBuilder builder, PocoMember member, int index, string memberTypeName, bool canBeNull)
+    private static void EmitWriteMember(StringBuilder builder, PocoMember member, int index, string memberTypeName, bool canBeNull, string? usedKeysVariable)
     {
         var localName = "__member" + index.ToString(CultureInfo.InvariantCulture);
         var writeArgument = canBeNull ? localName + "!" : localName;
@@ -855,12 +929,20 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 builder.Append(openIndent).Append("if (").Append(localName).AppendLine(" is not null)");
                 builder.Append(openIndent).AppendLine("{");
                 builder.Append(writeIndent).Append("writer.WritePropertyName(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
+                if (usedKeysVariable is not null)
+                {
+                    builder.Append(writeIndent).Append(usedKeysVariable).Append("?.Add(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
+                }
                 builder.Append(writeIndent).Append("_context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".Write(writer, ").Append(localName).AppendLine(");");
                 builder.Append(openIndent).AppendLine("}");
                 return;
             }
 
             builder.Append(openIndent).Append("writer.WritePropertyName(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
+            if (usedKeysVariable is not null)
+            {
+                builder.Append(openIndent).Append(usedKeysVariable).Append("?.Add(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
+            }
             builder.Append(openIndent).Append("_context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".Write(writer, ").Append(localName).AppendLine(");");
             return;
         }
@@ -884,6 +966,10 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
             builder.Append(openIndent).AppendLine("{");
             builder.Append(writeIndent).Append("writer.WritePropertyName(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
+            if (usedKeysVariable is not null)
+            {
+                builder.Append(writeIndent).Append(usedKeysVariable).Append("?.Add(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
+            }
             builder.Append(writeIndent).Append("_context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".Write(writer, ").Append(writeArgument).AppendLine(");");
             builder.Append(openIndent).AppendLine("}");
             return;
@@ -918,6 +1004,10 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.AppendLine("))");
         builder.Append(openIndent).AppendLine("{");
         builder.Append(writeIndent).Append("writer.WritePropertyName(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
+        if (usedKeysVariable is not null)
+        {
+            builder.Append(writeIndent).Append(usedKeysVariable).Append("?.Add(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
+        }
         builder.Append(writeIndent).Append("_context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".Write(writer, ").Append(writeArgument).AppendLine(");");
         builder.Append(openIndent).AppendLine("}");
     }
@@ -1003,7 +1093,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 continue;
             }
 
-            if (TryGetPocoShape(current, model.Options, out var poco))
+            if (TryGetPocoShape(context, model, current, out var poco))
             {
                 foreach (var member in poco.Members)
                 {
@@ -1031,6 +1121,23 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     }
 
                     queue.Enqueue(member.Type);
+                }
+
+                if (poco.ExtensionData is { } extensionData)
+                {
+                    if (!IsSupportedMemberType(extensionData.ValueType))
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            UnsupportedMemberType,
+                            model.ContextSymbol.Locations.FirstOrDefault(),
+                            current.ToDisplayString(),
+                            extensionData.MemberName,
+                            extensionData.ValueType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+                    }
+                    else
+                    {
+                        queue.Enqueue(extensionData.ValueType);
+                    }
                 }
             }
         }
@@ -1099,14 +1206,32 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         public bool IsRequired { get; }
     }
 
+    private sealed class PocoExtensionData
+    {
+        public PocoExtensionData(string memberName, ITypeSymbol memberType, ITypeSymbol valueType, string createExpression)
+        {
+            MemberName = memberName;
+            MemberType = memberType;
+            ValueType = valueType;
+            CreateExpression = createExpression;
+        }
+
+        public string MemberName { get; }
+        public ITypeSymbol MemberType { get; }
+        public ITypeSymbol ValueType { get; }
+        public string CreateExpression { get; }
+    }
+
     private sealed class PocoShape
     {
-        public PocoShape(ImmutableArray<PocoMember> members)
+        public PocoShape(ImmutableArray<PocoMember> members, PocoExtensionData? extensionData)
         {
             Members = members;
+            ExtensionData = extensionData;
         }
 
         public ImmutableArray<PocoMember> Members { get; }
+        public PocoExtensionData? ExtensionData { get; }
     }
 
     private enum WriteIgnoreKind
@@ -1128,7 +1253,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         public WriteIgnoreKind WriteIgnore { get; }
     }
 
-    private static bool TryGetPocoShape(ITypeSymbol type, SourceGenOptions options, out PocoShape shape)
+    private static bool TryGetPocoShape(SourceProductionContext context, ContextModel model, ITypeSymbol type, out PocoShape shape)
     {
         shape = null!;
 
@@ -1169,9 +1294,10 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             return false;
         }
 
-        var namingPolicy = options.PropertyNamingPolicyExpression;
+        var namingPolicy = model.Options.PropertyNamingPolicyExpression;
 
         var members = ImmutableArray.CreateBuilder<PocoMember>();
+        PocoExtensionData? extensionData = null;
         foreach (var member in named.GetMembers().OfType<IPropertySymbol>())
         {
             if (member.IsIndexer)
@@ -1186,6 +1312,45 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
             if (member.SetMethod is null || member.GetMethod is null)
             {
+                continue;
+            }
+
+            if (IsExtensionData(member))
+            {
+                if (extensionData is not null)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InvalidExtensionDataMember,
+                        model.ContextSymbol.Locations.FirstOrDefault(),
+                        type.ToDisplayString(),
+                        member.Name,
+                        "Multiple extension data members were found. Only a single member can be annotated with [TomlExtensionData]/[JsonExtensionData]."));
+                    continue;
+                }
+
+                if (!TryGetExtensionDataValueType(member.Type, out var extensionValueType))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InvalidExtensionDataMember,
+                        model.ContextSymbol.Locations.FirstOrDefault(),
+                        type.ToDisplayString(),
+                        member.Name,
+                        "Extension data members must be dictionary-like with string keys (for example IDictionary<string, object> or TomlTable)."));
+                    continue;
+                }
+
+                if (!TryGetExtensionDataCreateExpression(member.Type, extensionValueType, out var createExpression))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InvalidExtensionDataMember,
+                        model.ContextSymbol.Locations.FirstOrDefault(),
+                        type.ToDisplayString(),
+                        member.Name,
+                        "Extension data members must be instantiable (public parameterless constructor) or use an interface type such as IDictionary<string, TValue>."));
+                    continue;
+                }
+
+                extensionData = new PocoExtensionData(member.Name, member.Type, extensionValueType, createExpression);
                 continue;
             }
 
@@ -1213,6 +1378,45 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 continue;
             }
 
+            if (IsExtensionData(member))
+            {
+                if (extensionData is not null)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InvalidExtensionDataMember,
+                        model.ContextSymbol.Locations.FirstOrDefault(),
+                        type.ToDisplayString(),
+                        member.Name,
+                        "Multiple extension data members were found. Only a single member can be annotated with [TomlExtensionData]/[JsonExtensionData]."));
+                    continue;
+                }
+
+                if (!TryGetExtensionDataValueType(member.Type, out var extensionValueType))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InvalidExtensionDataMember,
+                        model.ContextSymbol.Locations.FirstOrDefault(),
+                        type.ToDisplayString(),
+                        member.Name,
+                        "Extension data members must be dictionary-like with string keys (for example IDictionary<string, object> or TomlTable)."));
+                    continue;
+                }
+
+                if (!TryGetExtensionDataCreateExpression(member.Type, extensionValueType, out var createExpression))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InvalidExtensionDataMember,
+                        model.ContextSymbol.Locations.FirstOrDefault(),
+                        type.ToDisplayString(),
+                        member.Name,
+                        "Extension data members must be instantiable (public parameterless constructor) or use an interface type such as IDictionary<string, TValue>."));
+                    continue;
+                }
+
+                extensionData = new PocoExtensionData(member.Name, member.Type, extensionValueType, createExpression);
+                continue;
+            }
+
             if (!HasAttribute(member, "Tomlyn.Serialization.TomlIncludeAttribute") &&
                 !HasAttribute(member, "System.Text.Json.Serialization.JsonIncludeAttribute"))
             {
@@ -1231,7 +1435,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore, required));
         }
 
-        shape = new PocoShape(members.ToImmutable());
+        shape = new PocoShape(members.ToImmutable(), extensionData);
         return true;
     }
 
@@ -1239,6 +1443,101 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
     {
         return HasAttribute(member, "Tomlyn.Serialization.TomlRequiredAttribute") ||
                HasAttribute(member, "System.Text.Json.Serialization.JsonRequiredAttribute");
+    }
+
+    private static bool IsExtensionData(ISymbol member)
+    {
+        return HasAttribute(member, "Tomlyn.Serialization.TomlExtensionDataAttribute") ||
+               HasAttribute(member, "System.Text.Json.Serialization.JsonExtensionDataAttribute");
+    }
+
+    private static bool TryGetExtensionDataValueType(ITypeSymbol type, out ITypeSymbol valueType)
+    {
+        valueType = null!;
+
+        if (type is not INamedTypeSymbol named)
+        {
+            return false;
+        }
+
+        static bool IsStringDictionaryInterface(INamedTypeSymbol iface, out ITypeSymbol dictionaryValueType)
+        {
+            dictionaryValueType = null!;
+            if (!iface.IsGenericType)
+            {
+                return false;
+            }
+
+            if (iface.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) != "global::System.Collections.Generic.IDictionary<TKey, TValue>")
+            {
+                return false;
+            }
+
+            if (iface.TypeArguments[0].SpecialType != SpecialType.System_String)
+            {
+                return false;
+            }
+
+            dictionaryValueType = iface.TypeArguments[1];
+            return true;
+        }
+
+        if (IsStringDictionaryInterface(named, out var directValueType))
+        {
+            valueType = directValueType;
+            return true;
+        }
+
+        foreach (var iface in named.AllInterfaces)
+        {
+            if (IsStringDictionaryInterface(iface, out var ifaceValueType))
+            {
+                valueType = ifaceValueType;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryGetExtensionDataCreateExpression(ITypeSymbol memberType, ITypeSymbol valueType, out string createExpression)
+    {
+        createExpression = null!;
+
+        var memberTypeNoOuterNullability = memberType.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
+        var memberTypeNameNoNullability = memberTypeNoOuterNullability.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var memberTypeName = memberTypeNoOuterNullability.ToDisplayString(FullyQualifiedNullableFormat);
+        if (memberTypeNameNoNullability == "global::Tomlyn.Model.TomlTable")
+        {
+            createExpression = "new global::Tomlyn.Model.TomlTable()";
+            return true;
+        }
+
+        if (memberTypeNoOuterNullability is not INamedTypeSymbol named)
+        {
+            return false;
+        }
+
+        if (named.TypeKind is (TypeKind.Class or TypeKind.Struct) &&
+            !named.IsAbstract &&
+            named.TypeKind != TypeKind.Interface)
+        {
+            if (named.TypeKind == TypeKind.Struct ||
+                named.Constructors.Any(static c => c.Parameters.Length == 0 && c.DeclaredAccessibility == Accessibility.Public))
+            {
+                createExpression = "new " + memberTypeName + "()";
+                return true;
+            }
+        }
+
+        if (named.TypeKind == TypeKind.Interface && TryGetExtensionDataValueType(memberTypeNoOuterNullability, out _))
+        {
+            var valueTypeName = valueType.ToDisplayString(FullyQualifiedNullableFormat);
+            createExpression = $"new global::System.Collections.Generic.Dictionary<string, {valueTypeName}>()";
+            return true;
+        }
+
+        return false;
     }
 
     private static bool TryGetArrayElementType(ITypeSymbol type, out ITypeSymbol elementType)
