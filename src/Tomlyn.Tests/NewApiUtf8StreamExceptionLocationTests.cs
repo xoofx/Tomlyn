@@ -1,3 +1,5 @@
+using System.IO;
+using System.Text;
 using NUnit.Framework;
 using Tomlyn.Model;
 
@@ -6,40 +8,34 @@ namespace Tomlyn.Tests;
 public sealed class NewApiUtf8StreamExceptionLocationTests
 {
     [Test]
-    public void Deserialize_Utf8Bytes_InvalidUtf8_ThrowsTomlExceptionWithByteOffset()
+    public void Deserialize_Stream_SyntaxError_ThrowsTomlExceptionWithLocation()
     {
-        // a = "<invalid utf-8>"
-        var bytes = new byte[]
+        using var stream = new MemoryStream();
+        using (var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), bufferSize: 1024, leaveOpen: true))
         {
-            (byte)'a',
-            (byte)' ',
-            (byte)'=',
-            (byte)' ',
-            (byte)'"',
-            0xC3, // invalid sequence start (expects continuation byte in 0x80..0xBF, but 0x28 is '(')
-            0x28,
-            (byte)'"',
-        };
+            writer.Write("a = [\n");
+        }
 
-        var ex = Assert.Throws<TomlException>(() => TomlSerializer.Deserialize<TomlTable>(bytes));
+        stream.Position = 0;
+        var ex = Assert.Throws<TomlException>(() => TomlSerializer.Deserialize<TomlTable>(stream));
         Assert.NotNull(ex);
         Assert.NotNull(ex!.Span);
 
-        Assert.AreEqual(5, ex.Offset, "Offset must be the character position of the invalid sequence.");
-        Assert.AreEqual(1, ex.Line);
-        Assert.AreEqual(6, ex.Column);
+        Assert.That(ex.Line, Is.EqualTo(2));
+        Assert.That(ex.Column, Is.GreaterThan(0));
     }
 
     [Test]
-    public void Deserialize_Utf8Bytes_WithBom_Succeeds()
+    public void Deserialize_Stream_WithBom_Succeeds()
     {
-        var bytes = new byte[]
+        using var stream = new MemoryStream();
+        using (var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true), bufferSize: 1024, leaveOpen: true))
         {
-            0xEF, 0xBB, 0xBF, // UTF-8 BOM
-            (byte)'a', (byte)' ', (byte)'=', (byte)' ', (byte)'1', (byte)'\n',
-        };
+            writer.Write("a = 1\n");
+        }
 
-        var table = TomlSerializer.Deserialize<TomlTable>(bytes);
+        stream.Position = 0;
+        var table = TomlSerializer.Deserialize<TomlTable>(stream);
 
         Assert.NotNull(table);
         Assert.AreEqual(1L, (long)table!["a"]);

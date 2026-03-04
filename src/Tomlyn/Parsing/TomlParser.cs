@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Text;
 using Tomlyn.Model;
 using Tomlyn.Serialization;
 using Tomlyn.Syntax;
@@ -33,6 +32,25 @@ public sealed class TomlParser
         _depth = 0;
     }
 
+    internal static TomlParser Create(ReadOnlyMemory<char> toml, TomlParserOptions parserOptions, TomlSerializerOptions? options = null)
+    {
+        if (parserOptions is null)
+        {
+            throw new ArgumentNullException(nameof(parserOptions));
+        }
+
+        var effectiveOptions = options ?? TomlSerializerOptions.Default;
+        var sourcePath = effectiveOptions.SourceName ?? string.Empty;
+        DiagnosticsBag? diagnostics = null;
+        if (parserOptions.Mode == TomlParserMode.Tolerant)
+        {
+            diagnostics = new DiagnosticsBag();
+        }
+
+        var core = new ParserCore(toml, sourcePath, parserOptions, diagnostics);
+        return new TomlParser(core, effectiveOptions, parserOptions, diagnostics);
+    }
+
     /// <summary>
     /// Creates a parser over a TOML string.
     /// </summary>
@@ -48,18 +66,14 @@ public sealed class TomlParser
             throw new ArgumentNullException(nameof(toml));
         }
 
-        var effectiveOptions = options ?? TomlSerializerOptions.Default;
-        var text = toml.AsMemory();
-        var sourcePath = effectiveOptions.SourceName ?? string.Empty;
-        var parserOptions = new TomlParserOptions();
-        DiagnosticsBag? diagnostics = null;
-        if (parserOptions.Mode == TomlParserMode.Tolerant)
+        var memory = toml.AsMemory();
+        if (!memory.IsEmpty && memory.Span[0] == '\uFEFF')
         {
-            diagnostics = new DiagnosticsBag();
+            memory = memory.Slice(1);
         }
 
-        var core = new ParserCore(text, sourcePath, parserOptions, diagnostics);
-        return new TomlParser(core, effectiveOptions, parserOptions, diagnostics);
+        var parserOptions = new TomlParserOptions();
+        return Create(memory, parserOptions, options);
     }
 
     /// <summary>
@@ -79,22 +93,13 @@ public sealed class TomlParser
             throw new ArgumentNullException(nameof(toml));
         }
 
-        if (parserOptions is null)
+        var memory = toml.AsMemory();
+        if (!memory.IsEmpty && memory.Span[0] == '\uFEFF')
         {
-            throw new ArgumentNullException(nameof(parserOptions));
+            memory = memory.Slice(1);
         }
 
-        var effectiveOptions = options ?? TomlSerializerOptions.Default;
-        var text = toml.AsMemory();
-        var sourcePath = effectiveOptions.SourceName ?? string.Empty;
-        DiagnosticsBag? diagnostics = null;
-        if (parserOptions.Mode == TomlParserMode.Tolerant)
-        {
-            diagnostics = new DiagnosticsBag();
-        }
-
-        var core = new ParserCore(text, sourcePath, parserOptions, diagnostics);
-        return new TomlParser(core, effectiveOptions, parserOptions, diagnostics);
+        return Create(memory, parserOptions, options);
     }
 
     /// <summary>
@@ -137,82 +142,6 @@ public sealed class TomlParser
             throw new ArgumentNullException(nameof(parserOptions));
         }
         return Create(reader.ReadToEnd(), parserOptions, options);
-    }
-
-    /// <summary>
-    /// Creates a parser over UTF-8 TOML bytes.
-    /// </summary>
-    /// <param name="utf8Toml">The UTF-8 TOML payload.</param>
-    /// <param name="options">Optional parser/serializer options.</param>
-    /// <returns>A parser instance positioned before the first event.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="utf8Toml"/> is <c>null</c>.</exception>
-    /// <exception cref="TomlException">The TOML payload is invalid.</exception>
-    public static TomlParser Create(byte[] utf8Toml, TomlSerializerOptions? options = null)
-    {
-        if (utf8Toml is null)
-        {
-            throw new ArgumentNullException(nameof(utf8Toml));
-        }
-
-        var effectiveOptions = options ?? TomlSerializerOptions.Default;
-        var toml = Encoding.UTF8.GetString(utf8Toml);
-        var memory = toml.AsMemory();
-        if (!memory.IsEmpty && memory.Span[0] == '\uFEFF')
-        {
-            memory = memory.Slice(1);
-        }
-
-        var sourcePath = effectiveOptions.SourceName ?? string.Empty;
-        var parserOptions = new TomlParserOptions();
-        DiagnosticsBag? diagnostics = null;
-        if (parserOptions.Mode == TomlParserMode.Tolerant)
-        {
-            diagnostics = new DiagnosticsBag();
-        }
-
-        var core = new ParserCore(memory, sourcePath, parserOptions, diagnostics);
-        return new TomlParser(core, effectiveOptions, parserOptions, diagnostics);
-    }
-
-    /// <summary>
-    /// Creates a parser over UTF-8 TOML bytes.
-    /// </summary>
-    /// <param name="utf8Toml">The UTF-8 TOML payload.</param>
-    /// <param name="parserOptions">Parser options controlling error handling.</param>
-    /// <param name="options">Optional parser/serializer options.</param>
-    /// <returns>A parser instance positioned before the first event.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="utf8Toml"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentNullException"><paramref name="parserOptions"/> is <c>null</c>.</exception>
-    /// <exception cref="TomlException">The TOML payload is invalid.</exception>
-    public static TomlParser Create(byte[] utf8Toml, TomlParserOptions parserOptions, TomlSerializerOptions? options = null)
-    {
-        if (utf8Toml is null)
-        {
-            throw new ArgumentNullException(nameof(utf8Toml));
-        }
-
-        if (parserOptions is null)
-        {
-            throw new ArgumentNullException(nameof(parserOptions));
-        }
-
-        var effectiveOptions = options ?? TomlSerializerOptions.Default;
-        var toml = Encoding.UTF8.GetString(utf8Toml);
-        var memory = toml.AsMemory();
-        if (!memory.IsEmpty && memory.Span[0] == '\uFEFF')
-        {
-            memory = memory.Slice(1);
-        }
-
-        var sourcePath = effectiveOptions.SourceName ?? string.Empty;
-        DiagnosticsBag? diagnostics = null;
-        if (parserOptions.Mode == TomlParserMode.Tolerant)
-        {
-            diagnostics = new DiagnosticsBag();
-        }
-
-        var core = new ParserCore(memory, sourcePath, parserOptions, diagnostics);
-        return new TomlParser(core, effectiveOptions, parserOptions, diagnostics);
     }
 
     /// <summary>

@@ -73,25 +73,6 @@ public static class SyntaxParser
     }
 
     /// <summary>
-    /// Parses a UTF-8 TOML payload into a syntax tree.
-    /// </summary>
-    /// <param name="utf8Toml">The UTF-8 TOML payload.</param>
-    /// <param name="sourceName">An optional source name used in diagnostics.</param>
-    /// <param name="validate">When <c>true</c>, runs semantic validation after parsing.</param>
-    /// <returns>The parsed syntax tree, possibly containing diagnostics.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="utf8Toml"/> is <c>null</c>.</exception>
-    public static DocumentSyntax Parse(byte[] utf8Toml, string? sourceName = null, bool validate = true)
-    {
-        if (utf8Toml is null)
-        {
-            throw new ArgumentNullException(nameof(utf8Toml));
-        }
-
-        var lexer = TomlLexer.Create(utf8Toml, new TomlLexerOptions { DecodeScalars = true }, sourceName);
-        return Parse(lexer, validate);
-    }
-
-    /// <summary>
     /// Parses a TOML payload into a syntax tree and throws on any parse/validation error.
     /// </summary>
     /// <param name="toml">The TOML payload.</param>

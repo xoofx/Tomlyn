@@ -66,7 +66,7 @@ var toml = TomlSerializer.Serialize(new ServerConfig { Host = "example.com", Por
 ## Streams (UTF-8)
 
 > [!TIP]
-> Prefer `Stream` or `byte[]` overloads for files - they avoid allocating an intermediate `string` and read UTF-8 directly.
+> `Stream` overloads are for convenience. Tomlyn reads the entire stream into memory before parsing (see [Performance](performance.md)).
 
 Tomlyn provides `Stream` and `TextReader` overloads to avoid manual `StreamReader`/`StreamWriter` boilerplate:
 
@@ -81,13 +81,6 @@ var config = TomlSerializer.Deserialize<ServerConfig>(input)!;
 // Write to a file stream
 using var output = File.Create("config_out.toml");
 TomlSerializer.Serialize(output, config);
-```
-
-You can also deserialize from `byte[]` (UTF-8):
-
-```csharp
-byte[] utf8Bytes = File.ReadAllBytes("config.toml");
-var config = TomlSerializer.Deserialize<ServerConfig>(utf8Bytes)!;
 ```
 
 ## Configure options

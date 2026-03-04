@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
-using System.Text;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using Tomlyn.Model;
@@ -31,9 +30,10 @@ public sealed class Toml11TomlTestInvalidFolderTests
         Assert.False(doc.HasErrors, "TOML 1.1 extension should parse without errors.");
         Assert.AreEqual(toml, roundtrip, "Syntax roundtrip should preserve input for full fidelity.");
 
-        var docUtf8 = SyntaxParser.Parse(Encoding.UTF8.GetBytes(toml), inputName);
-        Assert.False(docUtf8.HasErrors, "UTF8 input should parse without errors.");
-        Assert.AreEqual(roundtrip, docUtf8.ToString(), "UTF8 and UTF16 syntax roundtrips must match.");
+        using var reader = new StringReader(toml);
+        var docFromReader = SyntaxParser.Parse(reader, inputName);
+        Assert.False(docFromReader.HasErrors, "TextReader input should parse without errors.");
+        Assert.AreEqual(roundtrip, docFromReader.ToString(), "TextReader and string syntax roundtrips must match.");
     }
 
     [TestCaseSource(nameof(ListToml11InvalidFolderExtensions), Category = "toml-test")]
@@ -132,7 +132,7 @@ public sealed class Toml11TomlTestInvalidFolderTests
             Assert.True(File.Exists(file), $"The TOML test file `{file}` does not exist");
 
             var functionName = Path.GetFileName(file);
-            var input = Encoding.UTF8.GetString(File.ReadAllBytes(file));
+            var input = File.ReadAllText(file);
             tests.Add(new TestCaseData(functionName, input));
         }
 

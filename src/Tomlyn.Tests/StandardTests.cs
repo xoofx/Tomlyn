@@ -105,14 +105,15 @@ namespace Tomlyn.Tests
             }
 
             {
-                var docUtf8 = SyntaxParser.Parse(Encoding.UTF8.GetBytes(toml), inputName);
-                var roundtripUtf8 = docUtf8.ToString();
-                if (roundtrip != roundtripUtf8)
+                using var reader = new StringReader(toml);
+                var docFromReader = SyntaxParser.Parse(reader, inputName);
+                var roundtripFromReader = docFromReader.ToString();
+                if (roundtrip != roundtripFromReader)
                 {
                     Console.WriteLine($"Testing {inputName}");
                     Dump(toml, doc, roundtrip);
                 }
-                Assert.AreEqual(roundtrip, roundtripUtf8, "The UTF8 version doesn't match with the UTF16 version");
+                Assert.AreEqual(roundtrip, roundtripFromReader, "The TextReader version doesn't match with the string version");
             }
         }
 
@@ -211,6 +212,13 @@ namespace Tomlyn.Tests
 
                 if (type == InvalidSpec)
                 {
+                    // The toml-test "invalid/encoding" suite validates raw UTF-8 byte-level correctness.
+                    // Tomlyn's test harness feeds TOML as text (string/TextReader), so these cases are not applicable here.
+                    if (normalizedFile.IndexOf("/invalid/encoding/", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        goto next_file;
+                    }
+
                     for (var i = 0; i < Toml11ValidButTomlTestMarksInvalid.Length; i++)
                     {
                         if (normalizedFile.EndsWith(Toml11ValidButTomlTestMarksInvalid[i], StringComparison.OrdinalIgnoreCase))
@@ -222,7 +230,7 @@ namespace Tomlyn.Tests
 
                 var functionName = Path.GetFileName(file);
 
-                var input = Encoding.UTF8.GetString(File.ReadAllBytes(file));
+                var input = File.ReadAllText(file);
 
                 string? json = null;
                 if (type == "valid")

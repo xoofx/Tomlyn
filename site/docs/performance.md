@@ -2,7 +2,7 @@
 title: Performance
 ---
 
-Tomlyn is designed for high throughput and low allocations.
+Tomlyn is designed for high throughput and low allocations for **configuration-style** TOML workloads.
 
 ## Architecture
 
@@ -13,20 +13,29 @@ Tomlyn is designed for high throughput and low allocations.
 | [`TomlSerializer`](xref:Tomlyn.TomlSerializer) | Reads directly from the parser stream when possible; source-generated metadata avoids reflection. |
 | [`SyntaxParser`](xref:Tomlyn.Parsing.SyntaxParser) | Allocates tree nodes - use only when full-fidelity round-tripping is needed. |
 
+## What “high-performance” means for Tomlyn
+
+Tomlyn is optimized around the common TOML use-case: **configuration files** that can be loaded in memory.
+Tomlyn is not a streaming parser and it does not aim to match the design goals of `System.Text.Json` for high-throughput web API scenarios.
+
+Internally, Tomlyn parses a **UTF-16 `ReadOnlyMemory<char>`** view of the TOML payload.
+This means that:
+
+- Passing TOML as `string` is the most direct path.
+- When you use `Stream` or `TextReader`, Tomlyn reads the entire payload into memory before parsing.
+
 ## Practical tips
 
 | Tip | Why |
 | --- | --- |
 | **Cache [`TomlSerializerOptions`](xref:Tomlyn.TomlSerializerOptions)** | It is an immutable `sealed record`. Creating it once avoids repeated metadata resolution. |
 | **Prefer source generation** | [`TomlSerializerContext`](xref:Tomlyn.Serialization.TomlSerializerContext) / [`TomlTypeInfo<T>`](xref:Tomlyn.TomlTypeInfo`1) avoids reflection, reduces startup, and is required for NativeAOT. |
-| **Use `Stream` overloads** | [`TomlSerializer.Deserialize<T>(Stream)`](xref:Tomlyn.TomlSerializer) reads UTF-8 directly, avoiding a full-string allocation. |
-| **Use `byte[]` overloads** | [`TomlSerializer.Deserialize<T>(byte[])`](xref:Tomlyn.TomlSerializer) avoids the `string` → `byte[]` conversion for pre-loaded data. |
+| **Use `Stream`/`TextReader` for convenience** | Tomlyn reads the entire content into memory before parsing; use these overloads to integrate with existing IO code. |
 | **Set `SourceName` once** | Attach it to cached options, not per-call - it doesn't affect parsing, only exception messages. |
 | **Avoid [`SyntaxParser`](xref:Tomlyn.Parsing.SyntaxParser) for mapping** | [`SyntaxParser`](xref:Tomlyn.Parsing.SyntaxParser) builds a full tree. If you only need .NET objects, use [`TomlSerializer`](xref:Tomlyn.TomlSerializer) directly. |
 
 > [!TIP]
-> For the best performance, combine source generation with `Stream` or `byte[]` overloads.
-> This gives you zero-reflection, zero-intermediate-string deserialization.
+> For the best performance, combine source generation with a cached `TomlSerializerContext` and cached `TomlSerializerOptions`.
 
 ## When to use each API
 

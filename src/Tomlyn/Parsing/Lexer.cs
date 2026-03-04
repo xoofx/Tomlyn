@@ -1733,13 +1733,7 @@ namespace Tomlyn.Parsing
                 return Eof;
             }
 
-            var nextChar = ReadChar32(ref position);
-            if (nextChar == 0xFFFD)
-            {
-                AddError($"The character `{nextChar}` is an invalid UTF8 character", _current.Position, _current.Position);
-            }
-
-            return nextChar;
+            return ReadChar32(ref position);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1805,12 +1799,9 @@ namespace Tomlyn.Parsing
                 nextPosition.Column++;
             }
 
-            // U+FFFD is the Unicode replacement character. If it shows up in the input, it is typically a sign
-            // that the original TOML payload contained invalid UTF-8 sequences (e.g. when decoded by a reader
-            // that replaces invalid bytes). Treat it as invalid to match TOML conformance expectations.
             if (nextc == 0xFFFD)
             {
-                AddError($"The character `{nextc}` is an invalid UTF8 character", _current.Position, _current.Position);
+                AddError("Invalid UTF-16 surrogate sequence in TOML input.", _current.Position, _current.Position);
             }
 
             return nextc;

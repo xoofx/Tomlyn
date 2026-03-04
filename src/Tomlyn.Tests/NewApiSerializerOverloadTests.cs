@@ -37,11 +37,17 @@ public sealed class NewApiSerializerOverloadTests
     }
 
     [Test]
-    public void Deserialize_Utf8Bytes_WithContext_Works()
+    public void Deserialize_Stream_WithContext_Works()
     {
         var context = TestTomlSerializerContext.Default;
-        var bytes = Encoding.UTF8.GetBytes(SampleToml);
-        var person = TomlSerializer.Deserialize<GeneratedPerson>(bytes, context);
+        using var stream = new MemoryStream();
+        using (var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), bufferSize: 1024, leaveOpen: true))
+        {
+            writer.Write(SampleToml);
+        }
+
+        stream.Position = 0;
+        var person = TomlSerializer.Deserialize<GeneratedPerson>(stream, context);
 
         Assert.That(person, Is.Not.Null);
         Assert.That(person!.Name, Is.EqualTo("Ada"));
@@ -75,7 +81,13 @@ public sealed class NewApiSerializerOverloadTests
     public void Deserialize_Stream_WithTypeInfo_Works()
     {
         var context = TestTomlSerializerContext.Default;
-        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(SampleToml));
+        using var stream = new MemoryStream();
+        using (var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), bufferSize: 1024, leaveOpen: true))
+        {
+            writer.Write(SampleToml);
+        }
+
+        stream.Position = 0;
         var person = TomlSerializer.Deserialize(stream, context.GeneratedPerson);
 
         Assert.That(person, Is.Not.Null);
@@ -124,12 +136,17 @@ public sealed class NewApiSerializerOverloadTests
     }
 
     [Test]
-    public void TryDeserialize_Utf8Bytes_WithContext_ReturnsFalseOnFailure()
+    public void TryDeserialize_Stream_WithContext_ReturnsFalseOnFailure()
     {
         var context = TestTomlSerializerContext.Default;
-        var bytes = Encoding.UTF8.GetBytes("name = \"Ada\"\nage = \"not-a-number\"\n");
+        using var stream = new MemoryStream();
+        using (var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), bufferSize: 1024, leaveOpen: true))
+        {
+            writer.Write("name = \"Ada\"\nage = \"not-a-number\"\n");
+        }
 
-        var ok = TomlSerializer.TryDeserialize<GeneratedPerson>(bytes, context, out var value);
+        stream.Position = 0;
+        var ok = TomlSerializer.TryDeserialize<GeneratedPerson>(stream, context, out var value);
 
         Assert.That(ok, Is.False);
         Assert.That(value, Is.Null);
@@ -151,7 +168,13 @@ public sealed class NewApiSerializerOverloadTests
     public void TryDeserialize_Stream_Type_WithContext_ReturnsFalseOnFailure()
     {
         var context = TestTomlSerializerContext.Default;
-        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("name = \"Ada\"\nage = \"not-a-number\"\n"));
+        using var stream = new MemoryStream();
+        using (var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), bufferSize: 1024, leaveOpen: true))
+        {
+            writer.Write("name = \"Ada\"\nage = \"not-a-number\"\n");
+        }
+
+        stream.Position = 0;
 
         var ok = TomlSerializer.TryDeserialize(stream, typeof(GeneratedPerson), context, out var value);
 

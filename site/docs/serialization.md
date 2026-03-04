@@ -19,16 +19,12 @@ var toml = TomlSerializer.Serialize(new Person("Ada", 37));
 var person = TomlSerializer.Deserialize<Person>(toml)!;
 ```
 
-[`TomlSerializer`](xref:Tomlyn.TomlSerializer) provides overloads for `string`, `byte[]` (UTF-8), `Stream`, and `TextReader`/`TextWriter`:
+[`TomlSerializer`](xref:Tomlyn.TomlSerializer) provides overloads for `string`, `Stream`, and `TextReader`/`TextWriter`:
 
 ```csharp
-// From/to a file stream (UTF-8)
+// From a file stream (UTF-8)
 using var stream = File.OpenRead("config.toml");
 var config = TomlSerializer.Deserialize<MyConfig>(stream);
-
-// From a UTF-8 byte array
-byte[] utf8 = File.ReadAllBytes("config.toml");
-var config2 = TomlSerializer.Deserialize<MyConfig>(utf8);
 
 // To a TextWriter
 using var writer = new StreamWriter("output.toml");
@@ -576,5 +572,5 @@ if (!TomlSerializer.TryDeserialize<MyConfig>(toml, out var config))
 }
 ```
 
-`TryDeserialize` is available for all input types (`string`, `byte[]`, `Stream`, `TextReader`)
+`TryDeserialize` is available for all input types (`string`, `Stream`, `TextReader`)
 and with all metadata styles (options, context, type info).

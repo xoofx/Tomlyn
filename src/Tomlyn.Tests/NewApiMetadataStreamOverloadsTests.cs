@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using NUnit.Framework;
 using Tomlyn.Model;
 using Tomlyn.Serialization;
@@ -38,27 +39,21 @@ public sealed class NewApiMetadataStreamOverloadsTests
     }
 
     [Test]
-    public void Deserialize_Utf8Bytes_ObjectTypeInfo_UsesByteOffsets()
+    public void Deserialize_Stream_ObjectTypeInfo_Works()
     {
         var context = new BuiltInContext();
         var typeInfo = context.GetTypeInfo(typeof(TomlTable), context.Options);
         Assert.NotNull(typeInfo);
 
-        var bytes = new byte[]
+        using var stream = new MemoryStream();
+        using (var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), bufferSize: 1024, leaveOpen: true))
         {
-            (byte)'a',
-            (byte)' ',
-            (byte)'=',
-            (byte)' ',
-            (byte)'"',
-            0xC3,
-            0x28,
-            (byte)'"',
-        };
+            writer.Write("a = 1\n");
+        }
 
-        var ex = Assert.Throws<TomlException>(() => TomlSerializer.Deserialize(bytes, typeInfo!));
-        Assert.NotNull(ex);
-        Assert.AreEqual(5, ex!.Offset);
+        stream.Position = 0;
+        var table = (TomlTable)TomlSerializer.Deserialize(stream, typeInfo!)!;
+        Assert.AreEqual(1L, (long)table["a"]);
     }
 
     [Test]

@@ -42,29 +42,6 @@ public class NewApiExceptionLocationTests
     }
 
     [Test]
-    public void Parse_InvalidUtf8_IncludesByteOffset()
-    {
-        // "a = " followed by an invalid UTF-8 sequence: 0xC3 0x28
-        var bytes = new byte[] { (byte)'a', (byte)' ', (byte)'=', (byte)' ', 0xC3, 0x28, (byte)'\n' };
-        var options = new TomlSerializerOptions { SourceName = "utf8.toml" };
-
-        var parser = TomlParser.Create(bytes, options);
-        var ex = Assert.Throws<TomlException>(() =>
-        {
-            while (parser.MoveNext())
-            {
-            }
-        });
-
-        Assert.That(ex, Is.Not.Null);
-        Assert.That(ex!.Span.HasValue, Is.True);
-        Assert.That(ex.Offset, Is.EqualTo(4));
-        Assert.That(ex.Line, Is.EqualTo(1));
-        Assert.That(ex.Column, Is.EqualTo(5));
-        Assert.That(ex.Message, Does.Contain("utf8.toml("));
-    }
-
-    [Test]
     public void Parse_InvalidKeyHexEscape_IncludesLocation()
     {
         var options = new TomlSerializerOptions { SourceName = "keys.toml" };

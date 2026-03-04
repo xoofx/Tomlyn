@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using Tomlyn.Syntax;
 using Tomlyn.Text;
 
@@ -37,7 +36,13 @@ public sealed class TomlLexer
             throw new ArgumentNullException(nameof(toml));
         }
 
-        var lexer = new Lexer(toml.AsMemory(), sourceName ?? string.Empty)
+        var memory = toml.AsMemory();
+        if (!memory.IsEmpty && memory.Span[0] == '\uFEFF')
+        {
+            memory = memory.Slice(1);
+        }
+
+        var lexer = new Lexer(memory, sourceName ?? string.Empty)
         {
             DecodeScalars = false,
         };
@@ -65,7 +70,13 @@ public sealed class TomlLexer
             throw new ArgumentNullException(nameof(lexerOptions));
         }
 
-        var lexer = new Lexer(toml.AsMemory(), sourceName ?? string.Empty)
+        var memory = toml.AsMemory();
+        if (!memory.IsEmpty && memory.Span[0] == '\uFEFF')
+        {
+            memory = memory.Slice(1);
+        }
+
+        var lexer = new Lexer(memory, sourceName ?? string.Empty)
         {
             DecodeScalars = lexerOptions.DecodeScalars,
         };
@@ -111,69 +122,6 @@ public sealed class TomlLexer
         }
 
         return Create(reader.ReadToEnd(), lexerOptions, sourceName);
-    }
-
-    /// <summary>
-    /// Creates a lexer over UTF-8 TOML bytes.
-    /// </summary>
-    /// <param name="utf8Toml">The UTF-8 TOML payload.</param>
-    /// <param name="sourceName">An optional source name used in diagnostics.</param>
-    /// <returns>A lexer instance positioned before the first token.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="utf8Toml"/> is <c>null</c>.</exception>
-    public static TomlLexer Create(byte[] utf8Toml, string? sourceName = null)
-    {
-        if (utf8Toml is null)
-        {
-            throw new ArgumentNullException(nameof(utf8Toml));
-        }
-
-        var toml = Encoding.UTF8.GetString(utf8Toml);
-        var memory = toml.AsMemory();
-        if (!memory.IsEmpty && memory.Span[0] == '\uFEFF')
-        {
-            memory = memory.Slice(1);
-        }
-
-        var lexer = new Lexer(memory, sourceName ?? string.Empty)
-        {
-            DecodeScalars = false,
-        };
-        return new TomlLexer(lexer);
-    }
-
-    /// <summary>
-    /// Creates a lexer over UTF-8 TOML bytes.
-    /// </summary>
-    /// <param name="utf8Toml">The UTF-8 TOML payload.</param>
-    /// <param name="lexerOptions">Options controlling lexer behavior.</param>
-    /// <param name="sourceName">An optional source name used in diagnostics.</param>
-    /// <returns>A lexer instance positioned before the first token.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="utf8Toml"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentNullException"><paramref name="lexerOptions"/> is <c>null</c>.</exception>
-    public static TomlLexer Create(byte[] utf8Toml, TomlLexerOptions lexerOptions, string? sourceName = null)
-    {
-        if (utf8Toml is null)
-        {
-            throw new ArgumentNullException(nameof(utf8Toml));
-        }
-
-        if (lexerOptions is null)
-        {
-            throw new ArgumentNullException(nameof(lexerOptions));
-        }
-
-        var toml = Encoding.UTF8.GetString(utf8Toml);
-        var memory = toml.AsMemory();
-        if (!memory.IsEmpty && memory.Span[0] == '\uFEFF')
-        {
-            memory = memory.Slice(1);
-        }
-
-        var lexer = new Lexer(memory, sourceName ?? string.Empty)
-        {
-            DecodeScalars = lexerOptions.DecodeScalars,
-        };
-        return new TomlLexer(lexer);
     }
 
     /// <summary>

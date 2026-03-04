@@ -93,18 +93,6 @@ public static class TomlSerializer
     }
 
     /// <summary>
-    /// Serializes a value to a stream using explicit metadata.
-    /// </summary>
-    public static void Serialize<T>(Stream utf8Stream, T value, TomlTypeInfo<T> typeInfo)
-    {
-        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
-        ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
-        using var writer = new StreamWriter(utf8Stream, DefaultStreamEncoding, bufferSize: 1024, leaveOpen: true);
-        Serialize(writer, value, typeInfo);
-        writer.Flush();
-    }
-
-    /// <summary>
     /// Serializes a value into TOML text using explicit metadata.
     /// </summary>
     public static string Serialize(object? value, TomlTypeInfo typeInfo)
@@ -194,10 +182,10 @@ public static class TomlSerializer
     /// </summary>
     [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
     [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
-    public static void Serialize<T>(Stream utf8Stream, T value, TomlSerializerOptions? options = null)
+    public static void Serialize<T>(Stream stream, T value, TomlSerializerOptions? options = null)
     {
-        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
-        Serialize(utf8Stream, (object?)value, typeof(T), options);
+        ArgumentGuard.ThrowIfNull(stream, nameof(stream));
+        Serialize(stream, (object?)value, typeof(T), options);
     }
 
     /// <summary>
@@ -205,12 +193,12 @@ public static class TomlSerializer
     /// </summary>
     [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
     [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
-    public static void Serialize(Stream utf8Stream, object? value, Type inputType, TomlSerializerOptions? options = null)
+    public static void Serialize(Stream stream, object? value, Type inputType, TomlSerializerOptions? options = null)
     {
-        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
+        ArgumentGuard.ThrowIfNull(stream, nameof(stream));
         ArgumentGuard.ThrowIfNull(inputType, nameof(inputType));
 
-        using var writer = new StreamWriter(utf8Stream, DefaultStreamEncoding, bufferSize: 1024, leaveOpen: true);
+        using var writer = new StreamWriter(stream, DefaultStreamEncoding, bufferSize: 1024, leaveOpen: true);
         Serialize(writer, value, inputType, options);
         writer.Flush();
     }
@@ -218,23 +206,23 @@ public static class TomlSerializer
     /// <summary>
     /// Serializes a value to a stream using UTF-8 encoding and generated metadata from a serializer context.
     /// </summary>
-    public static void Serialize<T>(Stream utf8Stream, T value, TomlSerializerContext context)
+    public static void Serialize<T>(Stream stream, T value, TomlSerializerContext context)
     {
-        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
+        ArgumentGuard.ThrowIfNull(stream, nameof(stream));
         ArgumentGuard.ThrowIfNull(context, nameof(context));
-        Serialize(utf8Stream, (object?)value, typeof(T), context);
+        Serialize(stream, (object?)value, typeof(T), context);
     }
 
     /// <summary>
     /// Serializes a value to a stream using UTF-8 encoding, an explicit input type, and generated metadata from a serializer context.
     /// </summary>
-    public static void Serialize(Stream utf8Stream, object? value, Type inputType, TomlSerializerContext context)
+    public static void Serialize(Stream stream, object? value, Type inputType, TomlSerializerContext context)
     {
-        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
+        ArgumentGuard.ThrowIfNull(stream, nameof(stream));
         ArgumentGuard.ThrowIfNull(inputType, nameof(inputType));
         ArgumentGuard.ThrowIfNull(context, nameof(context));
 
-        using var writer = new StreamWriter(utf8Stream, DefaultStreamEncoding, bufferSize: 1024, leaveOpen: true);
+        using var writer = new StreamWriter(stream, DefaultStreamEncoding, bufferSize: 1024, leaveOpen: true);
         Serialize(writer, value, inputType, context);
         writer.Flush();
     }
@@ -242,12 +230,24 @@ public static class TomlSerializer
     /// <summary>
     /// Serializes a value to a stream using UTF-8 encoding and explicit metadata.
     /// </summary>
-    public static void Serialize(Stream utf8Stream, object? value, TomlTypeInfo typeInfo)
+    public static void Serialize(Stream stream, object? value, TomlTypeInfo typeInfo)
     {
-        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
+        ArgumentGuard.ThrowIfNull(stream, nameof(stream));
         ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
 
-        using var writer = new StreamWriter(utf8Stream, DefaultStreamEncoding, bufferSize: 1024, leaveOpen: true);
+        using var writer = new StreamWriter(stream, DefaultStreamEncoding, bufferSize: 1024, leaveOpen: true);
+        Serialize(writer, value, typeInfo);
+        writer.Flush();
+    }
+
+    /// <summary>
+    /// Serializes a value to a stream using UTF-8 encoding and explicit metadata.
+    /// </summary>
+    public static void Serialize<T>(Stream stream, T value, TomlTypeInfo<T> typeInfo)
+    {
+        ArgumentGuard.ThrowIfNull(stream, nameof(stream));
+        ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
+        using var writer = new StreamWriter(stream, DefaultStreamEncoding, bufferSize: 1024, leaveOpen: true);
         Serialize(writer, value, typeInfo);
         writer.Flush();
     }
@@ -313,79 +313,6 @@ public static class TomlSerializer
 
         var typeInfo = ResolveTypeInfo(context, returnType);
         return Deserialize(toml, typeInfo);
-    }
-
-    /// <summary>
-    /// Deserializes a TOML payload from UTF-8 bytes.
-    /// </summary>
-    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
-    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
-    public static T? Deserialize<T>(byte[] utf8Toml, TomlSerializerOptions? options = null)
-    {
-        ArgumentGuard.ThrowIfNull(utf8Toml, nameof(utf8Toml));
-        var effectiveOptions = options ?? TomlSerializerOptions.Default;
-        var typeInfo = ResolveTypeInfo(effectiveOptions, typeof(T));
-        return (T?)DeserializeUtf8(utf8Toml, typeInfo);
-    }
-
-    /// <summary>
-    /// Deserializes a TOML payload from UTF-8 bytes using generated metadata from a serializer context.
-    /// </summary>
-    public static T? Deserialize<T>(byte[] utf8Toml, TomlSerializerContext context)
-    {
-        ArgumentGuard.ThrowIfNull(utf8Toml, nameof(utf8Toml));
-        ArgumentGuard.ThrowIfNull(context, nameof(context));
-
-        var typeInfo = ResolveTypeInfo(context, typeof(T));
-        return (T?)DeserializeUtf8(utf8Toml, typeInfo);
-    }
-
-    /// <summary>
-    /// Deserializes a TOML payload from UTF-8 bytes using explicit metadata.
-    /// </summary>
-    public static T? Deserialize<T>(byte[] utf8Toml, TomlTypeInfo<T> typeInfo)
-    {
-        ArgumentGuard.ThrowIfNull(utf8Toml, nameof(utf8Toml));
-        ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
-        return (T?)DeserializeUtf8(utf8Toml, (TomlTypeInfo)typeInfo);
-    }
-
-    /// <summary>
-    /// Deserializes a TOML payload from UTF-8 bytes into an explicit destination type.
-    /// </summary>
-    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
-    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
-    public static object? Deserialize(byte[] utf8Toml, Type returnType, TomlSerializerOptions? options = null)
-    {
-        ArgumentGuard.ThrowIfNull(utf8Toml, nameof(utf8Toml));
-        ArgumentGuard.ThrowIfNull(returnType, nameof(returnType));
-
-        var effectiveOptions = options ?? TomlSerializerOptions.Default;
-        var typeInfo = ResolveTypeInfo(effectiveOptions, returnType);
-        return DeserializeUtf8(utf8Toml, typeInfo);
-    }
-
-    /// <summary>
-    /// Deserializes a TOML payload from UTF-8 bytes into an explicit destination type using generated metadata from a serializer context.
-    /// </summary>
-    public static object? Deserialize(byte[] utf8Toml, Type returnType, TomlSerializerContext context)
-    {
-        ArgumentGuard.ThrowIfNull(utf8Toml, nameof(utf8Toml));
-        ArgumentGuard.ThrowIfNull(returnType, nameof(returnType));
-        ArgumentGuard.ThrowIfNull(context, nameof(context));
-
-        var typeInfo = ResolveTypeInfo(context, returnType);
-        return DeserializeUtf8(utf8Toml, typeInfo);
-    }
-
-    /// <summary>
-    /// Deserializes a TOML payload from UTF-8 bytes using explicit metadata.
-    /// </summary>
-    public static object? Deserialize(byte[] utf8Toml, TomlTypeInfo typeInfo)
-    {
-        ArgumentGuard.ThrowIfNull(utf8Toml, nameof(utf8Toml));
-        ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
-        return DeserializeUtf8(utf8Toml, typeInfo);
     }
 
     /// <summary>
@@ -465,77 +392,77 @@ public static class TomlSerializer
     }
 
     /// <summary>
-    /// Deserializes a TOML payload from a UTF-8 stream.
+    /// Deserializes a TOML payload from a stream using UTF-8 encoding.
     /// </summary>
     [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
     [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
-    public static T? Deserialize<T>(Stream utf8Stream, TomlSerializerOptions? options = null)
+    public static T? Deserialize<T>(Stream stream, TomlSerializerOptions? options = null)
     {
-        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
+        ArgumentGuard.ThrowIfNull(stream, nameof(stream));
         var effectiveOptions = options ?? TomlSerializerOptions.Default;
         var typeInfo = ResolveTypeInfo(effectiveOptions, typeof(T));
-        return (T?)Deserialize(utf8Stream, typeInfo);
+        return (T?)Deserialize(stream, typeInfo);
     }
 
     /// <summary>
-    /// Deserializes a TOML payload from a UTF-8 stream using generated metadata from a serializer context.
+    /// Deserializes a TOML payload from a stream using UTF-8 encoding and generated metadata from a serializer context.
     /// </summary>
-    public static T? Deserialize<T>(Stream utf8Stream, TomlSerializerContext context)
+    public static T? Deserialize<T>(Stream stream, TomlSerializerContext context)
     {
-        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
+        ArgumentGuard.ThrowIfNull(stream, nameof(stream));
         ArgumentGuard.ThrowIfNull(context, nameof(context));
 
         var typeInfo = ResolveTypeInfo(context, typeof(T));
-        return (T?)Deserialize(utf8Stream, typeInfo);
+        return (T?)Deserialize(stream, typeInfo);
     }
 
     /// <summary>
-    /// Deserializes a TOML payload from a UTF-8 stream using explicit metadata.
+    /// Deserializes a TOML payload from a stream using UTF-8 encoding and explicit metadata.
     /// </summary>
-    public static T? Deserialize<T>(Stream utf8Stream, TomlTypeInfo<T> typeInfo)
+    public static T? Deserialize<T>(Stream stream, TomlTypeInfo<T> typeInfo)
     {
-        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
+        ArgumentGuard.ThrowIfNull(stream, nameof(stream));
         ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
-        return (T?)Deserialize(utf8Stream, (TomlTypeInfo)typeInfo);
+        return (T?)Deserialize(stream, (TomlTypeInfo)typeInfo);
     }
 
     /// <summary>
-    /// Deserializes a TOML payload from a UTF-8 stream into an explicit destination type.
+    /// Deserializes a TOML payload from a stream using UTF-8 encoding into an explicit destination type.
     /// </summary>
     [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
     [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
-    public static object? Deserialize(Stream utf8Stream, Type returnType, TomlSerializerOptions? options = null)
+    public static object? Deserialize(Stream stream, Type returnType, TomlSerializerOptions? options = null)
     {
-        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
+        ArgumentGuard.ThrowIfNull(stream, nameof(stream));
         ArgumentGuard.ThrowIfNull(returnType, nameof(returnType));
 
         var effectiveOptions = options ?? TomlSerializerOptions.Default;
         var typeInfo = ResolveTypeInfo(effectiveOptions, returnType);
-        return Deserialize(utf8Stream, typeInfo);
+        return Deserialize(stream, typeInfo);
     }
 
     /// <summary>
-    /// Deserializes a TOML payload from a UTF-8 stream into an explicit destination type using generated metadata from a serializer context.
+    /// Deserializes a TOML payload from a stream using UTF-8 encoding into an explicit destination type using generated metadata from a serializer context.
     /// </summary>
-    public static object? Deserialize(Stream utf8Stream, Type returnType, TomlSerializerContext context)
+    public static object? Deserialize(Stream stream, Type returnType, TomlSerializerContext context)
     {
-        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
+        ArgumentGuard.ThrowIfNull(stream, nameof(stream));
         ArgumentGuard.ThrowIfNull(returnType, nameof(returnType));
         ArgumentGuard.ThrowIfNull(context, nameof(context));
 
         var typeInfo = ResolveTypeInfo(context, returnType);
-        return Deserialize(utf8Stream, typeInfo);
+        return Deserialize(stream, typeInfo);
     }
 
     /// <summary>
-    /// Deserializes a TOML payload from a UTF-8 stream using explicit metadata.
+    /// Deserializes a TOML payload from a stream using UTF-8 encoding and explicit metadata.
     /// </summary>
-    public static object? Deserialize(Stream utf8Stream, TomlTypeInfo typeInfo)
+    public static object? Deserialize(Stream stream, TomlTypeInfo typeInfo)
     {
-        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
+        ArgumentGuard.ThrowIfNull(stream, nameof(stream));
         ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
 
-        using var reader = new StreamReader(utf8Stream, DefaultStreamEncoding, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
+        using var reader = new StreamReader(stream, DefaultStreamEncoding, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
         return Deserialize(reader, typeInfo);
     }
 
@@ -610,86 +537,6 @@ public static class TomlSerializer
         try
         {
             value = Deserialize(toml, returnType, context);
-            return true;
-        }
-        catch (TomlException)
-        {
-            value = null;
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Attempts to deserialize a TOML payload from UTF-8 bytes.
-    /// </summary>
-    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
-    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
-    public static bool TryDeserialize<T>(byte[] utf8Toml, out T? value, TomlSerializerOptions? options = null)
-    {
-        ArgumentGuard.ThrowIfNull(utf8Toml, nameof(utf8Toml));
-        try
-        {
-            value = Deserialize<T>(utf8Toml, options);
-            return true;
-        }
-        catch (TomlException)
-        {
-            value = default;
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Attempts to deserialize a TOML payload from UTF-8 bytes into an explicit destination type.
-    /// </summary>
-    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
-    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
-    public static bool TryDeserialize(byte[] utf8Toml, Type returnType, out object? value, TomlSerializerOptions? options = null)
-    {
-        ArgumentGuard.ThrowIfNull(utf8Toml, nameof(utf8Toml));
-        ArgumentGuard.ThrowIfNull(returnType, nameof(returnType));
-        try
-        {
-            value = Deserialize(utf8Toml, returnType, options);
-            return true;
-        }
-        catch (TomlException)
-        {
-            value = null;
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Attempts to deserialize a TOML payload from UTF-8 bytes using generated metadata from a serializer context.
-    /// </summary>
-    public static bool TryDeserialize<T>(byte[] utf8Toml, TomlSerializerContext context, out T? value)
-    {
-        ArgumentGuard.ThrowIfNull(utf8Toml, nameof(utf8Toml));
-        ArgumentGuard.ThrowIfNull(context, nameof(context));
-        try
-        {
-            value = Deserialize<T>(utf8Toml, context);
-            return true;
-        }
-        catch (TomlException)
-        {
-            value = default;
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Attempts to deserialize a TOML payload from UTF-8 bytes into an explicit destination type using generated metadata from a serializer context.
-    /// </summary>
-    public static bool TryDeserialize(byte[] utf8Toml, Type returnType, TomlSerializerContext context, out object? value)
-    {
-        ArgumentGuard.ThrowIfNull(utf8Toml, nameof(utf8Toml));
-        ArgumentGuard.ThrowIfNull(returnType, nameof(returnType));
-        ArgumentGuard.ThrowIfNull(context, nameof(context));
-        try
-        {
-            value = Deserialize(utf8Toml, returnType, context);
             return true;
         }
         catch (TomlException)
@@ -780,16 +627,16 @@ public static class TomlSerializer
     }
 
     /// <summary>
-    /// Attempts to deserialize a TOML payload from a UTF-8 stream.
+    /// Attempts to deserialize a TOML payload from a stream using UTF-8 encoding.
     /// </summary>
     [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
     [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
-    public static bool TryDeserialize<T>(Stream utf8Stream, out T? value, TomlSerializerOptions? options = null)
+    public static bool TryDeserialize<T>(Stream stream, out T? value, TomlSerializerOptions? options = null)
     {
-        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
+        ArgumentGuard.ThrowIfNull(stream, nameof(stream));
         try
         {
-            value = Deserialize<T>(utf8Stream, options);
+            value = Deserialize<T>(stream, options);
             return true;
         }
         catch (TomlException)
@@ -800,17 +647,17 @@ public static class TomlSerializer
     }
 
     /// <summary>
-    /// Attempts to deserialize a TOML payload from a UTF-8 stream into an explicit destination type.
+    /// Attempts to deserialize a TOML payload from a stream using UTF-8 encoding into an explicit destination type.
     /// </summary>
     [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
     [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
-    public static bool TryDeserialize(Stream utf8Stream, Type returnType, out object? value, TomlSerializerOptions? options = null)
+    public static bool TryDeserialize(Stream stream, Type returnType, out object? value, TomlSerializerOptions? options = null)
     {
-        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
+        ArgumentGuard.ThrowIfNull(stream, nameof(stream));
         ArgumentGuard.ThrowIfNull(returnType, nameof(returnType));
         try
         {
-            value = Deserialize(utf8Stream, returnType, options);
+            value = Deserialize(stream, returnType, options);
             return true;
         }
         catch (TomlException)
@@ -821,15 +668,15 @@ public static class TomlSerializer
     }
 
     /// <summary>
-    /// Attempts to deserialize a TOML payload from a UTF-8 stream using generated metadata from a serializer context.
+    /// Attempts to deserialize a TOML payload from a stream using UTF-8 encoding and generated metadata from a serializer context.
     /// </summary>
-    public static bool TryDeserialize<T>(Stream utf8Stream, TomlSerializerContext context, out T? value)
+    public static bool TryDeserialize<T>(Stream stream, TomlSerializerContext context, out T? value)
     {
-        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
+        ArgumentGuard.ThrowIfNull(stream, nameof(stream));
         ArgumentGuard.ThrowIfNull(context, nameof(context));
         try
         {
-            value = Deserialize<T>(utf8Stream, context);
+            value = Deserialize<T>(stream, context);
             return true;
         }
         catch (TomlException)
@@ -840,16 +687,16 @@ public static class TomlSerializer
     }
 
     /// <summary>
-    /// Attempts to deserialize a TOML payload from a UTF-8 stream into an explicit destination type using generated metadata from a serializer context.
+    /// Attempts to deserialize a TOML payload from a stream using UTF-8 encoding into an explicit destination type using generated metadata from a serializer context.
     /// </summary>
-    public static bool TryDeserialize(Stream utf8Stream, Type returnType, TomlSerializerContext context, out object? value)
+    public static bool TryDeserialize(Stream stream, Type returnType, TomlSerializerContext context, out object? value)
     {
-        ArgumentGuard.ThrowIfNull(utf8Stream, nameof(utf8Stream));
+        ArgumentGuard.ThrowIfNull(stream, nameof(stream));
         ArgumentGuard.ThrowIfNull(returnType, nameof(returnType));
         ArgumentGuard.ThrowIfNull(context, nameof(context));
         try
         {
-            value = Deserialize(utf8Stream, returnType, context);
+            value = Deserialize(stream, returnType, context);
             return true;
         }
         catch (TomlException)
@@ -869,16 +716,6 @@ public static class TomlSerializer
 
         var options = typeInfo.Options;
         var reader = TomlReader.Create(toml, options);
-        return DeserializeCore(reader, typeInfo, options);
-    }
-
-    private static object? DeserializeUtf8(byte[] utf8Toml, TomlTypeInfo typeInfo)
-    {
-        ArgumentGuard.ThrowIfNull(utf8Toml, nameof(utf8Toml));
-        ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
-
-        var options = typeInfo.Options;
-        var reader = TomlReader.Create(utf8Toml, options);
         return DeserializeCore(reader, typeInfo, options);
     }
 

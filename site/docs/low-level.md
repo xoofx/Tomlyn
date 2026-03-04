@@ -125,16 +125,12 @@ var parser = TomlParser.Create(toml, parserOptions);
 
 ### Input sources
 
-[`TomlParser.Create(...)`](xref:Tomlyn.Parsing.TomlParser) accepts `string`, `TextReader`, and `byte[]` (UTF-8):
+[`TomlParser.Create(...)`](xref:Tomlyn.Parsing.TomlParser) accepts `string` and `TextReader`:
 
 ```csharp
 // From a file stream
 using var reader = new StreamReader("config.toml");
 var parser = TomlParser.Create(reader);
-
-// From UTF-8 bytes
-byte[] utf8 = File.ReadAllBytes("config.toml");
-var parser2 = TomlParser.Create(utf8);
 ```
 
 ## SyntaxParser (full-fidelity syntax tree)
@@ -168,7 +164,7 @@ Console.WriteLine(doc.ToString());
 | [`SyntaxParser.Parse(...)`](xref:Tomlyn.Parsing.SyntaxParser) | Tolerant - collects errors in `doc.Diagnostics`, always returns a tree. |
 | [`SyntaxParser.ParseStrict(...)`](xref:Tomlyn.Parsing.SyntaxParser) | Strict - throws [`TomlException`](xref:Tomlyn.TomlException) on the first error. |
 
-Both accept `string` and [`TomlLexer`](xref:Tomlyn.Parsing.TomlLexer) inputs. `Parse` also accepts `TextReader` and `byte[]`.
+Both accept `string` and [`TomlLexer`](xref:Tomlyn.Parsing.TomlLexer) inputs. `Parse` also accepts `TextReader`.
 
 ### Syntax tree structure
 
