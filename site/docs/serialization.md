@@ -434,6 +434,93 @@ public abstract class Animal { /* ... */ }
 > [!NOTE]
 > When both Toml and Json polymorphic attributes are present on the same type, the Toml-specific attributes take precedence.
 
+### Default derived type
+
+Register one derived type **without a discriminator** to act as the default. When a TOML table has no discriminator key (or an unknown discriminator), it deserializes as the default type. When serializing the default type, no discriminator is emitted.
+
+```csharp
+[TomlPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[TomlDerivedType(typeof(Circle))]         // default — no discriminator
+[TomlDerivedType(typeof(Square), "square")]
+public abstract class Shape
+{
+    public string Color { get; set; } = "";
+}
+
+public sealed class Circle : Shape { public double Radius { get; set; } }
+public sealed class Square : Shape { public double Side { get; set; } }
+```
+
+```toml
+# Serialized Circle (default) — no "type" key
+Color = "red"
+Radius = 5.0
+
+# Serialized Square — "type" key is present
+type = "square"
+Color = "blue"
+Side = 3.0
+```
+
+The same works with `JsonDerivedTypeAttribute` using the single-argument constructor `[JsonDerivedType(typeof(Circle))]`.
+
+### Integer discriminators
+
+In addition to strings, [`TomlDerivedTypeAttribute`](xref:Tomlyn.Serialization.TomlDerivedTypeAttribute) accepts an `int` discriminator which is stored as a string in TOML:
+
+```csharp
+[TomlPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[TomlDerivedType(typeof(Circle), 1)]
+[TomlDerivedType(typeof(Square), 2)]
+public abstract class Shape { /* ... */ }
+```
+
+```toml
+type = "1"
+Color = "red"
+Radius = 5.0
+```
+
+`JsonDerivedTypeAttribute` integer discriminators (e.g. `[JsonDerivedType(typeof(Circle), 1)]`) are also supported.
+
+### Unknown discriminator handling
+
+By default, encountering an unrecognized discriminator throws a [`TomlException`](xref:Tomlyn.TomlException). You can change this behavior at the **attribute level** or **globally**.
+
+**Attribute-level** (takes priority):
+
+```csharp
+[TomlPolymorphic(
+    TypeDiscriminatorPropertyName = "kind",
+    UnknownDerivedTypeHandling = TomlUnknownDerivedTypeHandling.FallBackToBaseType)]
+[TomlDerivedType(typeof(Cat), "cat")]
+public class Animal
+{
+    public string Name { get; set; } = "";
+}
+```
+
+**Global options:**
+
+```csharp
+var options = new TomlSerializerOptions
+{
+    PolymorphismOptions = new TomlPolymorphismOptions
+    {
+        UnknownDerivedTypeHandling = TomlUnknownDerivedTypeHandling.FallBackToBaseType,
+    },
+};
+```
+
+The priority chain is:
+
+1. [`TomlPolymorphicAttribute.UnknownDerivedTypeHandling`](xref:Tomlyn.Serialization.TomlPolymorphicAttribute.UnknownDerivedTypeHandling) (if not [`Unspecified`](xref:Tomlyn.TomlUnknownDerivedTypeHandling.Unspecified))
+2. `JsonPolymorphicAttribute.UnknownDerivedTypeHandling` (mapped from `JsonUnknownDerivedTypeHandling`)
+3. [`TomlPolymorphismOptions.UnknownDerivedTypeHandling`](xref:Tomlyn.TomlPolymorphismOptions.UnknownDerivedTypeHandling) (global default)
+
+> [!NOTE]
+> [`TomlUnknownDerivedTypeHandling.Unspecified`](xref:Tomlyn.TomlUnknownDerivedTypeHandling.Unspecified) is a sentinel value for attribute properties and **cannot** be used on [`TomlPolymorphismOptions`](xref:Tomlyn.TomlPolymorphismOptions) — doing so throws `ArgumentOutOfRangeException`.
+
 ## Serialization callbacks
 
 Implement callback interfaces on your types to run logic before/after serialization or deserialization:
