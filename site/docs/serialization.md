@@ -436,7 +436,7 @@ Register one derived type **without a discriminator** to act as the default. Whe
 
 ```csharp
 [TomlPolymorphic(TypeDiscriminatorPropertyName = "type")]
-[TomlDerivedType(typeof(Circle))]         // default — no discriminator
+[TomlDerivedType(typeof(Circle))]         // default - no discriminator
 [TomlDerivedType(typeof(Square), "square")]
 public abstract class Shape
 {
@@ -448,11 +448,11 @@ public sealed class Square : Shape { public double Side { get; set; } }
 ```
 
 ```toml
-# Serialized Circle (default) — no "type" key
+# Serialized Circle (default) - no "type" key
 Color = "red"
 Radius = 5.0
 
-# Serialized Square — "type" key is present
+# Serialized Square - "type" key is present
 type = "square"
 Color = "blue"
 Side = 3.0
@@ -515,7 +515,7 @@ The priority chain is:
 3. [`TomlPolymorphismOptions.UnknownDerivedTypeHandling`](xref:Tomlyn.TomlPolymorphismOptions.UnknownDerivedTypeHandling) (global default)
 
 > [!NOTE]
-> [`TomlUnknownDerivedTypeHandling.Unspecified`](xref:Tomlyn.TomlUnknownDerivedTypeHandling.Unspecified) is a sentinel value for attribute properties and **cannot** be used on [`TomlPolymorphismOptions`](xref:Tomlyn.TomlPolymorphismOptions) — doing so throws `ArgumentOutOfRangeException`.
+> [`TomlUnknownDerivedTypeHandling.Unspecified`](xref:Tomlyn.TomlUnknownDerivedTypeHandling.Unspecified) is a sentinel value for attribute properties and **cannot** be used on [`TomlPolymorphismOptions`](xref:Tomlyn.TomlPolymorphismOptions) - doing so throws `ArgumentOutOfRangeException`.
 
 ## Serialization callbacks
 

@@ -1,3 +1,7 @@
+// Copyright (c) Alexandre Mutel. All rights reserved.
+// Licensed under the BSD-Clause 2 license.
+// See license.txt file in the project root for full license information.
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -245,7 +249,7 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
 
         var runtimeTypeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, runtimeType);
 
-        // Default derived type (null discriminator) — serialize without discriminator
+        // Default derived type (null discriminator) - serialize without discriminator
         if (discriminator is null)
         {
             runtimeTypeInfo.Write(writer, value);
@@ -287,7 +291,7 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
         var buffer = reader.CaptureCurrentValueToBuffer();
         if (!TryReadDiscriminator(buffer, out var discriminator, out var discriminatorSpan))
         {
-            // No discriminator found — try default derived type first
+            // No discriminator found - try default derived type first
             if (_defaultDerivedType is not null)
             {
                 var defaultTypeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, _defaultDerivedType);
@@ -323,7 +327,7 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
         }
         else if (_defaultDerivedType is not null)
         {
-            // Unknown discriminator — use default derived type
+            // Unknown discriminator - use default derived type
             targetTypeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, _defaultDerivedType);
         }
         else if (_unknownDerivedTypeHandling == TomlUnknownDerivedTypeHandling.FallBackToBaseType && !Type.IsInterface && !Type.IsAbstract)

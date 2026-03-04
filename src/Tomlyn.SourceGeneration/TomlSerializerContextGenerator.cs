@@ -2353,7 +2353,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     attr.ConstructorArguments[0].Kind == TypedConstantKind.Type &&
                     attr.ConstructorArguments[0].Value is ITypeSymbol defaultType)
                 {
-                    // TomlDerivedTypeAttribute(Type) — default derived type (no discriminator)
+                    // TomlDerivedTypeAttribute(Type) - default derived type (no discriminator)
                     if (defaultDerivedType is not null)
                     {
                         if (reportDiagnostics)

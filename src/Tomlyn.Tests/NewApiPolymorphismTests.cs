@@ -324,7 +324,7 @@ public class NewApiPolymorphismTests
             Name = "test"
             """;
 
-        // No options override needed — attribute sets FallBackToBaseType
+        // No options override needed - attribute sets FallBackToBaseType
         var result = TomlSerializer.Deserialize<AttrFallbackBase>(toml);
 
         Assert.That(result, Is.TypeOf<AttrFallbackBase>());
@@ -340,7 +340,7 @@ public class NewApiPolymorphismTests
             Name = "test"
             """;
 
-        // Options say Fail, but attribute says FallBackToBaseType — attribute wins
+        // Options say Fail, but attribute says FallBackToBaseType - attribute wins
         var options = new TomlSerializerOptions
         {
             PolymorphismOptions = new TomlPolymorphismOptions
@@ -355,7 +355,7 @@ public class NewApiPolymorphismTests
         Assert.That(result!.Name, Is.EqualTo("test"));
     }
 
-    // Test: attribute says Fail explicitly, options say FallBackToBaseType — attribute wins
+    // Test: attribute says Fail explicitly, options say FallBackToBaseType - attribute wins
     [TomlPolymorphic(TypeDiscriminatorPropertyName = "kind", UnknownDerivedTypeHandling = TomlUnknownDerivedTypeHandling.Fail)]
     [TomlDerivedType(typeof(AttrFailDerived), "derived")]
     private class AttrFailBase
@@ -439,7 +439,7 @@ public class NewApiPolymorphismTests
             Name = "test"
             """;
 
-        // TomlPolymorphic says Fail, JsonPolymorphic says FallBack — Toml wins
+        // TomlPolymorphic says Fail, JsonPolymorphic says FallBack - Toml wins
         Assert.Throws<TomlException>(() => TomlSerializer.Deserialize<TomlOverridesJsonBase>(toml));
     }
 

@@ -2,7 +2,7 @@
 
 <img align="right" width="256px" height="256px" src="img/Tomlyn.png">
 
-Tomlyn is a high-performance .NET TOML 1.1 parser, round-trippable syntax tree, and `System.Text.Json`-style object serializer — NativeAOT ready.
+Tomlyn is a high-performance .NET TOML 1.1 parser, round-trippable syntax tree, and `System.Text.Json`-style object serializer - NativeAOT ready.
 
 #### <img src="https://xoofx.github.io/SharpYaml/img/SharpYaml.png" alt="SharpYaml" height="32" style="vertical-align: text-bottom; margin-right: .45rem;" /> Looking for YAML support? Check out [SharpYaml](https://xoofx.github.io/SharpYaml/).
 
