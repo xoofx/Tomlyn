@@ -1,36 +1,47 @@
-# Tomlyn [![ci](https://github.com/xoofx/Tomlyn/actions/workflows/ci.yml/badge.svg)](https://github.com/xoofx/Tomlyn/actions/workflows/ci.yml)  [![Coverage Status](https://coveralls.io/repos/github/xoofx/Tomlyn/badge.svg?branch=main)](https://coveralls.io/github/xoofx/Tomlyn?branch=main)  [![NuGet](https://img.shields.io/nuget/v/Tomlyn.svg)](https://www.nuget.org/packages/Tomlyn/)
+# Tomlyn [![ci](https://github.com/xoofx/Tomlyn/actions/workflows/ci.yml/badge.svg)](https://github.com/xoofx/Tomlyn/actions/workflows/ci.yml) [![Coverage Status](https://coveralls.io/repos/github/xoofx/Tomlyn/badge.svg?branch=main)](https://coveralls.io/github/xoofx/Tomlyn?branch=main) [![NuGet](https://img.shields.io/nuget/v/Tomlyn.svg)](https://www.nuget.org/packages/Tomlyn/)
 
-<img align="right" width="160px" height="160px" src="img/logo.png">
+<img align="right" width="256px" height="256px" src="img/Tomlyn.png">
 
-Tomlyn is a high-performance [TOML](https://toml.io/en/) 1.1 parser and a `System.Text.Json`-style serializer for .NET.
+Tomlyn is a high-performance .NET TOML 1.1 parser, round-trippable syntax tree, and `System.Text.Json`-style object serializer — NativeAOT ready.
 
-## What is TOML?
+> **Note**: Tomlyn v1 is a major redesign with breaking changes from earlier versions. It uses a **`System.Text.Json`-style API** with `TomlSerializer`, `TomlSerializerOptions`, and resolver-based metadata (`ITomlTypeInfoResolver`). See the [migration guide](https://xoofx.github.io/Tomlyn/migration) for details.
 
-> **_A config file format for humans._**
-> _TOML aims to be a minimal configuration file format that's easy to read due to obvious semantics. TOML is designed to map unambiguously to a hash table. TOML should be easy to parse into data structures in a wide variety of languages._
+## ✨ Features
 
-- See the official website https://toml.io/en/ for more details.
-- TOML specs: [TOML v1.1.0](https://toml.io/en/v1.1.0)
+- **`System.Text.Json`-style API**: familiar surface with `TomlSerializer`, `TomlSerializerOptions`, `TomlTypeInfo<T>`
+- **TOML 1.1.0 only**: Tomlyn v1 targets TOML 1.1.0 and does **not** support TOML 1.0
+- **Source generation**: NativeAOT / trimming friendly via `TomlSerializerContext` - reuses `[JsonSerializable]` attributes
+- **`System.Text.Json` attribute interop**: reuse `[JsonPropertyName]`, `[JsonIgnore]`, `[JsonRequired]`, `[JsonConstructor]`, polymorphism attributes
+- **Allocation-free parsing pipeline**: incremental `TomlLexer` → `TomlParser` with precise spans for errors
+- **Low-level access**: full lexer/parser API plus a lossless, trivia-preserving syntax tree (`SyntaxParser` → `DocumentSyntax`)
+- **Reflection control**: reflection-based POCO mapping is available, but can be disabled for NativeAOT via a feature switch / MSBuild property
 
-## Features
+## 📐 Requirements
 
-- TOML 1.1.0 support (Tomlyn 1.0 does **not** support TOML 1.0).
-- Allocation-free pull-based parsing: `TomlLexer` → `TomlParser` (precise spans for all parse errors).
-- Lossless syntax tree: `SyntaxParser.Parse(...)` → `DocumentSyntax` (roundtrippable, trivia-preserving).
-- High-level serializer shaped like `System.Text.Json`: `TomlSerializer`, `TomlSerializerOptions`, `TomlSerializerContext`, `TomlTypeInfo<T>`.
-- Source generation for NativeAOT/trimming (no runtime reflection required).
-- Reflection-based POCO mapping remains available (can be disabled for NativeAOT via feature switch / publish settings).
+Tomlyn targets `net8.0`, `net10.0`, and `netstandard2.0`.
 
-## Documentation
+- Consuming the NuGet package works on any runtime that supports `netstandard2.0` (including .NET Framework) or modern .NET (`net8.0+`).
+- Building Tomlyn from source requires the .NET 10 SDK.
 
-- User guide: `doc/readme.md`
-- Website (Lunet): `site/` (published to https://xoofx.github.io/Tomlyn)
+## 📦 Install
 
-## Install
+```sh
+dotnet add package Tomlyn
+```
 
-Tomlyn is delivered as a [NuGet Package](https://www.nuget.org/packages/Tomlyn/).
+Tomlyn ships the source generator in-package (`analyzers/dotnet/cs`) - no extra package needed.
 
-## Usage
+## 🚀 Quick Start
+
+```csharp
+using Tomlyn;
+
+// Serialize
+var toml = TomlSerializer.Serialize(new { Name = "Ada", Age = 37 });
+
+// Deserialize
+var person = TomlSerializer.Deserialize<Person>(toml);
+```
 
 ### Untyped model (`TomlTable`)
 
@@ -53,7 +64,27 @@ Console.WriteLine(global);
 Console.WriteLine(TomlSerializer.Serialize(model));
 ```
 
-### Source-generated POCO mapping (`TomlSerializerContext`)
+### Options
+
+```csharp
+using System.Text.Json;
+using Tomlyn;
+
+var options = new TomlSerializerOptions
+{
+    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    WriteIndented = true,
+    IndentSize = 4,
+    DefaultIgnoreCondition = TomlIgnoreCondition.WhenWritingNull,
+};
+
+var toml = TomlSerializer.Serialize(config, options);
+var model = TomlSerializer.Deserialize<MyConfig>(toml, options);
+```
+
+By default, `PropertyNamingPolicy` is `null`, meaning CLR member names are used as-is for TOML mapping keys (same default as `System.Text.Json`).
+
+### Source Generation
 
 ```csharp
 using System.Text.Json.Serialization;
@@ -76,12 +107,32 @@ var config = TomlSerializer.Deserialize(toml, MyTomlContext.Default.MyConfig);
 var tomlOut = TomlSerializer.Serialize(config, MyTomlContext.Default.MyConfig);
 ```
 
-See `doc/readme.md` for details (reflection mapping, attribute support, metadata/trivia, parsing APIs).
+### Reflection Control
 
-## License
+Reflection fallback can be disabled globally before first serializer use:
+
+```csharp
+AppContext.SetSwitch("Tomlyn.TomlSerializer.IsReflectionEnabledByDefault", false);
+```
+
+When publishing with NativeAOT (`PublishAot=true`), the Tomlyn NuGet package disables reflection-based serialization by default.
+You can override the default by setting the following MSBuild property in your app project:
+
+```xml
+<PropertyGroup>
+  <TomlynIsReflectionEnabledByDefault>true</TomlynIsReflectionEnabledByDefault>
+</PropertyGroup>
+```
+
+## 📖 Documentation
+
+- [User guide](site/readme.md)
+- Website (Lunet): https://xoofx.github.io/Tomlyn
+
+## 🪪 License
 
 This software is released under the [BSD-Clause 2 license](https://opensource.org/licenses/BSD-2-Clause). 
 
-## Author
+## 🤗 Author
 
 Alexandre Mutel aka [xoofx](http://xoofx.github.io).
