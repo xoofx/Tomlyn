@@ -6,7 +6,7 @@ og_type: website
 
 <section class="text-center py-5">
   <div class="container">
-    <img src="{{site.basepath}}/img/tomlyn.svg" alt="Tomlyn" class="img-fluid" style="width: min(100%, 12rem); height: auto;">
+    <img src="{{site.basepath}}/img/Tomlyn.svg" alt="Tomlyn" class="img-fluid" style="width: min(100%, 12rem); height: auto;">
     <h1 class="display-4 mt-4">Tomlyn</h1>
     <p class="lead mt-3 mb-4">
       High-performance TOML 1.1 for .NET: <strong>lexer/parser</strong>, <strong>roundtrippable syntax tree</strong>,
