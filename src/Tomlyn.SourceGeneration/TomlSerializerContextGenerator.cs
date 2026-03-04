@@ -510,12 +510,52 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         for (var i = 0; i < poco.Members.Length; i++)
         {
             var member = poco.Members[i];
-            var memberTypeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var canBeNull = CanBeNull(member.Type);
-
             builder.Append("            var __member").Append(i.ToString(CultureInfo.InvariantCulture)).Append(" = value.").Append(member.MemberName).AppendLine(";");
-            EmitWriteMember(builder, member, i, memberTypeName, canBeNull);
         }
+
+        var declarationOrder = Enumerable.Range(0, poco.Members.Length).ToArray();
+        var alphabeticalOrder = declarationOrder
+            .OrderBy(i => poco.Members[i].SerializedName, StringComparer.Ordinal)
+            .ToArray();
+        var orderThenDeclaration = declarationOrder
+            .OrderBy(i => poco.Members[i].Order)
+            .ThenBy(i => i)
+            .ToArray();
+        var orderThenAlphabetical = declarationOrder
+            .OrderBy(i => poco.Members[i].Order)
+            .ThenBy(i => poco.Members[i].SerializedName, StringComparer.Ordinal)
+            .ToArray();
+
+        static void EmitWriteSequence(StringBuilder builder, PocoShape poco, int[] indices)
+        {
+            for (var sequenceIndex = 0; sequenceIndex < indices.Length; sequenceIndex++)
+            {
+                var i = indices[sequenceIndex];
+                var member = poco.Members[i];
+                var memberTypeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                var canBeNull = CanBeNull(member.Type);
+                EmitWriteMember(builder, member, i, memberTypeName, canBeNull);
+            }
+        }
+
+        builder.AppendLine("            switch (Options.MappingOrder)");
+        builder.AppendLine("            {");
+        builder.AppendLine("                case TomlMappingOrderPolicy.Declaration:");
+        EmitWriteSequence(builder, poco, declarationOrder);
+        builder.AppendLine("                    break;");
+        builder.AppendLine("                case TomlMappingOrderPolicy.Alphabetical:");
+        EmitWriteSequence(builder, poco, alphabeticalOrder);
+        builder.AppendLine("                    break;");
+        builder.AppendLine("                case TomlMappingOrderPolicy.OrderThenDeclaration:");
+        EmitWriteSequence(builder, poco, orderThenDeclaration);
+        builder.AppendLine("                    break;");
+        builder.AppendLine("                case TomlMappingOrderPolicy.OrderThenAlphabetical:");
+        EmitWriteSequence(builder, poco, orderThenAlphabetical);
+        builder.AppendLine("                    break;");
+        builder.AppendLine("                default:");
+        EmitWriteSequence(builder, poco, declarationOrder);
+        builder.AppendLine("                    break;");
+        builder.AppendLine("            }");
         builder.AppendLine("            writer.WriteEndTable();");
         if (callsOnSerialized)
         {
@@ -876,17 +916,19 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private sealed class PocoMember
     {
-        public PocoMember(string memberName, string serializedName, ITypeSymbol type, WriteIgnoreKind writeIgnore)
+        public PocoMember(string memberName, string serializedName, ITypeSymbol type, int order, WriteIgnoreKind writeIgnore)
         {
             MemberName = memberName;
             SerializedName = serializedName;
             Type = type;
+            Order = order;
             WriteIgnore = writeIgnore;
         }
 
         public string MemberName { get; }
         public string SerializedName { get; }
         public ITypeSymbol Type { get; }
+        public int Order { get; }
         public WriteIgnoreKind WriteIgnore { get; }
     }
 
@@ -987,7 +1029,8 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             }
 
             var serializedName = GetSerializedName(member, member.Name, namingPolicy);
-            members.Add(new PocoMember(member.Name, serializedName, member.Type, ignore.WriteIgnore));
+            var order = GetOrder(member);
+            members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore));
         }
 
         foreach (var member in named.GetMembers().OfType<IFieldSymbol>())
@@ -1015,7 +1058,8 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             }
 
             var serializedName = GetSerializedName(member, member.Name, namingPolicy);
-            members.Add(new PocoMember(member.Name, serializedName, member.Type, ignore.WriteIgnore));
+            var order = GetOrder(member);
+            members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore));
         }
 
         shape = new PocoShape(members.ToImmutable());
@@ -1211,6 +1255,31 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         return memberName;
+    }
+
+    private static int GetOrder(ISymbol member)
+    {
+        int? tomlOrder = null;
+        int? jsonOrder = null;
+
+        foreach (var attr in member.GetAttributes())
+        {
+            var attrName = attr.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            if (attrName == "global::Tomlyn.Serialization.TomlPropertyOrderAttribute" &&
+                attr.ConstructorArguments.Length == 1 &&
+                attr.ConstructorArguments[0].Value is int toml)
+            {
+                tomlOrder = toml;
+            }
+            else if (attrName == "global::System.Text.Json.Serialization.JsonPropertyOrderAttribute" &&
+                     attr.ConstructorArguments.Length == 1 &&
+                     attr.ConstructorArguments[0].Value is int json)
+            {
+                jsonOrder = json;
+            }
+        }
+
+        return tomlOrder ?? jsonOrder ?? 0;
     }
 
     private static bool TryConvertKnownName(string name, string namingPolicyExpression, out string converted)

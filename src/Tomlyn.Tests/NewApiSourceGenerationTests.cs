@@ -31,6 +31,15 @@ public sealed class GeneratedOptionsPerson
     public long Age { get; set; }
 }
 
+public sealed class GeneratedOrderedPerson
+{
+    [JsonPropertyOrder(-10)]
+    public int Age { get; set; }
+
+    [JsonPropertyOrder(10)]
+    public string Name { get; set; } = "";
+}
+
 public sealed class GeneratedCallbackPerson : ITomlOnSerializing, ITomlOnSerialized, ITomlOnDeserializing, ITomlOnDeserialized
 {
     public string Name { get; set; } = "";
@@ -151,6 +160,14 @@ internal partial class TestTomlSerializerContextWithOptions : TomlSerializerCont
 {
 }
 
+[TomlSourceGenerationOptions(
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+    MappingOrder = TomlMappingOrderPolicy.OrderThenDeclaration)]
+[JsonSerializable(typeof(GeneratedOrderedPerson))]
+internal partial class TestTomlSerializerContextOrdering : TomlSerializerContext
+{
+}
+
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(GeneratedCollectionsPayload))]
 internal partial class TestTomlSerializerContextCollections : TomlSerializerContext
@@ -178,6 +195,19 @@ internal partial class TestTomlSerializerContextCallbacks : TomlSerializerContex
 
 public class NewApiSourceGenerationTests
 {
+    [Test]
+    public void GeneratedContext_RespectsJsonPropertyOrder_WhenWriting()
+    {
+        var context = TestTomlSerializerContextOrdering.Default;
+        var toml = TomlSerializer.Serialize(new GeneratedOrderedPerson { Name = "Ada", Age = 37 }, context.GeneratedOrderedPerson);
+
+        var ageIndex = toml.IndexOf("age", StringComparison.Ordinal);
+        var nameIndex = toml.IndexOf("name", StringComparison.Ordinal);
+        Assert.That(ageIndex, Is.GreaterThanOrEqualTo(0));
+        Assert.That(nameIndex, Is.GreaterThanOrEqualTo(0));
+        Assert.That(ageIndex, Is.LessThan(nameIndex));
+    }
+
     [Test]
     public void GeneratedContext_CanDeserializePoco()
     {
