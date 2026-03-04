@@ -2,7 +2,7 @@
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <LangVersion>latest</LangVersion>
-    <Description>Tomlyn is a high-performance TOML 1.1 parser and a System.Text.Json-style serializer for .NET.</Description>
+    <Description>Tomlyn is a high-performance .NET TOML 1.1 parser, round-trippable syntax tree, and `System.Text.Json`-style object serializer — NativeAOT ready.</Description>
     <Copyright>Alexandre Mutel</Copyright>
     <Authors>Alexandre Mutel</Authors>
     <NeutralLanguage>en-US</NeutralLanguage>
@@ -10,8 +10,8 @@
     <!-- Setup by dotnet-releaser -->
     <!--<PackageReleaseNotes></PackageReleaseNotes>-->
     <PackageReadmeFile>readme.md</PackageReadmeFile>
-    <PackageIcon>logo.png</PackageIcon>
-    <PackageProjectUrl>https://github.com/xoofx/Tomlyn</PackageProjectUrl>
+    <PackageIcon>Tomlyn.png</PackageIcon>
+    <PackageProjectUrl>https://xoofx.github.io/Tomlyn/</PackageProjectUrl>
     <PackageLicenseExpression>BSD-2-Clause</PackageLicenseExpression>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <Nullable>enable</Nullable>
@@ -25,7 +25,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="../../img/logo.png" Pack="true" PackagePath="/" />
+    <None Include="../../img/Tomlyn.png" Pack="true" PackagePath="/" />
     <None Include="../../readme.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
@@ -41,18 +41,5 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
   </ItemGroup>
-
-  <Target Name="PatchVersion" AfterTargets="MinVer">
-    <PropertyGroup>
-      <!--
-        MinVer provides a SemVer `VersionPrefix` (e.g. 1.2.3). We derive AssemblyVersion/FileVersion
-        from it to keep a stable major.minor.0.0 format for binding redirects and assembly loading.
-      -->
-      <_TomlynAssemblyMajor>$([System.Version]::Parse('$(VersionPrefix)').Major)</_TomlynAssemblyMajor>
-      <_TomlynAssemblyMinor>$([System.Version]::Parse('$(VersionPrefix)').Minor)</_TomlynAssemblyMinor>
-      <AssemblyVersion>$(_TomlynAssemblyMajor).$(_TomlynAssemblyMinor).0.0</AssemblyVersion>
-      <FileVersion>$(_TomlynAssemblyMajor).$(_TomlynAssemblyMinor).0.0</FileVersion>
-    </PropertyGroup>
-  </Target>
 
 </Project>
