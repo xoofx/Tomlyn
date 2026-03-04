@@ -499,7 +499,7 @@ internal static class TomlModelTextWriter
 
 #if NET8_0_OR_GREATER
             Span<char> buffer = stackalloc char[64];
-            if (value.TryFormat(buffer, out var written, "g16", CultureInfo.InvariantCulture))
+            if (value.TryFormat(buffer, out var written, "R", CultureInfo.InvariantCulture))
             {
                 WriteFloatWithDecimalPoint(buffer.Slice(0, written));
                 return;

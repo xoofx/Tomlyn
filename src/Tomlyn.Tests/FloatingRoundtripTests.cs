@@ -8,8 +8,8 @@ using Tomlyn.Model;
 namespace Tomlyn.Tests
 {
     [TestFixture]
-    public class FloatingRoundtripTests{
-
+    public class FloatingRoundtripTests
+    {
 
         [TestCase(0.0)]
         [TestCase(-0.0)]
@@ -23,7 +23,7 @@ namespace Tomlyn.Tests
 #endif
         [TestCase(double.Epsilon)]
         [TestCase(-double.Epsilon)]
-        // [TestCase(0.1)] - - These fail. Adjusting g16->g17 fixes some but not all.
+        // [TestCase(0.1)] - These fail due to float-as-double roundtrip behavior in TomlTable.
         // [TestCase(0.99)]
         // [TestCase(0.3)]
         // [TestCase(double.MinValue)]
@@ -65,7 +65,7 @@ namespace Tomlyn.Tests
 #endif
         [TestCase(float.Epsilon)]
         [TestCase(-float.Epsilon)]
-        // [TestCase(0.1f)] - These fail. Adjusting g16->g17 fixes them
+        // [TestCase(0.1f)] - These fail due to float-as-double roundtrip behavior in TomlTable.
         // [TestCase(0.99f)]
         // [TestCase(0.3f)]
         // [TestCase(float.MinValue)]

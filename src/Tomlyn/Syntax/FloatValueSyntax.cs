@@ -3,7 +3,6 @@
 // See license.txt file in the project root for full license information.
 
 using System;
-using System.Globalization;
 using Tomlyn.Helpers;
 
 namespace Tomlyn.Syntax
@@ -14,8 +13,6 @@ namespace Tomlyn.Syntax
     public sealed class FloatValueSyntax : ValueSyntax
     {
         private SyntaxToken? _token;
-
-        private const string FloatFormat = "g16";
 
         /// <summary>
         /// Creates an instance of <see cref="FloatValueSyntax"/>
@@ -44,7 +41,7 @@ namespace Tomlyn.Syntax
             }
             else
             {
-                Token = new SyntaxToken(TokenKind.Float, value.ToString(FloatFormat, CultureInfo.InvariantCulture));
+                Token = new SyntaxToken(TokenKind.Float, TomlFormatHelper.ToString(value));
             }
             Value = value;
         }

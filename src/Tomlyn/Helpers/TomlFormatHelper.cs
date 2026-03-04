@@ -226,7 +226,8 @@ public class TomlFormatHelper
         {
             return "-inf";
         }
-        return AppendDecimalPoint(value.ToString("g16", CultureInfo.InvariantCulture));
+        // Use a round-trippable format to avoid precision loss when serializing and reading back.
+        return AppendDecimalPoint(value.ToString("R", CultureInfo.InvariantCulture));
     }
 
 
