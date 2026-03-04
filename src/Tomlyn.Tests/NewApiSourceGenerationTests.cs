@@ -40,6 +40,14 @@ public sealed class GeneratedOrderedPerson
     public string Name { get; set; } = "";
 }
 
+public sealed class GeneratedRequiredPerson
+{
+    [JsonRequired]
+    public string Name { get; set; } = "";
+
+    public int Age { get; set; }
+}
+
 public sealed class GeneratedCallbackPerson : ITomlOnSerializing, ITomlOnSerialized, ITomlOnDeserializing, ITomlOnDeserialized
 {
     public string Name { get; set; } = "";
@@ -191,6 +199,12 @@ internal partial class TestTomlSerializerContextEnumsAndObjects : TomlSerializer
 internal partial class TestTomlSerializerContextCallbacks : TomlSerializerContext
 {
 }
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(GeneratedRequiredPerson))]
+internal partial class TestTomlSerializerContextRequired : TomlSerializerContext
+{
+}
 #pragma warning restore SYSLIB1224
 
 public class NewApiSourceGenerationTests
@@ -222,6 +236,23 @@ public class NewApiSourceGenerationTests
         Assert.That(person, Is.Not.Null);
         Assert.That(person!.Name, Is.EqualTo("Ada"));
         Assert.That(person.Age, Is.EqualTo(37));
+    }
+
+    [Test]
+    public void GeneratedContext_Throws_WhenRequiredMemberIsMissing()
+    {
+        var context = TestTomlSerializerContextRequired.Default;
+        var toml = """
+            age = 37
+            """;
+
+        var exception = Assert.Throws<TomlException>(() => TomlSerializer.Deserialize(toml, context.GeneratedRequiredPerson));
+
+        Assert.That(exception, Is.Not.Null);
+        Assert.That(exception!.Message, Does.Contain("Missing required TOML key 'name'"));
+        Assert.That(exception.Message, Does.Contain(typeof(GeneratedRequiredPerson).FullName));
+        Assert.That(exception.Line, Is.GreaterThanOrEqualTo(1));
+        Assert.That(exception.Column, Is.GreaterThanOrEqualTo(1));
     }
 
     [Test]

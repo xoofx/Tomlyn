@@ -24,6 +24,8 @@ bld/
 tmp/
 .lunet/build/
 tomltest_failures*.log
+_gen/
+src/Tomlyn.Benchmarks.SourceGen/Properties/
 
 # Visual Studio 2015 cache/options directory
 .vs/

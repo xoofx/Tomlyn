@@ -567,12 +567,42 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.Append("        public override ").Append(readReturnType).AppendLine(" Read(TomlReader reader)");
         builder.AppendLine("        {");
         builder.AppendLine("            if (reader.TokenType != TomlTokenType.StartTable) throw reader.CreateException($\"Expected {TomlTokenType.StartTable} token but was {reader.TokenType}.\");");
+        builder.AppendLine("            var tableStartSpan = reader.CurrentSpan;");
         builder.Append("            var value = new ").Append(typeName).AppendLine("();");
         if (callsOnDeserializing)
         {
             builder.AppendLine("            ((global::Tomlyn.Serialization.ITomlOnDeserializing)value).OnTomlDeserializing();");
         }
-        builder.AppendLine("            var seenMask = 0;");
+        var hasRequiredMembers = poco.Members.Any(static m => m.IsRequired);
+        if (poco.Members.Length <= 64)
+        {
+            if (poco.Members.Length > 0)
+            {
+                builder.AppendLine("            ulong seenMask = 0;");
+            }
+            if (hasRequiredMembers)
+            {
+                ulong requiredMask = 0;
+                for (var i = 0; i < poco.Members.Length; i++)
+                {
+                    if (poco.Members[i].IsRequired)
+                    {
+                        requiredMask |= 1UL << i;
+                    }
+                }
+
+                builder.Append("            const ulong requiredMask = ").Append(requiredMask.ToString(CultureInfo.InvariantCulture)).AppendLine("UL;");
+            }
+        }
+        else
+        {
+            builder.Append("            var seen = (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error");
+            if (hasRequiredMembers)
+            {
+                builder.Append(" || true");
+            }
+            builder.Append(") ? new bool[").Append(poco.Members.Length.ToString(CultureInfo.InvariantCulture)).AppendLine("] : null;");
+        }
         builder.AppendLine("            reader.Read();");
         builder.AppendLine("            while (reader.TokenType != TomlTokenType.EndTable)");
         builder.AppendLine("            {");
@@ -588,7 +618,67 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         EmitMemberDispatch(builder, poco, ignoreCase: false);
         builder.AppendLine("                }");
         builder.AppendLine("            }");
+        builder.AppendLine("            var endTableSpan = reader.CurrentSpan;");
         builder.AppendLine("            reader.Read();");
+        if (hasRequiredMembers)
+        {
+            if (poco.Members.Length <= 64)
+            {
+                builder.AppendLine("            if (requiredMask != 0 && (seenMask & requiredMask) != requiredMask)");
+                builder.AppendLine("            {");
+                builder.AppendLine("                var span = endTableSpan ?? tableStartSpan;");
+                for (var i = 0; i < poco.Members.Length; i++)
+                {
+                    if (!poco.Members[i].IsRequired)
+                    {
+                        continue;
+                    }
+
+                    var serializedName = EscapeStringLiteral(poco.Members[i].SerializedName);
+                    builder.Append("                if ((seenMask & (1UL << ").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(")) == 0)");
+                    builder.AppendLine("                {");
+                    builder.Append("                    throw span is { } locatedSpan ? new TomlException(locatedSpan, $\"Missing required TOML key '")
+                        .Append(serializedName)
+                        .Append("' when deserializing '{typeof(")
+                        .Append(typeName)
+                        .Append(").FullName}'.\") : new TomlException($\"Missing required TOML key '")
+                        .Append(serializedName)
+                        .Append("' when deserializing '{typeof(")
+                        .Append(typeName)
+                        .Append(").FullName}'.\");");
+                    builder.AppendLine("                }");
+                }
+                builder.AppendLine("            }");
+            }
+            else
+            {
+                builder.AppendLine("            if (seen is not null)");
+                builder.AppendLine("            {");
+                builder.AppendLine("                var span = endTableSpan ?? tableStartSpan;");
+                for (var i = 0; i < poco.Members.Length; i++)
+                {
+                    if (!poco.Members[i].IsRequired)
+                    {
+                        continue;
+                    }
+
+                    var serializedName = EscapeStringLiteral(poco.Members[i].SerializedName);
+                    builder.Append("                if (!seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("])");
+                    builder.AppendLine("                {");
+                    builder.Append("                    throw span is { } locatedSpan ? new TomlException(locatedSpan, $\"Missing required TOML key '")
+                        .Append(serializedName)
+                        .Append("' when deserializing '{typeof(")
+                        .Append(typeName)
+                        .Append(").FullName}'.\") : new TomlException($\"Missing required TOML key '")
+                        .Append(serializedName)
+                        .Append("' when deserializing '{typeof(")
+                        .Append(typeName)
+                        .Append(").FullName}'.\");");
+                    builder.AppendLine("                }");
+                }
+                builder.AppendLine("            }");
+            }
+        }
         if (callsOnDeserialized)
         {
             builder.AppendLine("            ((global::Tomlyn.Serialization.ITomlOnDeserialized)value).OnTomlDeserialized();");
@@ -601,6 +691,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private static void EmitMemberDispatch(StringBuilder builder, PocoShape poco, bool ignoreCase)
     {
+        var useSeenMask = poco.Members.Length <= 64;
         if (ignoreCase)
         {
             var comparison = "StringComparison.OrdinalIgnoreCase";
@@ -609,12 +700,49 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 var member = poco.Members[i];
                 builder.Append("                    ").Append(i == 0 ? "if" : "else if").Append("(string.Equals(name, \"").Append(EscapeStringLiteral(member.SerializedName)).Append("\", ").Append(comparison).AppendLine("))");
                 builder.AppendLine("                    {");
-                builder.AppendLine("                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
-                builder.AppendLine("                        {");
-                builder.Append("                            const int bit = 1 << ").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
-                builder.AppendLine("                            if ((seenMask & bit) != 0) throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
-                builder.AppendLine("                            seenMask |= bit;");
-                builder.AppendLine("                        }");
+                if (useSeenMask)
+                {
+                    if (member.IsRequired)
+                    {
+                        builder.Append("                        const ulong bit = 1UL << ").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
+                        builder.AppendLine("                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
+                        builder.AppendLine("                        {");
+                        builder.AppendLine("                            if ((seenMask & bit) != 0) throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
+                        builder.AppendLine("                        }");
+                        builder.AppendLine("                        seenMask |= bit;");
+                    }
+                    else
+                    {
+                        builder.AppendLine("                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
+                        builder.AppendLine("                        {");
+                        builder.Append("                            const ulong bit = 1UL << ").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
+                        builder.AppendLine("                            if ((seenMask & bit) != 0) throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
+                        builder.AppendLine("                            seenMask |= bit;");
+                        builder.AppendLine("                        }");
+                    }
+                }
+                else
+                {
+                    builder.AppendLine("                        if (seen is not null)");
+                    builder.AppendLine("                        {");
+                    if (member.IsRequired)
+                    {
+                        builder.AppendLine("                            if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
+                        builder.AppendLine("                            {");
+                        builder.Append("                                if (seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("]) throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
+                        builder.AppendLine("                            }");
+                        builder.Append("                            seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
+                    }
+                    else
+                    {
+                        builder.AppendLine("                            if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
+                        builder.AppendLine("                            {");
+                        builder.Append("                                if (seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("]) throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
+                        builder.Append("                                seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
+                        builder.AppendLine("                            }");
+                    }
+                    builder.AppendLine("                        }");
+                }
                 builder.Append("                        value.").Append(member.MemberName).Append(" = _context.").Append(GetTypeInfoPropertyName(member.Type)).AppendLine(".Read(reader)!;");
                 builder.AppendLine("                        continue;");
                 builder.AppendLine("                    }");
@@ -652,12 +780,49 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             {
                 builder.Append("                                if (reader.PropertyNameEquals(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\"))");
                 builder.AppendLine("                                {");
-                builder.AppendLine("                                    if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
-                builder.AppendLine("                                    {");
-                builder.Append("                                        const int bit = 1 << ").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
-                builder.AppendLine("                                        if ((seenMask & bit) != 0) throw reader.CreateException($\"Duplicate key '{reader.PropertyName}' was encountered.\");");
-                builder.AppendLine("                                        seenMask |= bit;");
-                builder.AppendLine("                                    }");
+                if (useSeenMask)
+                {
+                    if (member.IsRequired)
+                    {
+                        builder.Append("                                    const ulong bit = 1UL << ").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
+                        builder.AppendLine("                                    if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
+                        builder.AppendLine("                                    {");
+                        builder.AppendLine("                                        if ((seenMask & bit) != 0) throw reader.CreateException($\"Duplicate key '{reader.PropertyName}' was encountered.\");");
+                        builder.AppendLine("                                    }");
+                        builder.AppendLine("                                    seenMask |= bit;");
+                    }
+                    else
+                    {
+                        builder.AppendLine("                                    if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
+                        builder.AppendLine("                                    {");
+                        builder.Append("                                        const ulong bit = 1UL << ").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
+                        builder.AppendLine("                                        if ((seenMask & bit) != 0) throw reader.CreateException($\"Duplicate key '{reader.PropertyName}' was encountered.\");");
+                        builder.AppendLine("                                        seenMask |= bit;");
+                        builder.AppendLine("                                    }");
+                    }
+                }
+                else
+                {
+                    builder.AppendLine("                                    if (seen is not null)");
+                    builder.AppendLine("                                    {");
+                    if (member.IsRequired)
+                    {
+                        builder.AppendLine("                                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
+                        builder.AppendLine("                                        {");
+                        builder.Append("                                            if (seen[").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine("]) throw reader.CreateException($\"Duplicate key '{reader.PropertyName}' was encountered.\");");
+                        builder.AppendLine("                                        }");
+                        builder.Append("                                        seen[").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
+                    }
+                    else
+                    {
+                        builder.AppendLine("                                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
+                        builder.AppendLine("                                        {");
+                        builder.Append("                                            if (seen[").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine("]) throw reader.CreateException($\"Duplicate key '{reader.PropertyName}' was encountered.\");");
+                        builder.Append("                                            seen[").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
+                        builder.AppendLine("                                        }");
+                    }
+                    builder.AppendLine("                                    }");
+                }
                 builder.AppendLine("                                    reader.Read();");
                 builder.Append("                                    value.").Append(member.MemberName).Append(" = _context.").Append(GetTypeInfoPropertyName(member.Type)).AppendLine(".Read(reader)!;");
                 builder.AppendLine("                                    continue;");
@@ -916,13 +1081,14 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private sealed class PocoMember
     {
-        public PocoMember(string memberName, string serializedName, ITypeSymbol type, int order, WriteIgnoreKind writeIgnore)
+        public PocoMember(string memberName, string serializedName, ITypeSymbol type, int order, WriteIgnoreKind writeIgnore, bool isRequired)
         {
             MemberName = memberName;
             SerializedName = serializedName;
             Type = type;
             Order = order;
             WriteIgnore = writeIgnore;
+            IsRequired = isRequired;
         }
 
         public string MemberName { get; }
@@ -930,6 +1096,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         public ITypeSymbol Type { get; }
         public int Order { get; }
         public WriteIgnoreKind WriteIgnore { get; }
+        public bool IsRequired { get; }
     }
 
     private sealed class PocoShape
@@ -1030,7 +1197,8 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
             var serializedName = GetSerializedName(member, member.Name, namingPolicy);
             var order = GetOrder(member);
-            members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore));
+            var required = IsRequired(member);
+            members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore, required));
         }
 
         foreach (var member in named.GetMembers().OfType<IFieldSymbol>())
@@ -1059,11 +1227,18 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
             var serializedName = GetSerializedName(member, member.Name, namingPolicy);
             var order = GetOrder(member);
-            members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore));
+            var required = IsRequired(member);
+            members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore, required));
         }
 
         shape = new PocoShape(members.ToImmutable());
         return true;
+    }
+
+    private static bool IsRequired(ISymbol member)
+    {
+        return HasAttribute(member, "Tomlyn.Serialization.TomlRequiredAttribute") ||
+               HasAttribute(member, "System.Text.Json.Serialization.JsonRequiredAttribute");
     }
 
     private static bool TryGetArrayElementType(ITypeSymbol type, out ITypeSymbol elementType)

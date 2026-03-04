@@ -135,7 +135,7 @@ Member-level attributes:
 | `TomlIgnoreAttribute` / `JsonIgnoreAttribute` | Yes | Yes | Supports ignore conditions for writes. |
 | `TomlIncludeAttribute` / `JsonIncludeAttribute` | Yes | Yes | Enables non-public members in supported scenarios. |
 | `TomlPropertyOrderAttribute` / `JsonPropertyOrderAttribute` | Yes | Yes | Controls ordering within tables. |
-| `TomlRequiredAttribute` / `JsonRequiredAttribute` | Yes | No | Missing required members throw `TomlException`. |
+| `TomlRequiredAttribute` / `JsonRequiredAttribute` | Yes | Yes | Missing required members throw `TomlException`. |
 | `TomlExtensionDataAttribute` / `JsonExtensionDataAttribute` | Yes | No | Captures unmapped keys. |
 | `TomlConverterAttribute` / `JsonConverterAttribute` | Yes | No | Selects a converter for a type/member. |
 
