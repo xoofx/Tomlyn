@@ -18,7 +18,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\Tomlyn\Tomlyn.targets" Pack="true" PackagePath="buildTransitive/Tomlyn.targets" />
+    <None Include="..\Tomlyn\Tomlyn.targets" Pack="true" PackagePath="buildTransitive/Tomlyn.Signed.targets" />
     <!-- Ship the source generator with the signed package as well (no separate generator NuGet package). -->
     <None Include="$(TomlynSourceGenAssembly)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     <None Include="$(TomlynSourceGenAssembly).pdb" Condition="Exists('$(TomlynSourceGenAssembly).pdb')" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
