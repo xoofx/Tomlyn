@@ -3,79 +3,116 @@ title: Source generation and NativeAOT
 ---
 
 Tomlyn supports an incremental source generator for high-performance, NativeAOT-friendly serialization.
+It follows the same patterns as [`System.Text.Json`](xref:System.Text.Json) source generation.
 
 ## When to use source generation
 
-Use source generation when:
+> [!TIP]
+> Source generation is recommended for production applications. It eliminates reflection, enables trimming,
+> and catches serialization configuration errors at compile time.
 
-- You publish with `PublishAot=true`.
-- You trim aggressively (`PublishTrimmed=true`).
-- You want to avoid reflection and reduce startup overhead.
+- Publishing with `PublishAot=true` (NativeAOT).
+- Trimming aggressively (`PublishTrimmed=true`).
+- Avoiding reflection overhead on hot paths.
+- Wanting compile-time validation of serialization metadata.
 
 ## Define a context
 
-Tomlyn reuses `System.Text.Json.Serialization` source-generation attributes.
+Declare a `partial` class that inherits from [`TomlSerializerContext`](xref:Tomlyn.Serialization.TomlSerializerContext) and annotate it with [`[JsonSerializable]`](xref:System.Text.Json.Serialization.JsonSerializableAttribute) for each root type:
 
 ```csharp
 using System.Text.Json.Serialization;
 using Tomlyn.Serialization;
 
-[TomlSourceGenerationOptions(PropertyNamingPolicy = System.Text.Json.JsonKnownNamingPolicy.CamelCase)]
-[JsonSerializable(typeof(MyConfig))]
-internal partial class MyTomlContext : TomlSerializerContext
+public sealed class ServerConfig
 {
+    public string Host { get; set; } = "localhost";
+    public int Port { get; set; } = 8080;
 }
+
+[JsonSerializable(typeof(ServerConfig))]
+internal partial class MyTomlContext : TomlSerializerContext { }
 ```
 
-The context type must be `partial` so the generator can add metadata properties.
+The generator produces a `Default` singleton and a typed [`TomlTypeInfo<T>`](xref:Tomlyn.TomlTypeInfo`1) property for each root.
+Nested types referenced by the root are discovered transitively - you only need to annotate top-level types.
+
+## Use generated metadata
+
+Use the generated [`TomlTypeInfo<T>`](xref:Tomlyn.TomlTypeInfo`1) property directly (recommended):
+
+```csharp
+using Tomlyn;
+
+var context = MyTomlContext.Default;
+
+var toml = TomlSerializer.Serialize(config, context.ServerConfig);
+var roundTrip = TomlSerializer.Deserialize(toml, context.ServerConfig);
+```
+
+For APIs that take a `Type`, pass the context:
+
+```csharp
+var toml = TomlSerializer.Serialize(value, typeof(ServerConfig), context);
+var roundTrip = TomlSerializer.Deserialize(toml, typeof(ServerConfig), context);
+```
 
 ## Compile-time options
 
-Use `TomlSourceGenerationOptionsAttribute` to fix a context's default `TomlSerializerOptions` at build time (including converter registration):
+Use [`TomlSourceGenerationOptionsAttribute`](xref:Tomlyn.Serialization.TomlSourceGenerationOptionsAttribute) to fix serialization options at build time:
 
 ```csharp
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Tomlyn;
 using Tomlyn.Serialization;
 
 [TomlSourceGenerationOptions(
+    PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
     WriteIndented = true,
     IndentSize = 2,
-    DefaultIgnoreCondition = TomlIgnoreCondition.WhenWritingNull,
-    Converters = new[] { typeof(MyCustomConverter) })]
-internal partial class MyTomlContext : TomlSerializerContext
-{
-}
+    DefaultIgnoreCondition = TomlIgnoreCondition.WhenWritingNull)]
+[JsonSerializable(typeof(ServerConfig))]
+internal partial class MyTomlContext : TomlSerializerContext { }
 ```
 
-## Use generated metadata
-
-Use the generated `TomlTypeInfo<T>` properties (recommended):
+### Registering converters at compile time
 
 ```csharp
-using Tomlyn;
-var context = MyTomlContext.Default;
-
-var toml = TomlSerializer.Serialize(value, context.MyConfig);
-var roundTrip = TomlSerializer.Deserialize(toml, context.MyConfig);
+[TomlSourceGenerationOptions(
+    Converters = [typeof(MyCustomConverter)])]
+[JsonSerializable(typeof(ServerConfig))]
+internal partial class MyTomlContext : TomlSerializerContext { }
 ```
-
-For APIs that take a `Type`, prefer the overloads that accept a context:
-
-```csharp
-var toml = TomlSerializer.Serialize(value, typeof(MyConfig), context);
-var roundTrip = TomlSerializer.Deserialize(toml, typeof(MyConfig), context);
-```
-
-Prefer overloads that accept a `TomlSerializerContext` or a `TomlTypeInfo<T>` directly. This avoids reflection and works well with trimming and NativeAOT.
 
 ## Naming policy and generated code
 
-For source generation, member names are resolved at build time using:
+For source generation, member names are resolved **at build time** using:
 
-- `TomlPropertyNameAttribute` / `JsonPropertyNameAttribute` when present (these override naming policies).
-- otherwise, `TomlSourceGenerationOptionsAttribute.PropertyNamingPolicy` (or no policy when unspecified).
+1. [`TomlPropertyNameAttribute`](xref:Tomlyn.TomlPropertyNameAttribute) / [`JsonPropertyNameAttribute`](xref:System.Text.Json.Serialization.JsonPropertyNameAttribute) (when present - these override naming policies).
+2. [`TomlSourceGenerationOptionsAttribute.PropertyNamingPolicy`](xref:Tomlyn.Serialization.TomlSourceGenerationOptionsAttribute) (when no explicit name attribute).
 
-The generated serializer stores the resolved names directly and does not call `ConvertName(...)` at runtime for object members.
+The generated serializer stores the resolved names directly and does **not** call `ConvertName(...)` at runtime.
+
+## Supported attributes (source generation)
+
+The source generator supports these attributes at compile time:
+
+| Member-level | Type-level |
+| --- | --- |
+| [`JsonPropertyNameAttribute`](xref:System.Text.Json.Serialization.JsonPropertyNameAttribute) / [`TomlPropertyNameAttribute`](xref:Tomlyn.TomlPropertyNameAttribute) | [`JsonConstructorAttribute`](xref:System.Text.Json.Serialization.JsonConstructorAttribute) / [`TomlConstructorAttribute`](xref:Tomlyn.Serialization.TomlConstructorAttribute) |
+| [`JsonIgnoreAttribute`](xref:System.Text.Json.Serialization.JsonIgnoreAttribute) / [`TomlIgnoreAttribute`](xref:Tomlyn.Serialization.TomlIgnoreAttribute) | [`JsonPolymorphicAttribute`](xref:System.Text.Json.Serialization.JsonPolymorphicAttribute) / [`TomlPolymorphicAttribute`](xref:Tomlyn.Serialization.TomlPolymorphicAttribute) |
+| [`JsonIncludeAttribute`](xref:System.Text.Json.Serialization.JsonIncludeAttribute) / [`TomlIncludeAttribute`](xref:Tomlyn.Serialization.TomlIncludeAttribute) | [`JsonDerivedTypeAttribute`](xref:System.Text.Json.Serialization.JsonDerivedTypeAttribute) / [`TomlDerivedTypeAttribute`](xref:Tomlyn.Serialization.TomlDerivedTypeAttribute) |
+| [`JsonPropertyOrderAttribute`](xref:System.Text.Json.Serialization.JsonPropertyOrderAttribute) / [`TomlPropertyOrderAttribute`](xref:Tomlyn.Serialization.TomlPropertyOrderAttribute) | |
+| [`JsonRequiredAttribute`](xref:System.Text.Json.Serialization.JsonRequiredAttribute) / [`TomlRequiredAttribute`](xref:Tomlyn.Serialization.TomlRequiredAttribute) | |
+| [`JsonExtensionDataAttribute`](xref:System.Text.Json.Serialization.JsonExtensionDataAttribute) / [`TomlExtensionDataAttribute`](xref:Tomlyn.Serialization.TomlExtensionDataAttribute) | |
+
+[`JsonConverterAttribute`](xref:System.Text.Json.Serialization.JsonConverterAttribute) / [`TomlConverterAttribute`](xref:Tomlyn.Serialization.TomlConverterAttribute) is supported by the **reflection resolver** but is **not** modeled by generated metadata.
+For source-generated scenarios, register converters via [`TomlSourceGenerationOptionsAttribute.Converters`](xref:Tomlyn.Serialization.TomlSourceGenerationOptionsAttribute) or [`TomlSerializerOptions.Converters`](xref:Tomlyn.TomlSerializerOptions.Converters).
+
+> [!WARNING]
+> Using `[TomlConverter]` or `[JsonConverter]` attributes with source generation will silently fall back to reflection.
+> Always register converters via `TomlSourceGenerationOptionsAttribute.Converters` for AOT safety.
 
 ## Reflection control
 
@@ -85,29 +122,37 @@ Reflection fallback can be disabled globally before first serializer use:
 AppContext.SetSwitch("Tomlyn.TomlSerializer.IsReflectionEnabledByDefault", false);
 ```
 
-When reflection is disabled, you must provide metadata via `TomlTypeInfo<T>` or `TomlSerializerOptions.TypeInfoResolver`.
-This applies to .NET object mapping (POCOs, collections of POCOs, etc.).
-Built-in primitives and untyped containers remain supported without reflection.
+When reflection is disabled:
 
-## JSON/TOML attributes support (source generation)
+- Object mapping (POCOs, records, collections of POCOs) requires metadata via [`TomlTypeInfo<T>`](xref:Tomlyn.TomlTypeInfo`1) or [`TomlSerializerOptions.TypeInfoResolver`](xref:Tomlyn.TomlSerializerOptions.TypeInfoResolver).
+- Built-in scalar converters and untyped containers ([`TomlTable`](xref:Tomlyn.Model.TomlTable), [`TomlArray`](xref:Tomlyn.Model.TomlArray)) remain supported without reflection.
 
-The source generator currently supports a focused subset of mapping attributes at compile time:
+You can also disable reflection via MSBuild in your project file:
 
-- `JsonPropertyNameAttribute` / `TomlPropertyNameAttribute`
-- `JsonIgnoreAttribute` / `TomlIgnoreAttribute`
-- `JsonIncludeAttribute` / `TomlIncludeAttribute`
-- `JsonPropertyOrderAttribute` / `TomlPropertyOrderAttribute`
-- `JsonRequiredAttribute` / `TomlRequiredAttribute`
-- `JsonExtensionDataAttribute` / `TomlExtensionDataAttribute`
-- `JsonConstructorAttribute` / `TomlConstructorAttribute`
-- `JsonPolymorphicAttribute` / `TomlPolymorphicAttribute`
-- `JsonDerivedTypeAttribute` / `TomlDerivedTypeAttribute`
+```xml
+<PropertyGroup>
+  <TomlSerializerIsReflectionEnabledByDefault>false</TomlSerializerIsReflectionEnabledByDefault>
+</PropertyGroup>
+```
 
-Other attributes (for example `JsonConverterAttribute`, converter-specific attributes, etc.) are supported by the reflection resolver, but are not yet fully modeled by generated metadata.
-If you rely on those features, keep reflection enabled or register a custom `ITomlTypeInfoResolver`.
+## Multiple contexts
+
+You can define multiple contexts for different parts of your application:
+
+```csharp
+[JsonSerializable(typeof(ServerConfig))]
+internal partial class ServerContext : TomlSerializerContext { }
+
+[JsonSerializable(typeof(DatabaseConfig))]
+internal partial class DatabaseContext : TomlSerializerContext { }
+```
 
 ## Troubleshooting
 
-- If generated properties are missing, ensure the project references the `Tomlyn` NuGet package (the generator is shipped in-package under `analyzers/dotnet/cs`).
-- Ensure the context class is `partial`.
-- Ensure roots are declared via `[JsonSerializable(typeof(...))]`.
+| Problem | Solution |
+| --- | --- |
+| Generated properties are missing | Ensure the project references the `Tomlyn` NuGet package (the generator is shipped under `analyzers/dotnet/cs`). |
+| Compilation errors on context | Ensure the context class is `partial`. |
+| Type not found on context | Ensure root types are declared via `[JsonSerializable(typeof(...))]`. |
+| Nested types not serialized | Nested types are discovered transitively - verify they're reachable from a root type. |
+| Converter not applied | Use `TomlSourceGenerationOptionsAttribute.Converters` instead of `TomlConverterAttribute` for source-generated contexts. |

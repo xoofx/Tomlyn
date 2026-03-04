@@ -1,20 +1,36 @@
 # Tomlyn Documentation (v1)
 
-Tomlyn provides two main layers:
+Tomlyn is a high-performance TOML 1.1 library for .NET, shaped like `System.Text.Json`.
+It provides two main layers:
 
-- **Low-level parsing** for tools and high-performance readers:
-  - `TomlLexer` → tokens (+ trivia) with precise `TomlSourceSpan`
-  - `TomlParser` → pull-based semantic events (`MoveNext()`)
-  - `TomlReader` → serializer-oriented reader built on `TomlParser`
-- **High-level serialization** shaped like `System.Text.Json`:
-  - `TomlSerializer`, `TomlSerializerOptions`
-  - `TomlSerializerContext` source generation (`TomlTypeInfo<T>` metadata)
+- **Object serialization** via `TomlSerializer` - maps TOML documents to .NET objects and back.
+  Supports reflection and source generation. Does not preserve comments or formatting.
+- **Low-level parsing** via `TomlLexer`, `TomlParser`, and `SyntaxParser` - token streams,
+  incremental events, and a full-fidelity syntax tree for tooling and round-tripping.
 
-Tomlyn 1.0 targets **TOML 1.1.0** only.
+Tomlyn v1 targets **TOML 1.1.0 only**.
 
-## 1. Untyped model (`TomlTable`, `TomlArray`)
+## 1. Basic serialization
 
-Use this when you want a convenient runtime representation without defining POCOs.
+```csharp
+using Tomlyn;
+
+public sealed class ServerConfig
+{
+    public string Host { get; set; } = "localhost";
+    public int Port { get; set; } = 8080;
+}
+
+var config = new ServerConfig { Host = "example.com", Port = 443 };
+var toml = TomlSerializer.Serialize(config);
+var roundTrip = TomlSerializer.Deserialize<ServerConfig>(toml)!;
+```
+
+`TomlSerializer` provides overloads for `string`, `byte[]` (UTF-8), `Stream`, and `TextReader`/`TextWriter`.
+
+## 2. Untyped model (`TomlTable`, `TomlArray`)
+
+Use this when you want a dynamic representation without defining POCOs.
 
 ```csharp
 using Tomlyn;
@@ -28,35 +44,42 @@ var toml = """
     """;
 
 var table = TomlSerializer.Deserialize<TomlTable>(toml)!;
-Console.WriteLine((string)table["title"]!);
+var title = (string)table["title"]!;
+var owner = (TomlTable)table["owner"]!;
+var name = (string)owner["name"]!;
 
 table["title"] = "Updated";
-var roundtrip = TomlSerializer.Serialize(table);
+var output = TomlSerializer.Serialize(table);
 ```
 
-## 2. POCO mapping (reflection)
+## 3. Options
 
-Reflection-based mapping is available via `TomlSerializer.Serialize<T>(...)` / `Deserialize<T>(...)`.
+`TomlSerializerOptions` is an immutable `sealed record` - create it once and reuse it.
 
 ```csharp
+using System.Text.Json;
 using Tomlyn;
 
-public sealed class Config
+var options = new TomlSerializerOptions
 {
-    public string? Title { get; set; }
-}
+    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+    WriteIndented = true,
+    IndentSize = 2,
+    DefaultIgnoreCondition = TomlIgnoreCondition.WhenWritingNull,
+};
 
-var config = TomlSerializer.Deserialize<Config>("title = \"x\"");
-var toml = TomlSerializer.Serialize(config);
+var toml = TomlSerializer.Serialize(config, options);
 ```
 
-Notes:
-- Reflection-based mapping is **not** compatible with trimming/NativeAOT unless you opt into the required metadata.
-- When publishing with NativeAOT, reflection-based mapping is disabled by default (feature switch).
+Key options: `PropertyNamingPolicy`, `DictionaryKeyPolicy`, `WriteIndented`, `IndentSize`, `NewLine`,
+`DefaultIgnoreCondition`, `DuplicateKeyHandling`, `DottedKeyHandling`, `MappingOrder`,
+`RootValueHandling`, `InlineTablePolicy`, `TableArrayStyle`, `StringStylePreferences`,
+`PolymorphismOptions`, `MetadataStore`, `SourceName`, `Converters`, `TypeInfoResolver`.
 
-## 3. POCO mapping (source generation / NativeAOT)
+## 4. POCO mapping (source generation / NativeAOT)
 
-Source generation follows `System.Text.Json` patterns: declare a context derived from `TomlSerializerContext`, and add `JsonSerializable` roots.
+Source generation follows `System.Text.Json` patterns: declare a context derived from `TomlSerializerContext`,
+and add `JsonSerializable` roots.
 
 ```csharp
 using System.Text.Json.Serialization;
@@ -68,46 +91,72 @@ public sealed class Config
     public string? Title { get; set; }
 }
 
-#pragma warning disable SYSLIB1224
-[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
 [JsonSerializable(typeof(Config))]
-internal partial class MyTomlContext : TomlSerializerContext
-{
-}
-#pragma warning restore SYSLIB1224
+internal partial class MyTomlContext : TomlSerializerContext { }
 
 var config = TomlSerializer.Deserialize("title = \"x\"", MyTomlContext.Default.Config);
 var toml = TomlSerializer.Serialize(config, MyTomlContext.Default.Config);
 ```
 
-## 4. Attribute support (STJ parity)
+## 5. Attribute support (STJ parity)
 
-Tomlyn supports a broad subset of `System.Text.Json.Serialization` attributes, including:
-- `JsonPropertyName`, `JsonIgnore` (+ conditions), `JsonPropertyOrder`
-- `JsonConstructor`, `JsonRequired` / `required`
-- `JsonExtensionData` (table-shaped extension data)
-- `JsonPolymorphic`, `JsonDerivedType` (discriminator-based polymorphism)
+Tomlyn supports TOML-specific attributes and a subset of `System.Text.Json.Serialization` attributes:
 
-Tomlyn-specific equivalents exist for TOML-specific behavior (for example `TomlIgnore`, `TomlPolymorphic`, `TomlDerivedType`).
+- **Member-level**: `TomlPropertyName`/`JsonPropertyName`, `TomlIgnore`/`JsonIgnore`,
+  `TomlInclude`/`JsonInclude`, `TomlPropertyOrder`/`JsonPropertyOrder`,
+  `TomlRequired`/`JsonRequired`, `TomlExtensionData`/`JsonExtensionData`,
+  `TomlConverter`/`JsonConverter`.
+- **Type-level**: `TomlConstructor`/`JsonConstructor`, `TomlPolymorphic`/`JsonPolymorphic`,
+  `TomlDerivedType`/`JsonDerivedType`.
 
-## 5. Preserving comments/trivia without polluting POCOs
+TOML-specific attributes take precedence when both are present.
 
-Tomlyn can capture and re-apply TOML trivia (comments / formatting hints) using an external metadata store:
+## 6. Converters
+
+Implement `TomlConverter<T>` (or `TomlConverterFactory`) for custom type mapping:
+
+```csharp
+using Tomlyn.Serialization;
+
+public sealed class UpperCaseStringConverter : TomlConverter<string>
+{
+    public override string? Read(TomlReader reader)
+        => reader.GetString().ToUpperInvariant();
+
+    public override void Write(TomlWriter writer, string value)
+        => writer.WriteStringValue(value.ToLowerInvariant());
+}
+```
+
+Register via `TomlSerializerOptions.Converters`, `[TomlConverter]` attribute (reflection),
+or `TomlSourceGenerationOptionsAttribute.Converters` (source generation).
+
+## 7. Preserving comments/trivia
+
+Tomlyn can capture TOML trivia (comments, formatting) using a metadata store:
 
 ```csharp
 using Tomlyn;
 using Tomlyn.Serialization;
 
 var store = new TomlMetadataStore();
-var options = TomlSerializerOptions.Default with { MetadataStore = store };
+var options = new TomlSerializerOptions { MetadataStore = store };
 
-var config = TomlSerializer.Deserialize<MyConfig>(toml, options);
-var tomlOut = TomlSerializer.Serialize(config, options: options);
+var config = TomlSerializer.Deserialize<TomlTable>(toml, options)!;
+
+// Access per-property metadata: LeadingTrivia, TrailingTrivia, Span, DisplayKind
+if (store.TryGetProperties(config, out var metadata) && metadata is not null)
+{
+    metadata.TryGetProperty("title", out var prop);
+}
+
+var tomlOut = TomlSerializer.Serialize(config, options);
 ```
 
-## 6. Syntax tree (roundtrip / tooling)
+## 8. Syntax tree (roundtrip / tooling)
 
-For full-fidelity parsing (including trivia and invalid tokens), use `SyntaxParser`:
+For full-fidelity parsing (including trivia), use `SyntaxParser`:
 
 ```csharp
 using Tomlyn.Parsing;
@@ -116,15 +165,28 @@ var doc = SyntaxParser.Parse(toml);
 if (doc.HasErrors)
 {
     foreach (var diag in doc.Diagnostics)
-    {
         Console.WriteLine(diag);
-    }
 }
 
-Console.WriteLine(doc.ToString()); // roundtrippable
+Console.WriteLine(doc.ToString()); // roundtrippable - reproduces exact original text
 ```
 
-## 7. Error locations
+## 9. Error handling
 
-All parsing errors throw `TomlException` with a precise `TomlSourceSpan` pointing into the original document.
+All parsing errors throw `TomlException` with precise source locations:
+
+```csharp
+try
+{
+    var config = TomlSerializer.Deserialize<Config>("bad = [",
+        new TomlSerializerOptions { SourceName = "config.toml" });
+}
+catch (TomlException ex)
+{
+    // ex.SourceName, ex.Line, ex.Column, ex.Offset, ex.Span
+    Console.WriteLine(ex.Message);
+}
+```
+
+Use `TryDeserialize(...)` for a non-throwing API.
 

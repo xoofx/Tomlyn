@@ -5,6 +5,6 @@ docs:
   - { path: source-generation.md, title: "Source generation and NativeAOT" }
   - { path: dom.md, title: "DOM model" }
   - { path: low-level.md, title: "Low-level APIs" }
-  - { path: compatibility.md, title: "Compatibility (TOML 1.1)" }
+  - { path: compatibility.md, title: "Compatibility" }
   - { path: performance.md, title: "Performance" }
   - { path: migration.md, title: "Migration (v0.x to v1.0)" }

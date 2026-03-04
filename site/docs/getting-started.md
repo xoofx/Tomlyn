@@ -8,34 +8,91 @@ title: Getting started
 dotnet add package Tomlyn
 ```
 
-Tomlyn targets `net8.0`, `net10.0`, and `netstandard2.0`.
+Tomlyn ships builds for `net8.0`, `net10.0`, and `netstandard2.0`.
 
 ## Serialize and deserialize
+
+The main entry point is [`TomlSerializer`](xref:Tomlyn.TomlSerializer) - it works just like [`System.Text.Json.JsonSerializer`](xref:System.Text.Json.JsonSerializer):
 
 ```csharp
 using Tomlyn;
 
-public sealed record Person(string Name, int Age);
+public sealed class ServerConfig
+{
+    public string Host { get; set; } = "localhost";
+    public int Port { get; set; } = 8080;
+    public bool Ssl { get; set; }
+}
 
-var toml = TomlSerializer.Serialize(new Person("Ada", 37));
-var person = TomlSerializer.Deserialize<Person>(toml)!;
+// Serialize to TOML
+var config = new ServerConfig { Host = "example.com", Port = 443, Ssl = true };
+var toml = TomlSerializer.Serialize(config);
+
+// Deserialize from TOML
+var roundTrip = TomlSerializer.Deserialize<ServerConfig>(toml)!;
+```
+
+Output:
+
+```toml
+Host = "example.com"
+Port = 443
+Ssl = true
+```
+
+> [!NOTE]
+> By default [`TomlSerializerOptions.DefaultIgnoreCondition`](xref:Tomlyn.TomlSerializerOptions.DefaultIgnoreCondition) is set to [`TomlIgnoreCondition.WhenWritingNull`](xref:Tomlyn.TomlIgnoreCondition.WhenWritingNull),
+> so null properties are omitted from the output.
+
+## Naming policies
+
+By default, CLR member names are used as-is. Use [`PropertyNamingPolicy`](xref:Tomlyn.TomlSerializerOptions.PropertyNamingPolicy) for snake_case or camelCase keys:
+
+```csharp
+using System.Text.Json;
+using Tomlyn;
+
+var options = new TomlSerializerOptions
+{
+    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+};
+
+var toml = TomlSerializer.Serialize(new ServerConfig { Host = "example.com", Port = 443 }, options);
+
+// host = "example.com"
+// port = 443
 ```
 
 ## Streams (UTF-8)
 
-Tomlyn provides `Stream` overloads to avoid `StreamReader`/`StreamWriter` boilerplate:
+> [!TIP]
+> Prefer `Stream` or `byte[]` overloads for files - they avoid allocating an intermediate `string` and read UTF-8 directly.
+
+Tomlyn provides `Stream` and `TextReader` overloads to avoid manual `StreamReader`/`StreamWriter` boilerplate:
 
 ```csharp
 using System.IO;
 using Tomlyn;
 
-using var stream = File.OpenRead("config.toml");
-var config = TomlSerializer.Deserialize<MyConfig>(stream);
+// Read from a file stream
+using var input = File.OpenRead("config.toml");
+var config = TomlSerializer.Deserialize<ServerConfig>(input)!;
+
+// Write to a file stream
+using var output = File.Create("config_out.toml");
+TomlSerializer.Serialize(output, config);
+```
+
+You can also deserialize from `byte[]` (UTF-8):
+
+```csharp
+byte[] utf8Bytes = File.ReadAllBytes("config.toml");
+var config = TomlSerializer.Deserialize<ServerConfig>(utf8Bytes)!;
 ```
 
 ## Configure options
 
-`TomlSerializerOptions` is immutable and can be cached and reused.
+[`TomlSerializerOptions`](xref:Tomlyn.TomlSerializerOptions) is an immutable `sealed record` - create it once and reuse it:
 
 ```csharp
 using System.Text.Json;
@@ -51,41 +108,85 @@ var options = new TomlSerializerOptions
 };
 
 var toml = TomlSerializer.Serialize(config, options);
-var roundTrip = TomlSerializer.Deserialize<MyConfig>(toml, options);
+var roundTrip = TomlSerializer.Deserialize<ServerConfig>(toml, options);
 ```
 
-## Error locations
+See [Serialization](serialization.md) for the full option reference table.
 
-When parsing or mapping fails, Tomlyn throws `TomlException` with precise locations:
+## Error handling
+
+When parsing or mapping fails, Tomlyn throws [`TomlException`](xref:Tomlyn.TomlException) with precise source locations:
 
 ```csharp
 try
 {
-    var config = TomlSerializer.Deserialize<MyConfig>("bad = [", new TomlSerializerOptions { SourceName = "config.toml" });
+    var config = TomlSerializer.Deserialize<ServerConfig>(
+        "bad = [",
+        new TomlSerializerOptions { SourceName = "config.toml" });
 }
 catch (TomlException ex)
 {
-    // ex.SourceName, ex.Line, ex.Column, ex.Offset, ex.Span
+    // ex.SourceName  → "config.toml"
+    // ex.Line        → 1
+    // ex.Column      → 7
     Console.WriteLine(ex.Message);
 }
 ```
 
-If you prefer a non-throwing API, use `TryDeserialize(...)`:
+If you prefer a non-throwing API, use `TryDeserialize`:
 
 ```csharp
-if (!TomlSerializer.TryDeserialize<MyConfig>(toml, out var value))
+if (!TomlSerializer.TryDeserialize<ServerConfig>(toml, out var value))
 {
     // value is null/default when parsing fails
 }
 ```
 
+## Untyped model (no POCOs)
+
+If you don't want to define classes, deserialize into [`TomlTable`](xref:Tomlyn.Model.TomlTable):
+
+```csharp
+using Tomlyn;
+using Tomlyn.Model;
+
+var toml = """
+    title = "My App"
+
+    [database]
+    host = "localhost"
+    port = 5432
+    """;
+
+var table = TomlSerializer.Deserialize<TomlTable>(toml)!;
+var title = (string)table["title"]!;              // "My App"
+var db = (TomlTable)table["database"]!;
+var port = (long)db["port"]!;                     // 5432
+```
+
+See [DOM model](dom.md) for more details.
+
 ## Source generation (NativeAOT friendly)
 
-For NativeAOT/trimming scenarios, prefer `TomlSerializerContext` and generated `TomlTypeInfo<T>` metadata.
-See [Source generation and NativeAOT](source-generation.md).
+For NativeAOT / trimming, declare a [`TomlSerializerContext`](xref:Tomlyn.Serialization.TomlSerializerContext) and use generated metadata:
 
-## Next
+```csharp
+using System.Text.Json.Serialization;
+using Tomlyn;
+using Tomlyn.Serialization;
 
-- [Serialization](serialization.md)
-- [Source generation and NativeAOT](source-generation.md)
-- [Low-level APIs](low-level.md)
+[JsonSerializable(typeof(ServerConfig))]
+internal partial class MyTomlContext : TomlSerializerContext { }
+
+var toml = TomlSerializer.Serialize(config, MyTomlContext.Default.ServerConfig);
+var roundTrip = TomlSerializer.Deserialize(toml, MyTomlContext.Default.ServerConfig);
+```
+
+See [Source generation and NativeAOT](source-generation.md) for details.
+
+## Next steps
+
+- [Serialization](serialization.md) - options, attributes, converters, polymorphism, and more.
+- [Source generation and NativeAOT](source-generation.md) - trimming-safe metadata.
+- [DOM model](dom.md) - dynamic [`TomlTable`](xref:Tomlyn.Model.TomlTable) / [`TomlArray`](xref:Tomlyn.Model.TomlArray) manipulation.
+- [Low-level APIs](low-level.md) - tokenizer, parser, and syntax tree.
