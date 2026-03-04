@@ -454,4 +454,100 @@ public class NewApiPolymorphismTests
             };
         });
     }
+
+    // --- Feature 3: Integer Discriminators ---
+
+    [TomlPolymorphic(TypeDiscriminatorPropertyName = "type")]
+    [TomlDerivedType(typeof(IntDiscrimCircle), 1)]
+    [TomlDerivedType(typeof(IntDiscrimSquare), 2)]
+    private abstract class IntDiscrimShape
+    {
+        public string? Color { get; set; }
+    }
+
+    private sealed class IntDiscrimCircle : IntDiscrimShape
+    {
+        public double Radius { get; set; }
+    }
+
+    private sealed class IntDiscrimSquare : IntDiscrimShape
+    {
+        public double Side { get; set; }
+    }
+
+    [Test]
+    public void Serialize_IntDiscriminator_WritesAsString()
+    {
+        IntDiscrimShape value = new IntDiscrimCircle { Color = "red", Radius = 5.0 };
+        var toml = TomlSerializer.Serialize(value);
+
+        Assert.That(toml, Does.Contain("type = \"1\""));
+        Assert.That(toml, Does.Contain("Color"));
+        Assert.That(toml, Does.Contain("Radius"));
+    }
+
+    [Test]
+    public void Deserialize_IntDiscriminator_MatchesByString()
+    {
+        var toml =
+            """
+            type = "1"
+            Color = "red"
+            Radius = 5.0
+            """;
+
+        var result = TomlSerializer.Deserialize<IntDiscrimShape>(toml);
+
+        Assert.That(result, Is.TypeOf<IntDiscrimCircle>());
+        var circle = (IntDiscrimCircle)result!;
+        Assert.That(circle.Color, Is.EqualTo("red"));
+        Assert.That(circle.Radius, Is.EqualTo(5.0));
+    }
+
+    [Test]
+    public void Roundtrip_IntDiscriminator()
+    {
+        IntDiscrimShape original = new IntDiscrimSquare { Color = "blue", Side = 3.0 };
+        var toml = TomlSerializer.Serialize(original);
+        var result = TomlSerializer.Deserialize<IntDiscrimShape>(toml);
+
+        Assert.That(result, Is.TypeOf<IntDiscrimSquare>());
+        var square = (IntDiscrimSquare)result!;
+        Assert.That(square.Color, Is.EqualTo("blue"));
+        Assert.That(square.Side, Is.EqualTo(3.0));
+    }
+
+    // JsonDerivedType int discriminators (already supported at runtime)
+    [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+    [JsonDerivedType(typeof(JsonIntDiscrimCircle), 1)]
+    [JsonDerivedType(typeof(JsonIntDiscrimSquare), 2)]
+    private abstract class JsonIntDiscrimShape
+    {
+        public string? Color { get; set; }
+    }
+
+    private sealed class JsonIntDiscrimCircle : JsonIntDiscrimShape
+    {
+        public double Radius { get; set; }
+    }
+
+    private sealed class JsonIntDiscrimSquare : JsonIntDiscrimShape
+    {
+        public double Side { get; set; }
+    }
+
+    [Test]
+    public void Roundtrip_JsonIntDiscriminator()
+    {
+        JsonIntDiscrimShape original = new JsonIntDiscrimCircle { Color = "red", Radius = 5.0 };
+        var toml = TomlSerializer.Serialize(original);
+
+        Assert.That(toml, Does.Contain("type = \"1\""));
+
+        var result = TomlSerializer.Deserialize<JsonIntDiscrimShape>(toml);
+
+        Assert.That(result, Is.TypeOf<JsonIntDiscrimCircle>());
+        Assert.That(((JsonIntDiscrimCircle)result!).Color, Is.EqualTo("red"));
+        Assert.That(((JsonIntDiscrimCircle)result).Radius, Is.EqualTo(5.0));
+    }
 }

@@ -352,6 +352,31 @@ public sealed class GeneratedJsonAttrFallbackDerived : GeneratedJsonAttrFallback
 internal partial class TestTomlSerializerContextJsonAttrFallback : TomlSerializerContext
 {
 }
+
+[TomlPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[TomlDerivedType(typeof(GeneratedIntDiscrimCircle), 1)]
+[TomlDerivedType(typeof(GeneratedIntDiscrimSquare), 2)]
+public abstract class GeneratedIntDiscrimShape
+{
+}
+
+public sealed class GeneratedIntDiscrimCircle : GeneratedIntDiscrimShape
+{
+    public string Color { get; set; } = "";
+    public double Radius { get; set; }
+}
+
+public sealed class GeneratedIntDiscrimSquare : GeneratedIntDiscrimShape
+{
+    public string Color { get; set; } = "";
+    public double Side { get; set; }
+}
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(GeneratedIntDiscrimShape))]
+internal partial class TestTomlSerializerContextIntDiscriminator : TomlSerializerContext
+{
+}
 #pragma warning restore SYSLIB1224
 
 public class NewApiSourceGenerationTests
@@ -806,5 +831,51 @@ public class NewApiSourceGenerationTests
 
         Assert.That(result, Is.TypeOf<GeneratedJsonAttrFallbackBase>());
         Assert.That(result!.Name, Is.EqualTo("test"));
+    }
+
+    // --- Feature 3: Integer Discriminators (source-gen) ---
+
+    [Test]
+    public void GeneratedContext_IntDiscriminator_Serialize()
+    {
+        var context = TestTomlSerializerContextIntDiscriminator.Default;
+        GeneratedIntDiscrimShape model = new GeneratedIntDiscrimCircle { Color = "red", Radius = 5.0 };
+        var toml = TomlSerializer.Serialize(model, context.GeneratedIntDiscrimShape);
+
+        Assert.That(toml, Does.Contain("type = \"1\""));
+        Assert.That(toml, Does.Contain("color = \"red\""));
+        Assert.That(toml, Does.Contain("radius = 5"));
+    }
+
+    [Test]
+    public void GeneratedContext_IntDiscriminator_Deserialize()
+    {
+        var context = TestTomlSerializerContextIntDiscriminator.Default;
+        var toml = """
+            type = "2"
+            color = "blue"
+            side = 3.0
+            """;
+
+        var result = TomlSerializer.Deserialize(toml, context.GeneratedIntDiscrimShape);
+
+        Assert.That(result, Is.TypeOf<GeneratedIntDiscrimSquare>());
+        var square = (GeneratedIntDiscrimSquare)result!;
+        Assert.That(square.Color, Is.EqualTo("blue"));
+        Assert.That(square.Side, Is.EqualTo(3.0));
+    }
+
+    [Test]
+    public void GeneratedContext_IntDiscriminator_Roundtrip()
+    {
+        var context = TestTomlSerializerContextIntDiscriminator.Default;
+        GeneratedIntDiscrimShape original = new GeneratedIntDiscrimCircle { Color = "red", Radius = 5.0 };
+        var toml = TomlSerializer.Serialize(original, context.GeneratedIntDiscrimShape);
+        var result = TomlSerializer.Deserialize(toml, context.GeneratedIntDiscrimShape);
+
+        Assert.That(result, Is.TypeOf<GeneratedIntDiscrimCircle>());
+        var circle = (GeneratedIntDiscrimCircle)result!;
+        Assert.That(circle.Color, Is.EqualTo("red"));
+        Assert.That(circle.Radius, Is.EqualTo(5.0));
     }
 }
