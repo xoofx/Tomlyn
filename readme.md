@@ -4,6 +4,8 @@
 
 Tomlyn is a high-performance .NET TOML 1.1 parser, round-trippable syntax tree, and `System.Text.Json`-style object serializer — NativeAOT ready.
 
+#### <img src="https://xoofx.github.io/SharpYaml/img/SharpYaml.png" alt="SharpYaml" height="32" style="vertical-align: text-bottom; margin-right: .45rem;" /> Looking for YAML support? Check out [SharpYaml](https://xoofx.github.io/SharpYaml/).
+
 > **Note**: Tomlyn v1 is a major redesign with breaking changes from earlier versions. It uses a **`System.Text.Json`-style API** with `TomlSerializer`, `TomlSerializerOptions`, and resolver-based metadata (`ITomlTypeInfoResolver`). See the [migration guide](https://xoofx.github.io/Tomlyn/migration) for details.
 
 ## ✨ Features

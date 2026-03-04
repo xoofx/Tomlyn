@@ -21,6 +21,10 @@ og_type: website
     <div class="mt-4 text-start mx-auto" style="max-width: 48rem;">
       <pre class="language-shell-session"><code>dotnet add package Tomlyn</code></pre>
       <p class="text-center text-secondary mt-2" style="font-size: 0.85rem;">Available on <a href="https://www.nuget.org/packages/Tomlyn/" class="text-secondary">NuGet</a> - net8.0, net10.0, netstandard2.0</p>
+      <p class="text-center mt-3" style="font-size: 1rem;">
+        <img src="https://xoofx.github.io/SharpYaml/img/SharpYaml.png" alt="SharpYaml" style="height: 2rem; width: auto; vertical-align: text-bottom; margin-right: .45rem;">
+        Looking for <span style="font-weight: 600;">YAML</span> support? Check out <a href="https://xoofx.github.io/SharpYaml/" class="text-secondary">SharpYaml</a>.
+      </p>
     </div>
   </div>
 </section>
