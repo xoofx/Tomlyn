@@ -48,6 +48,33 @@ public sealed class GeneratedRequiredPerson
     public int Age { get; set; }
 }
 
+public sealed class GeneratedInitOnlyPerson
+{
+    public string Name { get; init; } = "";
+
+    public int Age { get; init; } = 42;
+}
+
+public sealed class GeneratedRequiredInitPerson
+{
+    public required string Name { get; init; } = "";
+
+    public int Age { get; init; } = 42;
+}
+
+public sealed class GeneratedCtorInitRequiredPerson
+{
+    [JsonConstructor]
+    public GeneratedCtorInitRequiredPerson(string name)
+    {
+        Name = name;
+    }
+
+    public required string Name { get; init; } = "";
+
+    public int Age { get; init; } = 42;
+}
+
 public sealed class GeneratedExtensionDataPerson
 {
     public string Name { get; set; } = "";
@@ -271,6 +298,24 @@ internal partial class TestTomlSerializerContextRequired : TomlSerializerContext
 {
 }
 
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[TomlSerializable(typeof(GeneratedInitOnlyPerson))]
+internal partial class TestTomlSerializerContextInitOnly : TomlSerializerContext
+{
+}
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[TomlSerializable(typeof(GeneratedRequiredInitPerson))]
+internal partial class TestTomlSerializerContextRequiredInit : TomlSerializerContext
+{
+}
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[TomlSerializable(typeof(GeneratedCtorInitRequiredPerson))]
+internal partial class TestTomlSerializerContextCtorInitRequired : TomlSerializerContext
+{
+}
+
 [TomlSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     DictionaryKeyPolicy = JsonKnownNamingPolicy.CamelCase)]
@@ -431,6 +476,51 @@ public class NewApiSourceGenerationTests
     }
 
     [Test]
+    public void GeneratedContext_CanDeserializeInitOnlyMembers()
+    {
+        var context = TestTomlSerializerContextInitOnly.Default;
+        var toml = """
+            name = "Ada"
+            """;
+
+        var person = TomlSerializer.Deserialize(toml, context.GeneratedInitOnlyPerson);
+
+        Assert.That(person, Is.Not.Null);
+        Assert.That(person!.Name, Is.EqualTo("Ada"));
+        Assert.That(person.Age, Is.EqualTo(42));
+    }
+
+    [Test]
+    public void GeneratedContext_CanDeserializeRequiredKeywordMembers()
+    {
+        var context = TestTomlSerializerContextRequiredInit.Default;
+        var toml = """
+            name = "Ada"
+            """;
+
+        var person = TomlSerializer.Deserialize(toml, context.GeneratedRequiredInitPerson);
+
+        Assert.That(person, Is.Not.Null);
+        Assert.That(person!.Name, Is.EqualTo("Ada"));
+        Assert.That(person.Age, Is.EqualTo(42));
+    }
+
+    [Test]
+    public void GeneratedContext_Throws_WhenRequiredKeywordMemberIsMissing()
+    {
+        var context = TestTomlSerializerContextRequiredInit.Default;
+        var toml = """
+            age = 37
+            """;
+
+        var exception = Assert.Throws<TomlException>(() => TomlSerializer.Deserialize(toml, context.GeneratedRequiredInitPerson));
+
+        Assert.That(exception, Is.Not.Null);
+        Assert.That(exception!.Message, Does.Contain("Missing required TOML key 'name'"));
+        Assert.That(exception.Message, Does.Contain(typeof(GeneratedRequiredInitPerson).FullName));
+    }
+
+    [Test]
     public void GeneratedContext_Throws_WhenRequiredMemberIsMissing()
     {
         var context = TestTomlSerializerContextRequired.Default;
@@ -445,6 +535,37 @@ public class NewApiSourceGenerationTests
         Assert.That(exception.Message, Does.Contain(typeof(GeneratedRequiredPerson).FullName));
         Assert.That(exception.Line, Is.GreaterThanOrEqualTo(1));
         Assert.That(exception.Column, Is.GreaterThanOrEqualTo(1));
+    }
+
+    [Test]
+    public void GeneratedContext_CanDeserializeConstructorBoundRequiredInitMembers()
+    {
+        var context = TestTomlSerializerContextCtorInitRequired.Default;
+        var toml = """
+            name = "Ada"
+            age = 37
+            """;
+
+        var model = TomlSerializer.Deserialize(toml, context.GeneratedCtorInitRequiredPerson);
+
+        Assert.That(model, Is.Not.Null);
+        Assert.That(model!.Name, Is.EqualTo("Ada"));
+        Assert.That(model.Age, Is.EqualTo(37));
+    }
+
+    [Test]
+    public void GeneratedContext_PreservesConstructorDefaultsForMissingInitOnlyMembers()
+    {
+        var context = TestTomlSerializerContextCtorInitRequired.Default;
+        var toml = """
+            name = "Ada"
+            """;
+
+        var model = TomlSerializer.Deserialize(toml, context.GeneratedCtorInitRequiredPerson);
+
+        Assert.That(model, Is.Not.Null);
+        Assert.That(model!.Name, Is.EqualTo("Ada"));
+        Assert.That(model.Age, Is.EqualTo(42));
     }
 
     [Test]

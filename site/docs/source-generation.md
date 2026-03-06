@@ -36,6 +36,7 @@ internal partial class MyTomlContext : TomlSerializerContext { }
 The generator produces a `Default` singleton and a typed [`TomlTypeInfo<T>`](xref:Tomlyn.TomlTypeInfo`1) property for each root.
 Nested types referenced by the root are discovered transitively - you only need to annotate top-level types.
 Set [`TomlSerializableAttribute.TypeInfoPropertyName`](xref:Tomlyn.Serialization.TomlSerializableAttribute.TypeInfoPropertyName) when you want to customize the generated property name exposed by the context.
+Source-generated deserialization also supports C# `init` and `required` members.
 
 ## Use generated metadata
 

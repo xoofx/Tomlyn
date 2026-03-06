@@ -256,6 +256,7 @@ public sealed class DatabaseConfig
 ```
 
 If `host` or `port` is missing from the TOML input, `TomlException` is thrown.
+Source-generated contexts also honor the C# `required` keyword and `init` accessors during deserialization.
 
 ### Example: constructor-based deserialization
 

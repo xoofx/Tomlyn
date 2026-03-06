@@ -89,6 +89,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
     private const string TomlOnSerializedMetadataName = "Tomlyn.Serialization.ITomlOnSerialized";
     private const string TomlOnDeserializingMetadataName = "Tomlyn.Serialization.ITomlOnDeserializing";
     private const string TomlOnDeserializedMetadataName = "Tomlyn.Serialization.ITomlOnDeserialized";
+    private const string SetsRequiredMembersAttributeMetadataName = "System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute";
 
     private static readonly SymbolDisplayFormat FullyQualifiedNullableFormat =
         SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
@@ -719,9 +720,14 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             builder.Append("            throw new TomlException(\"").Append(EscapeStringLiteral(ctorError.ErrorMessage!)).AppendLine("\");");
             builder.AppendLine("        }");
         }
+        else if (poco.RequiresGeneratedObjectInitializer)
+        {
+            var bufferedConstructor = constructor ?? new PocoConstructor(null, ImmutableArray<PocoConstructorParameter>.Empty, null, setsRequiredMembers: false);
+            EmitPocoReadWithConstructor(builder, model, type, poco, bufferedConstructor, readReturnType, callsOnDeserializing, callsOnDeserialized, useObjectInitializerConstruction: true);
+        }
         else if (constructor is { IsValid: true } ctor && !ctor.Parameters.IsDefaultOrEmpty)
         {
-            EmitPocoReadWithConstructor(builder, model, type, poco, ctor, readReturnType, callsOnDeserializing, callsOnDeserialized);
+            EmitPocoReadWithConstructor(builder, model, type, poco, ctor, readReturnType, callsOnDeserializing, callsOnDeserialized, useObjectInitializerConstruction: false);
         }
         else
         {
@@ -859,12 +865,27 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         PocoConstructor ctor,
         string readReturnType,
         bool callsOnDeserializing,
-        bool callsOnDeserialized)
+        bool callsOnDeserialized,
+        bool useObjectInitializerConstruction)
     {
         var typeName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var readNonNullableTypeName = typeName;
         var hasRequiredMembers = poco.Members.Any(static m => m.IsRequired);
         var useSeenMask = poco.Members.Length <= 64;
+        var wrapConstructionErrors = !ctor.Parameters.IsDefaultOrEmpty;
+
+        string? GetLinkedParameterExpression(int memberIndex)
+        {
+            for (var i = 0; i < ctor.Parameters.Length; i++)
+            {
+                if (ctor.Parameters[i].LinkedMemberIndex == memberIndex)
+                {
+                    return "__arg" + i.ToString(CultureInfo.InvariantCulture);
+                }
+            }
+
+            return null;
+        }
 
         builder.Append("        public override ").Append(readReturnType).AppendLine(" Read(TomlReader reader)");
         builder.AppendLine("        {");
@@ -1288,60 +1309,148 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         // Construct instance.
-        builder.AppendLine("            " + readNonNullableTypeName + " value;");
-        builder.AppendLine("            try");
-        builder.AppendLine("            {");
-        builder.Append("                value = new ").Append(typeName).Append("(");
-        for (var i = 0; i < ctor.Parameters.Length; i++)
+        if (useObjectInitializerConstruction)
         {
-            if (i != 0)
+            var templateInitializerAssignments = ImmutableArray.CreateBuilder<string>();
+            var finalInitializerAssignments = ImmutableArray.CreateBuilder<string>();
+            var needsTemplate = false;
+
+            for (var i = 0; i < poco.Members.Length; i++)
             {
-                builder.Append(", ");
+                var member = poco.Members[i];
+                if (!member.CanSet)
+                {
+                    continue;
+                }
+
+                needsTemplate = true;
+                finalInitializerAssignments.Add(member.MemberName + " = __memberValue" + i.ToString(CultureInfo.InvariantCulture));
+
+                if (!member.IsCompilerRequired)
+                {
+                    continue;
+                }
+
+                var templateValueExpression = "__memberValue" + i.ToString(CultureInfo.InvariantCulture);
+                if (GetLinkedParameterExpression(i) is { } linkedParameterExpression)
+                {
+                    templateValueExpression = "__memberSeen" + i.ToString(CultureInfo.InvariantCulture) + " ? __memberValue" + i.ToString(CultureInfo.InvariantCulture) + " : " + linkedParameterExpression;
+                }
+
+                templateInitializerAssignments.Add(member.MemberName + " = " + templateValueExpression);
             }
 
-            builder.Append("__arg").Append(i.ToString(CultureInfo.InvariantCulture));
-        }
-        builder.AppendLine(");");
-        builder.AppendLine("            }");
-        builder.AppendLine("            catch (Exception ex)");
-        builder.AppendLine("            {");
-        builder.AppendLine("                throw new TomlException($\"Failed to create an instance of '{typeof(" + typeName + ").FullName}'.\", ex);");
-        builder.AppendLine("            }");
-
-        if (callsOnDeserializing)
-        {
-            builder.AppendLine("            ((global::Tomlyn.Serialization.ITomlOnDeserializing)value).OnTomlDeserializing();");
-        }
-
-        for (var i = 0; i < poco.Members.Length; i++)
-        {
-            var member = poco.Members[i];
-            if (!member.CanSet)
+            if (extensionData is { CanSet: true })
             {
-                continue;
+                needsTemplate = true;
+                finalInitializerAssignments.Add(extensionData.MemberName + " = __extensionDataValue");
+                if (extensionData.IsCompilerRequired)
+                {
+                    templateInitializerAssignments.Add(extensionData.MemberName + " = " + extensionData.CreateExpression);
+                }
             }
 
-            builder.Append("            if (__memberSeen").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(")");
-            builder.AppendLine("            {");
-            builder.Append("                value.").Append(member.MemberName).Append(" = __memberValue").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
-            builder.AppendLine("            }");
-        }
+            if (needsTemplate)
+            {
+                builder.Append("            ").Append(readNonNullableTypeName).AppendLine(" __template;");
+                EmitPocoConstructionAssignment(builder, "__template", typeName, ctor.Parameters, templateInitializerAssignments.ToImmutable(), wrapConstructionErrors);
 
-        if (extensionData is not null)
+                for (var i = 0; i < poco.Members.Length; i++)
+                {
+                    var member = poco.Members[i];
+                    if (!member.CanSet)
+                    {
+                        continue;
+                    }
+
+                    builder.Append("            if (!__memberSeen").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(")");
+                    builder.AppendLine("            {");
+                    builder.Append("                __memberValue").Append(i.ToString(CultureInfo.InvariantCulture)).Append(" = __template.").Append(member.MemberName).AppendLine(";");
+                    builder.AppendLine("            }");
+                }
+
+                if (extensionData is { CanSet: true })
+                {
+                    builder.Append("            var __extensionDataValue = __template.").Append(extensionData.MemberName).AppendLine(";");
+                    builder.AppendLine("            if (__extensionData is not null && __extensionData.Count != 0)");
+                    builder.AppendLine("            {");
+                    builder.AppendLine("                if (__extensionDataValue is null)");
+                    builder.AppendLine("                {");
+                    builder.Append("                    __extensionDataValue = ").Append(extensionData.CreateExpression).AppendLine(";");
+                    builder.AppendLine("                }");
+                    builder.AppendLine("                foreach (var __pair in __extensionData)");
+                    builder.AppendLine("                {");
+                    builder.AppendLine("                    __extensionDataValue[__pair.Key] = __pair.Value;");
+                    builder.AppendLine("                }");
+                    builder.AppendLine("            }");
+                }
+            }
+
+            builder.Append("            ").Append(readNonNullableTypeName).AppendLine(" value;");
+            EmitPocoConstructionAssignment(builder, "value", typeName, ctor.Parameters, finalInitializerAssignments.ToImmutable(), wrapConstructionErrors);
+
+            if (callsOnDeserializing)
+            {
+                builder.AppendLine("            ((global::Tomlyn.Serialization.ITomlOnDeserializing)value).OnTomlDeserializing();");
+            }
+
+            if (extensionData is { CanSet: false })
+            {
+                var nullInitializationMessage = EscapeStringLiteral($"Extension data member '{extensionData.MemberName}' is null and cannot be initialized.");
+                builder.AppendLine("            if (__extensionData is not null && __extensionData.Count != 0)");
+                builder.AppendLine("            {");
+                builder.Append("                var __target = value.").Append(extensionData.MemberName).AppendLine(";");
+                builder.AppendLine("                if (__target is null)");
+                builder.AppendLine("                {");
+                builder.Append("                    throw new TomlException(\"").Append(nullInitializationMessage).AppendLine("\");");
+                builder.AppendLine("                }");
+                builder.AppendLine("                foreach (var __pair in __extensionData)");
+                builder.AppendLine("                {");
+                builder.AppendLine("                    __target[__pair.Key] = __pair.Value;");
+                builder.AppendLine("                }");
+                builder.AppendLine("            }");
+            }
+        }
+        else
         {
-            builder.AppendLine("            if (__extensionData is not null && __extensionData.Count != 0)");
-            builder.AppendLine("            {");
-            builder.Append("                var __target = value.").Append(extensionData.MemberName).AppendLine(";");
-            builder.AppendLine("                if (__target is null)");
-            builder.AppendLine("                {");
-            builder.Append("                    __target = ").Append(extensionData.CreateExpression).AppendLine(";");
-            builder.Append("                    value.").Append(extensionData.MemberName).AppendLine(" = __target;");
-            builder.AppendLine("                }");
-            builder.AppendLine("                foreach (var __pair in __extensionData)");
-            builder.AppendLine("                {");
-            builder.AppendLine("                    __target[__pair.Key] = __pair.Value;");
-            builder.AppendLine("                }");
-            builder.AppendLine("            }");
+            builder.Append("            ").Append(readNonNullableTypeName).AppendLine(" value;");
+            EmitPocoConstructionAssignment(builder, "value", typeName, ctor.Parameters, ImmutableArray<string>.Empty, wrapConstructionErrors);
+
+            if (callsOnDeserializing)
+            {
+                builder.AppendLine("            ((global::Tomlyn.Serialization.ITomlOnDeserializing)value).OnTomlDeserializing();");
+            }
+
+            for (var i = 0; i < poco.Members.Length; i++)
+            {
+                var member = poco.Members[i];
+                if (!member.CanSet)
+                {
+                    continue;
+                }
+
+                builder.Append("            if (__memberSeen").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(")");
+                builder.AppendLine("            {");
+                builder.Append("                value.").Append(member.MemberName).Append(" = __memberValue").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
+                builder.AppendLine("            }");
+            }
+
+            if (extensionData is not null)
+            {
+                builder.AppendLine("            if (__extensionData is not null && __extensionData.Count != 0)");
+                builder.AppendLine("            {");
+                builder.Append("                var __target = value.").Append(extensionData.MemberName).AppendLine(";");
+                builder.AppendLine("                if (__target is null)");
+                builder.AppendLine("                {");
+                builder.Append("                    __target = ").Append(extensionData.CreateExpression).AppendLine(";");
+                builder.Append("                    value.").Append(extensionData.MemberName).AppendLine(" = __target;");
+                builder.AppendLine("                }");
+                builder.AppendLine("                foreach (var __pair in __extensionData)");
+                builder.AppendLine("                {");
+                builder.AppendLine("                    __target[__pair.Key] = __pair.Value;");
+                builder.AppendLine("                }");
+                builder.AppendLine("            }");
+            }
         }
 
         if (callsOnDeserialized)
@@ -1351,6 +1460,60 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         builder.AppendLine("            return value;");
         builder.AppendLine("        }");
+    }
+
+    private static void EmitPocoConstructionAssignment(
+        StringBuilder builder,
+        string targetName,
+        string typeName,
+        ImmutableArray<PocoConstructorParameter> parameters,
+        ImmutableArray<string> initializerAssignments,
+        bool wrapConstructionErrors)
+    {
+        void EmitAssignmentBody(string indent)
+        {
+            builder.Append(indent).Append(targetName).Append(" = new ").Append(typeName).Append("(");
+            for (var i = 0; i < parameters.Length; i++)
+            {
+                if (i != 0)
+                {
+                    builder.Append(", ");
+                }
+
+                builder.Append("__arg").Append(i.ToString(CultureInfo.InvariantCulture));
+            }
+
+            builder.Append(")");
+            if (initializerAssignments.IsDefaultOrEmpty)
+            {
+                builder.AppendLine(";");
+                return;
+            }
+
+            builder.AppendLine();
+            builder.Append(indent).AppendLine("{");
+            for (var i = 0; i < initializerAssignments.Length; i++)
+            {
+                builder.Append(indent).Append("    ").Append(initializerAssignments[i]).AppendLine(",");
+            }
+
+            builder.Append(indent).AppendLine("};");
+        }
+
+        if (!wrapConstructionErrors)
+        {
+            EmitAssignmentBody("            ");
+            return;
+        }
+
+        builder.AppendLine("            try");
+        builder.AppendLine("            {");
+        EmitAssignmentBody("                ");
+        builder.AppendLine("            }");
+        builder.AppendLine("            catch (Exception ex)");
+        builder.AppendLine("            {");
+        builder.AppendLine("                throw new TomlException($\"Failed to create an instance of '{typeof(" + typeName + ").FullName}'.\", ex);");
+        builder.AppendLine("            }");
     }
 
     private static void EmitMemberDispatch(StringBuilder builder, PocoShape poco, bool ignoreCase)
@@ -1929,7 +2092,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private sealed class PocoMember
     {
-        public PocoMember(string memberName, string serializedName, ITypeSymbol type, int order, WriteIgnoreKind writeIgnore, bool isRequired, bool canSet)
+        public PocoMember(string memberName, string serializedName, ITypeSymbol type, int order, WriteIgnoreKind writeIgnore, bool isRequired, bool isCompilerRequired, bool canSet, bool isInitOnly)
         {
             MemberName = memberName;
             SerializedName = serializedName;
@@ -1937,7 +2100,9 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             Order = order;
             WriteIgnore = writeIgnore;
             IsRequired = isRequired;
+            IsCompilerRequired = isCompilerRequired;
             CanSet = canSet;
+            IsInitOnly = isInitOnly;
         }
 
         public string MemberName { get; }
@@ -1946,37 +2111,47 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         public int Order { get; }
         public WriteIgnoreKind WriteIgnore { get; }
         public bool IsRequired { get; }
+        public bool IsCompilerRequired { get; }
         public bool CanSet { get; }
+        public bool IsInitOnly { get; }
     }
 
     private sealed class PocoExtensionData
     {
-        public PocoExtensionData(string memberName, ITypeSymbol memberType, ITypeSymbol valueType, string createExpression)
+        public PocoExtensionData(string memberName, ITypeSymbol memberType, ITypeSymbol valueType, string createExpression, bool canSet, bool isInitOnly, bool isCompilerRequired)
         {
             MemberName = memberName;
             MemberType = memberType;
             ValueType = valueType;
             CreateExpression = createExpression;
+            CanSet = canSet;
+            IsInitOnly = isInitOnly;
+            IsCompilerRequired = isCompilerRequired;
         }
 
         public string MemberName { get; }
         public ITypeSymbol MemberType { get; }
         public ITypeSymbol ValueType { get; }
         public string CreateExpression { get; }
+        public bool CanSet { get; }
+        public bool IsInitOnly { get; }
+        public bool IsCompilerRequired { get; }
     }
 
     private sealed class PocoConstructor
     {
-        public PocoConstructor(IMethodSymbol? constructor, ImmutableArray<PocoConstructorParameter> parameters, string? errorMessage)
+        public PocoConstructor(IMethodSymbol? constructor, ImmutableArray<PocoConstructorParameter> parameters, string? errorMessage, bool setsRequiredMembers)
         {
             Constructor = constructor;
             Parameters = parameters;
             ErrorMessage = errorMessage;
+            SetsRequiredMembers = setsRequiredMembers;
         }
 
         public IMethodSymbol? Constructor { get; }
         public ImmutableArray<PocoConstructorParameter> Parameters { get; }
         public string? ErrorMessage { get; }
+        public bool SetsRequiredMembers { get; }
         public bool IsValid => ErrorMessage is null && Constructor is not null;
     }
 
@@ -2008,16 +2183,39 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private sealed class PocoShape
     {
-        public PocoShape(ImmutableArray<PocoMember> members, PocoExtensionData? extensionData, PocoConstructor? constructor)
+        public PocoShape(ImmutableArray<PocoMember> members, PocoExtensionData? extensionData, PocoConstructor? constructor, bool requiresGeneratedObjectInitializer)
         {
             Members = members;
             ExtensionData = extensionData;
             Constructor = constructor;
+            RequiresGeneratedObjectInitializer = requiresGeneratedObjectInitializer;
         }
 
         public ImmutableArray<PocoMember> Members { get; }
         public PocoExtensionData? ExtensionData { get; }
         public PocoConstructor? Constructor { get; }
+        public bool RequiresGeneratedObjectInitializer { get; }
+    }
+
+    private static bool RequiresGeneratedObjectInitializer(
+        ImmutableArray<PocoMember> members,
+        PocoExtensionData? extensionData,
+        PocoConstructor? constructor,
+        bool parameterlessConstructorSetsRequiredMembers)
+    {
+        var hasInitOnlyMembers = members.Any(static member => member.IsInitOnly) || extensionData?.IsInitOnly == true;
+        if (hasInitOnlyMembers)
+        {
+            return true;
+        }
+
+        var hasCompilerRequiredMembers = members.Any(static member => member.IsCompilerRequired) || extensionData?.IsCompilerRequired == true;
+        if (!hasCompilerRequiredMembers)
+        {
+            return false;
+        }
+
+        return !(constructor?.SetsRequiredMembers ?? parameterlessConstructorSetsRequiredMembers);
     }
 
     private sealed class PolymorphicDerivedType
@@ -2108,6 +2306,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         IMethodSymbol? selectedConstructor = null;
         string? constructorError = null;
+        var parameterlessConstructorSetsRequiredMembers = false;
         if (named.TypeKind == TypeKind.Class)
         {
             var publicConstructors = named.InstanceConstructors
@@ -2135,9 +2334,10 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 {
                     selectedConstructor = annotated[0];
                 }
-                else if (publicConstructors.Any(static ctor => ctor.Parameters.Length == 0))
+                else if (publicConstructors.FirstOrDefault(static ctor => ctor.Parameters.Length == 0) is { } parameterlessConstructor)
                 {
                     selectedConstructor = null;
+                    parameterlessConstructorSetsRequiredMembers = HasAttribute(parameterlessConstructor, SetsRequiredMembersAttributeMetadataName);
                 }
                 else if (publicConstructors.Length == 1)
                 {
@@ -2173,6 +2373,8 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             }
 
             var canSet = member.SetMethod is not null && member.SetMethod.DeclaredAccessibility == Accessibility.Public;
+            var isInitOnly = member.SetMethod?.IsInitOnly == true;
+            var isCompilerRequired = member.IsRequired;
 
             if (IsExtensionData(member))
             {
@@ -2209,7 +2411,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     continue;
                 }
 
-                extensionData = new PocoExtensionData(member.Name, member.Type, extensionValueType, createExpression);
+                extensionData = new PocoExtensionData(member.Name, member.Type, extensionValueType, createExpression, canSet, isInitOnly, isCompilerRequired);
                 continue;
             }
 
@@ -2222,7 +2424,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             var serializedName = GetSerializedName(member, member.Name, namingPolicy);
             var order = GetOrder(member);
             var required = IsRequired(member);
-            members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore, required, canSet));
+            members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore, required, isCompilerRequired, canSet, isInitOnly));
         }
 
         foreach (var member in named.GetMembers().OfType<IFieldSymbol>())
@@ -2272,7 +2474,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     continue;
                 }
 
-                extensionData = new PocoExtensionData(member.Name, member.Type, extensionValueType, createExpression);
+                extensionData = new PocoExtensionData(member.Name, member.Type, extensionValueType, createExpression, canSet: true, isInitOnly: false, isCompilerRequired: member.IsRequired);
                 continue;
             }
 
@@ -2291,16 +2493,17 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             var serializedName = GetSerializedName(member, member.Name, namingPolicy);
             var order = GetOrder(member);
             var required = IsRequired(member);
-            members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore, required, canSet: true));
+            members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore, required, member.IsRequired, canSet: true, isInitOnly: false));
         }
 
         PocoConstructor? constructorModel = null;
         if (constructorError is not null && selectedConstructor is null)
         {
-            constructorModel = new PocoConstructor(null, ImmutableArray<PocoConstructorParameter>.Empty, constructorError);
+            constructorModel = new PocoConstructor(null, ImmutableArray<PocoConstructorParameter>.Empty, constructorError, setsRequiredMembers: false);
         }
         else if (selectedConstructor is not null)
         {
+            var setsRequiredMembers = HasAttribute(selectedConstructor, SetsRequiredMembersAttributeMetadataName);
             if (selectedConstructor.Parameters.Length > 0)
             {
                 var memberIndexByClrName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -2340,16 +2543,24 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     parameters.Add(new PocoConstructorParameter(keyName, parameterName, parameter.Type, hasDefaultValue, defaultValueExpression, linkedMemberIndex));
                 }
 
-                constructorModel = new PocoConstructor(selectedConstructor, parameters.ToImmutable(), constructorError);
-                shape = new PocoShape(membersSoFar, extensionData, constructorModel);
+                constructorModel = new PocoConstructor(selectedConstructor, parameters.ToImmutable(), constructorError, setsRequiredMembers);
+                shape = new PocoShape(
+                    membersSoFar,
+                    extensionData,
+                    constructorModel,
+                    RequiresGeneratedObjectInitializer(membersSoFar, extensionData, constructorModel, parameterlessConstructorSetsRequiredMembers));
                 return true;
             }
 
-            constructorModel = new PocoConstructor(selectedConstructor, ImmutableArray<PocoConstructorParameter>.Empty, constructorError);
+            constructorModel = new PocoConstructor(selectedConstructor, ImmutableArray<PocoConstructorParameter>.Empty, constructorError, setsRequiredMembers);
         }
 
         var finalMembers = members.ToImmutable();
-        shape = new PocoShape(finalMembers, extensionData, constructorModel);
+        shape = new PocoShape(
+            finalMembers,
+            extensionData,
+            constructorModel,
+            RequiresGeneratedObjectInitializer(finalMembers, extensionData, constructorModel, parameterlessConstructorSetsRequiredMembers));
         return true;
     }
 
@@ -2677,7 +2888,13 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private static bool IsRequired(ISymbol member)
     {
-        return HasAttribute(member, "Tomlyn.Serialization.TomlRequiredAttribute") ||
+        return member switch
+               {
+                   IPropertySymbol property when property.IsRequired => true,
+                   IFieldSymbol field when field.IsRequired => true,
+                   _ => false,
+               } ||
+               HasAttribute(member, "Tomlyn.Serialization.TomlRequiredAttribute") ||
                HasAttribute(member, "System.Text.Json.Serialization.JsonRequiredAttribute");
     }
 
