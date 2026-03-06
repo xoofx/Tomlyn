@@ -34,7 +34,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
     private static readonly DiagnosticDescriptor UnsupportedMemberType = new(
         id: "TOMLYN003",
         title: "Unsupported member type",
-        messageFormat: "Type '{0}' contains member '{1}' of unsupported type '{2}'. Add [JsonSerializable(typeof({2}))] to the context or change the member type.",
+        messageFormat: "Type '{0}' contains member '{1}' of unsupported type '{2}'. Add [TomlSerializable(typeof({2}))] to the context or change the member type.",
         category: "Tomlyn.SourceGeneration",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -71,7 +71,16 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    private static readonly DiagnosticDescriptor JsonSerializableNotSupported = new(
+        id: "TOMLYN008",
+        title: "JsonSerializable is not supported on TOML contexts",
+        messageFormat: "Type '{0}' derives from Tomlyn.Serialization.TomlSerializerContext and uses [JsonSerializable]. Replace [JsonSerializable(...)] with [TomlSerializable(...)] on the context.",
+        category: "Tomlyn.SourceGeneration",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
     private const string TomlSerializerContextMetadataName = "Tomlyn.Serialization.TomlSerializerContext";
+    private const string TomlSerializableAttributeMetadataName = "Tomlyn.Serialization.TomlSerializableAttribute";
     private const string JsonSerializableAttributeMetadataName = "System.Text.Json.Serialization.JsonSerializableAttribute";
     private const string JsonSourceGenerationOptionsAttributeMetadataName = "System.Text.Json.Serialization.JsonSourceGenerationOptionsAttribute";
     private const string TomlSourceGenerationOptionsAttributeMetadataName = "Tomlyn.Serialization.TomlSourceGenerationOptionsAttribute";
@@ -91,9 +100,10 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             INamedTypeSymbol contextSymbol,
             string namespaceName,
             string typeName,
-            ImmutableArray<ITypeSymbol> rootTypes,
+            ImmutableArray<RootTypeModel> rootTypes,
             SourceGenOptions options,
-            bool isValid)
+            bool isValid,
+            bool usesJsonSerializable)
         {
             ContextSymbol = contextSymbol;
             NamespaceName = namespaceName;
@@ -101,14 +111,28 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             RootTypes = rootTypes;
             Options = options;
             IsValid = isValid;
+            UsesJsonSerializable = usesJsonSerializable;
         }
 
         public INamedTypeSymbol ContextSymbol { get; }
         public string NamespaceName { get; }
         public string TypeName { get; }
-        public ImmutableArray<ITypeSymbol> RootTypes { get; }
+        public ImmutableArray<RootTypeModel> RootTypes { get; }
         public SourceGenOptions Options { get; }
         public bool IsValid { get; }
+        public bool UsesJsonSerializable { get; }
+    }
+
+    private sealed class RootTypeModel
+    {
+        public RootTypeModel(ITypeSymbol type, string? typeInfoPropertyName)
+        {
+            Type = type;
+            TypeInfoPropertyName = typeInfoPropertyName;
+        }
+
+        public ITypeSymbol Type { get; }
+        public string? TypeInfoPropertyName { get; }
     }
 
     private sealed class SourceGenOptions
@@ -178,12 +202,13 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             return null;
         }
 
-        var roots = ImmutableArray.CreateBuilder<ITypeSymbol>();
+        var roots = ImmutableArray.CreateBuilder<RootTypeModel>();
         var options = new SourceGenOptions();
+        var usesJsonSerializable = false;
 
         foreach (var attribute in classSymbol.GetAttributes())
         {
-            if (IsJsonSerializableAttribute(attribute))
+            if (IsTomlSerializableAttribute(attribute))
             {
                 if (attribute.ConstructorArguments.Length != 1)
                 {
@@ -196,7 +221,13 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     continue;
                 }
 
-                roots.Add(typeSymbol);
+                roots.Add(new RootTypeModel(typeSymbol, GetTypeInfoPropertyNameOverride(attribute)));
+                continue;
+            }
+
+            if (IsJsonSerializableAttribute(attribute))
+            {
+                usesJsonSerializable = true;
                 continue;
             }
 
@@ -212,7 +243,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             }
         }
 
-        if (roots.Count == 0)
+        if (roots.Count == 0 && !usesJsonSerializable)
         {
             return null;
         }
@@ -228,11 +259,22 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             typeName,
             roots.ToImmutable(),
             options,
-            isValid: isPartial);
+            isValid: isPartial,
+            usesJsonSerializable: usesJsonSerializable);
     }
 
     private static void EmitContext(SourceProductionContext context, Compilation compilation, ContextModel model)
     {
+        if (model.UsesJsonSerializable)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(JsonSerializableNotSupported, model.ContextSymbol.Locations.FirstOrDefault(), model.ContextSymbol.ToDisplayString()));
+        }
+
+        if (model.RootTypes.Length == 0)
+        {
+            return;
+        }
+
         if (!model.IsValid)
         {
             context.ReportDiagnostic(Diagnostic.Create(ContextMustBePartial, model.ContextSymbol.Locations.FirstOrDefault(), model.ContextSymbol.ToDisplayString()));
@@ -241,6 +283,10 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         ValidateConverters(context, model);
         ValidateSourceGenerationOptions(context, model);
+        if (!ValidateRootAttributes(context, model))
+        {
+            return;
+        }
 
         var expanded = ExpandTypeGraph(context, model);
         var ordered = expanded
@@ -402,12 +448,22 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
     private static void EmitTypeInfoProperty(StringBuilder builder, SourceProductionContext context, ContextModel model, ITypeSymbol type)
     {
         var propertyName = GetTypeInfoPropertyName(type);
+        var publicPropertyName = TryGetCustomTypeInfoPropertyName(model, type, out var customPropertyName)
+            ? customPropertyName
+            : propertyName;
+        var propertyAccessibility = string.Equals(publicPropertyName, propertyName, StringComparison.Ordinal) ? "public" : "private";
         var typeName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
         builder.Append("    private TomlTypeInfo<").Append(typeName).Append(">? _").Append(propertyName).AppendLine(";");
-        builder.Append("    public TomlTypeInfo<").Append(typeName).Append("> ").Append(propertyName).AppendLine();
+        builder.Append("    ").Append(propertyAccessibility).Append(" TomlTypeInfo<").Append(typeName).Append("> ").Append(propertyName).AppendLine();
         builder.Append("        => _").Append(propertyName).Append(" ??= Create").Append(propertyName).AppendLine("();");
         builder.AppendLine();
+
+        if (!string.Equals(publicPropertyName, propertyName, StringComparison.Ordinal))
+        {
+            builder.Append("    public TomlTypeInfo<").Append(typeName).Append("> ").Append(publicPropertyName).Append(" => ").Append(propertyName).AppendLine(";");
+            builder.AppendLine();
+        }
 
         builder.Append("    private TomlTypeInfo<").Append(typeName).Append("> Create").Append(propertyName).AppendLine("()");
         builder.AppendLine("    {");
@@ -1618,7 +1674,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private static ImmutableArray<ITypeSymbol> ExpandTypeGraph(SourceProductionContext context, ContextModel model)
     {
-        var queue = new Queue<ITypeSymbol>(model.RootTypes);
+        var queue = new Queue<ITypeSymbol>(model.RootTypes.Select(static root => root.Type));
         var seen = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
         var list = new List<ITypeSymbol>();
 
@@ -1764,6 +1820,29 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         return list.ToImmutableArray();
+    }
+
+    private static bool ValidateRootAttributes(SourceProductionContext context, ContextModel model)
+    {
+        foreach (var root in model.RootTypes)
+        {
+            if (root.TypeInfoPropertyName is null)
+            {
+                continue;
+            }
+
+            if (!SyntaxFacts.IsValidIdentifier(root.TypeInfoPropertyName))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InvalidSourceGenerationOption,
+                    model.ContextSymbol.Locations.FirstOrDefault(),
+                    model.ContextSymbol.ToDisplayString(),
+                    $"TomlSerializable TypeInfoPropertyName '{root.TypeInfoPropertyName}' must be a valid C# identifier."));
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool HasPolymorphismAttributes(INamedTypeSymbol type)
@@ -3250,6 +3329,21 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         return SanitizeIdentifier(type.Name);
     }
 
+    private static bool TryGetCustomTypeInfoPropertyName(ContextModel model, ITypeSymbol type, out string propertyName)
+    {
+        foreach (var root in model.RootTypes)
+        {
+            if (SymbolEqualityComparer.Default.Equals(root.Type, type) && root.TypeInfoPropertyName is not null)
+            {
+                propertyName = root.TypeInfoPropertyName;
+                return true;
+            }
+        }
+
+        propertyName = null!;
+        return false;
+    }
+
     private static string SanitizeIdentifier(string name)
     {
         var builder = new StringBuilder(name.Length);
@@ -3290,6 +3384,22 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private static bool IsJsonSerializableAttribute(AttributeData attribute)
         => attribute.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::" + JsonSerializableAttributeMetadataName;
+
+    private static bool IsTomlSerializableAttribute(AttributeData attribute)
+        => attribute.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::" + TomlSerializableAttributeMetadataName;
+
+    private static string? GetTypeInfoPropertyNameOverride(AttributeData attribute)
+    {
+        foreach (var namedArgument in attribute.NamedArguments)
+        {
+            if (namedArgument.Key == "TypeInfoPropertyName" && namedArgument.Value.Value is string propertyName)
+            {
+                return propertyName;
+            }
+        }
+
+        return null;
+    }
 
     private static bool IsJsonSourceGenerationOptionsAttribute(AttributeData attribute)
         => attribute.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::" + JsonSourceGenerationOptionsAttributeMetadataName;

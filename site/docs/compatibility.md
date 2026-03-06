@@ -44,11 +44,11 @@ See [Source generation and NativeAOT](source-generation.md) for details.
 
 ## System.Text.Json interop
 
-Tomlyn reuses [`System.Text.Json`](xref:System.Text.Json) types in two areas:
+Tomlyn reuses [`System.Text.Json`](xref:System.Text.Json) types in several areas:
 
 - **Naming policies** - [`TomlSerializerOptions.PropertyNamingPolicy`](xref:Tomlyn.TomlSerializerOptions.PropertyNamingPolicy) accepts any [`JsonNamingPolicy`](xref:System.Text.Json.JsonNamingPolicy).
 - **Attributes** - most common [`System.Text.Json.Serialization`](xref:System.Text.Json.Serialization) attributes work out of the box.
-- **Source generation** - [`[JsonSerializable]`](xref:System.Text.Json.Serialization.JsonSerializableAttribute) roots and [`JsonKnownNamingPolicy`](xref:System.Text.Json.JsonKnownNamingPolicy) are used for context declaration.
+- **Source generation** - [`[TomlSerializable]`](xref:Tomlyn.Serialization.TomlSerializableAttribute) roots declare TOML contexts, while [`JsonKnownNamingPolicy`](xref:System.Text.Json.JsonKnownNamingPolicy) remains available for compile-time naming options.
 
 > [!NOTE]
 > This allows you to share model classes between JSON and TOML serializers. TOML-specific attributes take precedence when both are present.

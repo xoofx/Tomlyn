@@ -17,13 +17,11 @@ public sealed class IgnoreConditionModel
     public long DefaultIgnored { get; set; }
 }
 
-#pragma warning disable SYSLIB1224
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
-[JsonSerializable(typeof(IgnoreConditionModel))]
+[TomlSerializable(typeof(IgnoreConditionModel))]
 internal partial class TestTomlIgnoreContext : TomlSerializerContext
 {
 }
-#pragma warning restore SYSLIB1224
 
 public class NewApiIgnoreConditionTests
 {

@@ -24,14 +24,12 @@ public sealed class DottedKeyDictionaryHolder
     public Dictionary<string, long> Map { get; set; } = new();
 }
 
-#pragma warning disable SYSLIB1224
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
-[JsonSerializable(typeof(GeneratedCollectionHolder))]
-[JsonSerializable(typeof(DottedKeyDictionaryHolder))]
+[TomlSerializable(typeof(GeneratedCollectionHolder))]
+[TomlSerializable(typeof(DottedKeyDictionaryHolder))]
 internal partial class TestTomlCollectionsContext : TomlSerializerContext
 {
 }
-#pragma warning restore SYSLIB1224
 
 public class NewApiCollectionTests
 {

@@ -56,11 +56,10 @@ See [Source generation and NativeAOT](source-generation.md) for full details.
 ## Using a source-generated context
 
 ```csharp
-using System.Text.Json.Serialization;
 using Tomlyn;
 using Tomlyn.Serialization;
 
-[JsonSerializable(typeof(MyConfig))]
+[TomlSerializable(typeof(MyConfig))]
 internal partial class MyTomlContext : TomlSerializerContext { }
 
 var context = MyTomlContext.Default;
@@ -317,7 +316,7 @@ public sealed class Config
 
 ```csharp
 [TomlSourceGenerationOptions(Converters = [typeof(UpperCaseStringConverter)])]
-[JsonSerializable(typeof(Config))]
+[TomlSerializable(typeof(Config))]
 internal partial class MyTomlContext : TomlSerializerContext { }
 ```
 

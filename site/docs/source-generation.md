@@ -18,10 +18,9 @@ It follows the same patterns as [`System.Text.Json`](xref:System.Text.Json) sour
 
 ## Define a context
 
-Declare a `partial` class that inherits from [`TomlSerializerContext`](xref:Tomlyn.Serialization.TomlSerializerContext) and annotate it with [`[JsonSerializable]`](xref:System.Text.Json.Serialization.JsonSerializableAttribute) for each root type:
+Declare a `partial` class that inherits from [`TomlSerializerContext`](xref:Tomlyn.Serialization.TomlSerializerContext) and annotate it with [`[TomlSerializable]`](xref:Tomlyn.Serialization.TomlSerializableAttribute) for each root type:
 
 ```csharp
-using System.Text.Json.Serialization;
 using Tomlyn.Serialization;
 
 public sealed class ServerConfig
@@ -30,12 +29,13 @@ public sealed class ServerConfig
     public int Port { get; set; } = 8080;
 }
 
-[JsonSerializable(typeof(ServerConfig))]
+[TomlSerializable(typeof(ServerConfig))]
 internal partial class MyTomlContext : TomlSerializerContext { }
 ```
 
 The generator produces a `Default` singleton and a typed [`TomlTypeInfo<T>`](xref:Tomlyn.TomlTypeInfo`1) property for each root.
 Nested types referenced by the root are discovered transitively - you only need to annotate top-level types.
+Set [`TomlSerializableAttribute.TypeInfoPropertyName`](xref:Tomlyn.Serialization.TomlSerializableAttribute.TypeInfoPropertyName) when you want to customize the generated property name exposed by the context.
 
 ## Use generated metadata
 
@@ -72,7 +72,7 @@ using Tomlyn.Serialization;
     WriteIndented = true,
     IndentSize = 2,
     DefaultIgnoreCondition = TomlIgnoreCondition.WhenWritingNull)]
-[JsonSerializable(typeof(ServerConfig))]
+[TomlSerializable(typeof(ServerConfig))]
 internal partial class MyTomlContext : TomlSerializerContext { }
 ```
 
@@ -81,7 +81,7 @@ internal partial class MyTomlContext : TomlSerializerContext { }
 ```csharp
 [TomlSourceGenerationOptions(
     Converters = [typeof(MyCustomConverter)])]
-[JsonSerializable(typeof(ServerConfig))]
+[TomlSerializable(typeof(ServerConfig))]
 internal partial class MyTomlContext : TomlSerializerContext { }
 ```
 
@@ -140,10 +140,10 @@ You can also disable reflection via MSBuild in your project file:
 You can define multiple contexts for different parts of your application:
 
 ```csharp
-[JsonSerializable(typeof(ServerConfig))]
+[TomlSerializable(typeof(ServerConfig))]
 internal partial class ServerContext : TomlSerializerContext { }
 
-[JsonSerializable(typeof(DatabaseConfig))]
+[TomlSerializable(typeof(DatabaseConfig))]
 internal partial class DatabaseContext : TomlSerializerContext { }
 ```
 
@@ -153,6 +153,6 @@ internal partial class DatabaseContext : TomlSerializerContext { }
 | --- | --- |
 | Generated properties are missing | Ensure the project references the `Tomlyn` NuGet package (the generator is shipped under `analyzers/dotnet/cs`). |
 | Compilation errors on context | Ensure the context class is `partial`. |
-| Type not found on context | Ensure root types are declared via `[JsonSerializable(typeof(...))]`. |
+| Type not found on context | Ensure root types are declared via `[TomlSerializable(typeof(...))]`. |
 | Nested types not serialized | Nested types are discovered transitively - verify they're reachable from a root type. |
 | Converter not applied | Use `TomlSourceGenerationOptionsAttribute.Converters` instead of `TomlConverterAttribute` for source-generated contexts. |

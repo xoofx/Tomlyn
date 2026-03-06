@@ -164,11 +164,10 @@ See [DOM model](dom.md) for more details.
 For NativeAOT / trimming, declare a [`TomlSerializerContext`](xref:Tomlyn.Serialization.TomlSerializerContext) and use generated metadata:
 
 ```csharp
-using System.Text.Json.Serialization;
 using Tomlyn;
 using Tomlyn.Serialization;
 
-[JsonSerializable(typeof(ServerConfig))]
+[TomlSerializable(typeof(ServerConfig))]
 internal partial class MyTomlContext : TomlSerializerContext { }
 
 var toml = TomlSerializer.Serialize(config, MyTomlContext.Default.ServerConfig);

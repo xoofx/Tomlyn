@@ -9,7 +9,6 @@
     <IsPackable>false</IsPackable>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
-    <NoWarn>$(NoWarn);SYSLIB1224</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

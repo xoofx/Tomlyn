@@ -19,11 +19,10 @@ public sealed class SourceGenerationDiagnosticsTests
     {
         var source = """
             #nullable enable
-            using System.Text.Json.Serialization;
             using Tomlyn.Serialization;
 
             [TomlSourceGenerationOptions(IndentSize = 0)]
-            [JsonSerializable(typeof(Person))]
+            [TomlSerializable(typeof(Person))]
             internal partial class Ctx : TomlSerializerContext { }
 
             public sealed class Person { public string Name { get; set; } = ""; }
@@ -38,12 +37,11 @@ public sealed class SourceGenerationDiagnosticsTests
     {
         var source = """
             #nullable enable
-            using System.Text.Json.Serialization;
             using Tomlyn;
             using Tomlyn.Serialization;
 
             [TomlSourceGenerationOptions(NewLine = (TomlNewLineKind)42)]
-            [JsonSerializable(typeof(Person))]
+            [TomlSerializable(typeof(Person))]
             internal partial class Ctx : TomlSerializerContext { }
 
             public sealed class Person { public string Name { get; set; } = ""; }
@@ -59,13 +57,12 @@ public sealed class SourceGenerationDiagnosticsTests
         var source = """
             #nullable enable
             using System;
-            using System.Text.Json.Serialization;
             using Tomlyn.Serialization;
 
             public sealed class NotAConverter { public NotAConverter() { } }
 
             [TomlSourceGenerationOptions(Converters = new [] { typeof(NotAConverter) })]
-            [JsonSerializable(typeof(Person))]
+            [TomlSerializable(typeof(Person))]
             internal partial class Ctx : TomlSerializerContext { }
 
             public sealed class Person { public string Name { get; set; } = ""; }
@@ -73,6 +70,41 @@ public sealed class SourceGenerationDiagnosticsTests
 
         var diagnostics = RunGenerator(source);
         Assert.That(diagnostics.Any(d => d.Id == "TOMLYN002"), Is.True);
+    }
+
+    [Test]
+    public void Generator_WarnsForJsonSerializableUsage()
+    {
+        var source = """
+            #nullable enable
+            using System.Text.Json.Serialization;
+            using Tomlyn.Serialization;
+
+            [JsonSerializable(typeof(Person))]
+            internal partial class Ctx : TomlSerializerContext { }
+
+            public sealed class Person { public string Name { get; set; } = ""; }
+            """;
+
+        var diagnostics = RunGenerator(source);
+        Assert.That(diagnostics.Any(d => d.Id == "TOMLYN008"), Is.True);
+    }
+
+    [Test]
+    public void Generator_ReportsInvalidTypeInfoPropertyName()
+    {
+        var source = """
+            #nullable enable
+            using Tomlyn.Serialization;
+
+            [TomlSerializable(typeof(Person), TypeInfoPropertyName = "not-valid")]
+            internal partial class Ctx : TomlSerializerContext { }
+
+            public sealed class Person { public string Name { get; set; } = ""; }
+            """;
+
+        var diagnostics = RunGenerator(source);
+        Assert.That(diagnostics.Any(d => d.Id == "TOMLYN005" && d.GetMessage().Contains("TypeInfoPropertyName", StringComparison.Ordinal)), Is.True);
     }
 
     private static ImmutableArray<Diagnostic> RunGenerator(string source)

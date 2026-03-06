@@ -19,7 +19,7 @@ This page summarizes the major breaking changes when migrating from Tomlyn v0.x.
 | `Toml.Parse(...)` | [`SyntaxParser.Parse(...)`](xref:Tomlyn.Parsing.SyntaxParser) / `ParseStrict(...)` |
 | `DocumentSyntax.Tokens()` | [`TomlLexer`](xref:Tomlyn.Parsing.TomlLexer) |
 | `ITomlMetadataProvider` (on your types) | [`TomlSerializerOptions.MetadataStore`](xref:Tomlyn.TomlSerializerOptions.MetadataStore) (external store) |
-| `[TomlModel]` source gen roots | [`TomlSerializerContext`](xref:Tomlyn.Serialization.TomlSerializerContext) + [`JsonSerializable`](xref:System.Text.Json.Serialization.JsonSerializableAttribute) |
+| `[TomlModel]` source gen roots | [`TomlSerializerContext`](xref:Tomlyn.Serialization.TomlSerializerContext) + [`TomlSerializable`](xref:Tomlyn.Serialization.TomlSerializableAttribute) |
 
 ## Main API shape (TomlSerializer)
 
@@ -68,17 +68,16 @@ v0.x source generation required referencing an analyzer and marking a root model
 Tomlyn v1 uses a `System.Text.Json`-style source generation model based on:
 
 - [`TomlSerializerContext`](xref:Tomlyn.Serialization.TomlSerializerContext)
-- [`JsonSerializableAttribute`](xref:System.Text.Json.Serialization.JsonSerializableAttribute) roots
+- [`TomlSerializableAttribute`](xref:Tomlyn.Serialization.TomlSerializableAttribute) roots
 
 > [!NOTE]
 > The Tomlyn v1 source generator ships with the main `Tomlyn` NuGet package (as a compiler analyzer).
 > You typically only need to add a `TomlSerializerContext` to your project.
 
 ```csharp
-using System.Text.Json.Serialization;
 using Tomlyn.Serialization;
 
-[JsonSerializable(typeof(MyType))]
+[TomlSerializable(typeof(MyType))]
 internal partial class MyTomlContext : TomlSerializerContext
 {
 }

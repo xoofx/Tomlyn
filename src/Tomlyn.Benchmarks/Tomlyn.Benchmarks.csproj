@@ -7,7 +7,6 @@
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
         <LangVersion>latest</LangVersion>
-        <NoWarn>$(NoWarn);SYSLIB1224</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>

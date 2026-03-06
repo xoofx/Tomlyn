@@ -318,11 +318,9 @@ enabled = true
     }
 }
 
-#pragma warning disable SYSLIB1224
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
-[JsonSerializable(typeof(Program.RootConfig))]
-[JsonSerializable(typeof(TomlTable))]
+[TomlSerializable(typeof(Program.RootConfig))]
+[TomlSerializable(typeof(TomlTable))]
 internal partial class AotTomlSerializerContext : TomlSerializerContext
 {
 }
-#pragma warning restore SYSLIB1224

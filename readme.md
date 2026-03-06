@@ -12,7 +12,7 @@ Tomlyn is a high-performance .NET TOML 1.1 parser, round-trippable syntax tree, 
 
 - **`System.Text.Json`-style API**: familiar surface with `TomlSerializer`, `TomlSerializerOptions`, `TomlTypeInfo<T>`
 - **TOML 1.1.0 only**: Tomlyn v1 targets TOML 1.1.0 and does **not** support TOML 1.0
-- **Source generation**: NativeAOT / trimming friendly via `TomlSerializerContext` - reuses `[JsonSerializable]` attributes
+- **Source generation**: NativeAOT / trimming friendly via `TomlSerializerContext` and `[TomlSerializable]` roots
 - **`System.Text.Json` attribute interop**: reuse `[JsonPropertyName]`, `[JsonIgnore]`, `[JsonRequired]`, `[JsonConstructor]`, polymorphism attributes
 - **Allocation-free parsing pipeline**: incremental `TomlLexer` → `TomlParser` with precise spans for errors
 - **Low-level access**: full lexer/parser API plus a lossless, trivia-preserving syntax tree (`SyntaxParser` → `DocumentSyntax`)
@@ -97,13 +97,11 @@ public sealed class MyConfig
     public string? Global { get; set; }
 }
 
-#pragma warning disable SYSLIB1224
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
-[JsonSerializable(typeof(MyConfig))]
+[TomlSerializable(typeof(MyConfig))]
 internal partial class MyTomlContext : TomlSerializerContext
 {
 }
-#pragma warning restore SYSLIB1224
 
 var config = TomlSerializer.Deserialize(toml, MyTomlContext.Default.MyConfig);
 var tomlOut = TomlSerializer.Serialize(config, MyTomlContext.Default.MyConfig);
