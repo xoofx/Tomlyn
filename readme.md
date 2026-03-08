@@ -2,7 +2,7 @@
 
 <img align="right" width="256px" height="256px" src="img/Tomlyn.png">
 
-Tomlyn is a high-performance .NET TOML 1.1 parser, round-trippable syntax tree, and `System.Text.Json`-style object serializer - NativeAOT ready.
+Tomlyn is a high-performance .NET [TOML](https://toml.io/en/) 1.1 parser, round-trippable syntax tree, and `System.Text.Json`-style object serializer - NativeAOT ready.
 
 #### <img src="https://xoofx.github.io/SharpYaml/img/SharpYaml.png" alt="SharpYaml" height="32" style="vertical-align: text-bottom; margin-right: .45rem;" /> Looking for YAML support? Check out [SharpYaml](https://xoofx.github.io/SharpYaml/).
 
@@ -11,7 +11,7 @@ Tomlyn is a high-performance .NET TOML 1.1 parser, round-trippable syntax tree, 
 ## ✨ Features
 
 - **`System.Text.Json`-style API**: familiar surface with `TomlSerializer`, `TomlSerializerOptions`, `TomlTypeInfo<T>`
-- **TOML 1.1.0 only**: Tomlyn v1 targets TOML 1.1.0 and does **not** support TOML 1.0
+- **TOML 1.1.0 only**: Tomlyn v1 targets [TOML 1.1.0](https://toml.io/en/v1.1.0) and does **not** support TOML 1.0
 - **Source generation**: NativeAOT / trimming friendly via `TomlSerializerContext` and `[TomlSerializable]` roots
 - **`System.Text.Json` attribute interop**: reuse `[JsonPropertyName]`, `[JsonIgnore]`, `[JsonRequired]`, `[JsonConstructor]`, polymorphism attributes
 - **Allocation-free parsing pipeline**: incremental `TomlLexer` → `TomlParser` with precise spans for errors
