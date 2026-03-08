@@ -195,6 +195,13 @@ public sealed class GeneratedNullablePayload
     public DateTimeOffset? When { get; set; }
 }
 
+public sealed class GeneratedNullableReferencePayload
+{
+    public string? NullableMock { get; init; }
+
+    public string NonNullableMock { get; init; } = string.Empty;
+}
+
 public enum GeneratedEnumKind
 {
     A = 0,
@@ -277,6 +284,12 @@ internal partial class TestTomlSerializerContextCollections : TomlSerializerCont
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [TomlSerializable(typeof(GeneratedNullablePayload))]
 internal partial class TestTomlSerializerContextNullables : TomlSerializerContext
+{
+}
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[TomlSerializable(typeof(GeneratedNullableReferencePayload))]
+internal partial class TestTomlSerializerContextNullableReferences : TomlSerializerContext
 {
 }
 
@@ -844,6 +857,29 @@ public class NewApiSourceGenerationTests
         Assert.That(roundtrip, Is.Not.Null);
         Assert.That(roundtrip!.Count, Is.EqualTo(payload.Count));
         Assert.That(roundtrip.When, Is.EqualTo(payload.When));
+    }
+
+    [Test]
+    public void GeneratedContext_CanHandleNullableReferenceTypes()
+    {
+        var context = TestTomlSerializerContextNullableReferences.Default;
+
+        var emptyPayload = TomlSerializer.Deserialize("", context.GeneratedNullableReferencePayload);
+
+        Assert.That(emptyPayload, Is.Not.Null);
+        Assert.That(emptyPayload!.NullableMock, Is.Null);
+        Assert.That(emptyPayload.NonNullableMock, Is.EqualTo(string.Empty));
+
+        var toml = """
+            nullableMock = "hello"
+            nonNullableMock = "world"
+            """;
+
+        var payload = TomlSerializer.Deserialize(toml, context.GeneratedNullableReferencePayload);
+
+        Assert.That(payload, Is.Not.Null);
+        Assert.That(payload!.NullableMock, Is.EqualTo("hello"));
+        Assert.That(payload.NonNullableMock, Is.EqualTo("world"));
     }
 
     [Test]

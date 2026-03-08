@@ -659,7 +659,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             {
                 var i = indices[sequenceIndex];
                 var member = poco.Members[i];
-                var memberTypeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                var memberTypeName = member.Type.ToDisplayString(FullyQualifiedNullableFormat);
                 var canBeNull = CanBeNull(member.Type);
                 EmitWriteMember(builder, member, i, memberTypeName, canBeNull, usedKeysVariable);
             }
@@ -896,8 +896,8 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         for (var i = 0; i < ctor.Parameters.Length; i++)
         {
             var parameter = ctor.Parameters[i];
-            var parameterTypeName = parameter.ParameterType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var defaultLiteral = parameter.ParameterType.IsReferenceType ? "default!" : "default";
+            var parameterTypeName = parameter.ParameterType.ToDisplayString(FullyQualifiedNullableFormat);
+            var defaultLiteral = GetDefaultLiteral(parameter.ParameterType);
             builder.Append("            ").Append(parameterTypeName).Append(" __arg").Append(i.ToString(CultureInfo.InvariantCulture)).Append(" = ").Append(defaultLiteral).AppendLine(";");
             builder.Append("            bool __argSeen").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(" = false;");
         }
@@ -911,8 +911,8 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 continue;
             }
 
-            var memberTypeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var defaultLiteral = member.Type.IsReferenceType ? "default!" : "default";
+            var memberTypeName = member.Type.ToDisplayString(FullyQualifiedNullableFormat);
+            var defaultLiteral = GetDefaultLiteral(member.Type);
             builder.Append("            ").Append(memberTypeName).Append(" __memberValue").Append(i.ToString(CultureInfo.InvariantCulture)).Append(" = ").Append(defaultLiteral).AppendLine(";");
             builder.Append("            bool __memberSeen").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(" = false;");
         }
@@ -1717,7 +1717,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         var writeArgument = canBeNull ? localName + "!" : localName;
         var writeIndent = "                ";
         var openIndent = "            ";
-        var defaultLiteral = member.Type.IsReferenceType ? "default!" : "default";
+        var defaultLiteral = GetDefaultLiteral(member.Type);
         var defaultIsNull = member.Type.IsReferenceType || TryGetNullableUnderlyingType(member.Type, out _);
 
         if (member.WriteIgnore == WriteIgnoreKind.WhenWritingNull)
@@ -1818,6 +1818,13 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         return TryGetNullableUnderlyingType(type, out _);
+    }
+
+    private static string GetDefaultLiteral(ITypeSymbol type)
+    {
+        return type.IsReferenceType && type.NullableAnnotation != NullableAnnotation.Annotated
+            ? "default!"
+            : "default";
     }
 
     private static bool TryGetNullableUnderlyingType(ITypeSymbol type, out ITypeSymbol underlyingType)

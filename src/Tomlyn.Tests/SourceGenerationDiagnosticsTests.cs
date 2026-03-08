@@ -107,7 +107,52 @@ public sealed class SourceGenerationDiagnosticsTests
         Assert.That(diagnostics.Any(d => d.Id == "TOMLYN005" && d.GetMessage().Contains("TypeInfoPropertyName", StringComparison.Ordinal)), Is.True);
     }
 
+    [Test]
+    public void Generator_PreservesNullableReferenceLocals()
+    {
+        var source = """
+            #nullable enable
+            using System.Text.Json.Serialization;
+            using Tomlyn.Serialization;
+
+            public sealed class InitOptions
+            {
+                public string? NullableMock { get; init; }
+                public string NonNullableMock { get; init; } = string.Empty;
+            }
+
+            public sealed class CtorOptions
+            {
+                [JsonConstructor]
+                public CtorOptions(string? nullableMock, string nonNullableMock)
+                {
+                    NullableMock = nullableMock;
+                    NonNullableMock = nonNullableMock;
+                }
+
+                public string? NullableMock { get; }
+                public string NonNullableMock { get; }
+            }
+
+            [TomlSerializable(typeof(InitOptions))]
+            [TomlSerializable(typeof(CtorOptions))]
+            internal partial class Ctx : TomlSerializerContext { }
+            """;
+
+        var result = RunGeneratorTest(source);
+        var generatedSource = string.Join(Environment.NewLine, result.GeneratedSources);
+
+        Assert.That(result.Diagnostics.Any(d => d.Id is "CS8600" or "CS8601"), Is.False);
+        StringAssert.Contains("string? __memberValue0 = default;", generatedSource);
+        StringAssert.Contains("string __memberValue1 = default!;", generatedSource);
+        StringAssert.Contains("string? __arg0 = default;", generatedSource);
+        StringAssert.Contains("string __arg1 = default!;", generatedSource);
+    }
+
     private static ImmutableArray<Diagnostic> RunGenerator(string source)
+        => RunGeneratorTest(source).Diagnostics;
+
+    private static GeneratorTestResult RunGeneratorTest(string source)
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Latest);
         var syntaxTree = CSharpSyntaxTree.ParseText(source, parseOptions);
@@ -121,9 +166,30 @@ public sealed class SourceGenerationDiagnosticsTests
         GeneratorDriver driver = CSharpGeneratorDriver.Create(generator);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
 
-        var outputDiagnostics = outputCompilation.GetDiagnostics();
-        return generatorDiagnostics.Concat(outputDiagnostics).ToImmutableArray();
+        var inputSyntaxTrees = compilation.SyntaxTrees.ToHashSet();
+        var generatedSources = driver.GetRunResult()
+            .Results
+            .SelectMany(static result => result.GeneratedSources)
+            .Select(static generated => generated.SourceText.ToString())
+            .ToImmutableArray();
+        var outputDiagnostics = outputCompilation.GetDiagnostics().ToImmutableArray();
+        var generatedCodeWarnings = outputDiagnostics
+            .Where(d => d.Severity == DiagnosticSeverity.Warning &&
+                        d.Location.SourceTree is { } tree &&
+                        !inputSyntaxTrees.Contains(tree))
+            .ToImmutableArray();
+
+        if (!generatedCodeWarnings.IsDefaultOrEmpty)
+        {
+            Assert.Fail(
+                "Generated code produced compiler warnings:" + Environment.NewLine +
+                string.Join(Environment.NewLine, generatedCodeWarnings.Select(static d => d.ToString())));
+        }
+
+        return new GeneratorTestResult(generatorDiagnostics.Concat(outputDiagnostics).ToImmutableArray(), generatedSources);
     }
+
+    private readonly record struct GeneratorTestResult(ImmutableArray<Diagnostic> Diagnostics, ImmutableArray<string> GeneratedSources);
 
     private static IEnumerable<MetadataReference> CreateReferences()
     {
