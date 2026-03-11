@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Tomlyn.Helpers;
 using Tomlyn.Model;
 using Tomlyn.Serialization;
 using Tomlyn.Syntax;
@@ -22,6 +23,7 @@ public sealed class TomlParser
     private readonly TomlSerializerOptions _options;
     private readonly TomlParserOptions _parserOptions;
     private readonly IParserCore _core;
+    private readonly int _effectiveMaxDepth;
     private DiagnosticsBag? _diagnostics;
     private TomlParseEvent _current;
     private int _depth;
@@ -31,6 +33,7 @@ public sealed class TomlParser
         _core = core;
         _options = options ?? TomlSerializerOptions.Default;
         _parserOptions = parserOptions ?? throw new ArgumentNullException(nameof(parserOptions));
+        _effectiveMaxDepth = TomlDepthHelper.GetEffectiveMaxDepth(_options.MaxDepth);
         _diagnostics = diagnostics;
         _current = default;
         _depth = 0;
@@ -271,6 +274,10 @@ public sealed class TomlParser
             case TomlParseEventKind.StartTable:
             case TomlParseEventKind.StartArray:
                 _depth++;
+                if (_depth > _effectiveMaxDepth)
+                {
+                    TomlDepthHelper.ThrowDepthExceeded(_effectiveMaxDepth, _current.Span);
+                }
                 break;
             case TomlParseEventKind.EndTable:
             case TomlParseEventKind.EndArray:

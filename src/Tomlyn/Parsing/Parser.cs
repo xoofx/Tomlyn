@@ -17,22 +17,27 @@ namespace Tomlyn.Parsing
     internal partial class Parser
     {
         private readonly Lexer _lexer;
+        private readonly int _effectiveMaxDepth;
         private SyntaxTokenValue _previousToken;
         private SyntaxTokenValue _token;
         private bool _hideNewLine;
         private readonly List<SyntaxTrivia> _currentTrivias;
         private TableSyntaxBase? _currentTable;
         private DiagnosticsBag? _diagnostics;
+        private int _currentContainerDepth;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Parser"/> class.
         /// </summary>
         /// <param name="lexer">The lexer.</param>
+        /// <param name="options">The serializer options supplying the effective max depth.</param>
         /// <exception cref="System.ArgumentNullException"></exception>
-        public Parser(Lexer lexer)
+        public Parser(Lexer lexer, TomlSerializerOptions options)
         {
             _lexer = lexer;
             _currentTrivias = new List<SyntaxTrivia>();
+            _effectiveMaxDepth = TomlDepthHelper.GetEffectiveMaxDepth((options ?? throw new ArgumentNullException(nameof(options))).MaxDepth);
+            _currentContainerDepth = 1;
         }
 
         // private Stack<ScriptNode> Blocks { get; }
@@ -46,6 +51,7 @@ namespace Tomlyn.Parsing
 
             _currentTable = null;
             _hideNewLine = true;
+            _currentContainerDepth = 1;
             NextToken();
             while (TryParseTableEntry(out var itemEntry))
             {
@@ -329,6 +335,7 @@ namespace Tomlyn.Parsing
 
         private ArraySyntax ParseArray()
         {
+            EnterContainer();
             var array = Open<ArraySyntax>();
             var saveHideNewLine = _hideNewLine;
             _hideNewLine = true;
@@ -377,12 +384,14 @@ namespace Tomlyn.Parsing
             finally
             {
                 _hideNewLine = saveHideNewLine;
+                ExitContainer();
             }
             return Close(array);
         }
 
         private InlineTableSyntax ParseInlineTable()
         {
+            EnterContainer();
             var inlineTable = Open<InlineTableSyntax>();
 
             var previousState = _lexer.State;
@@ -465,6 +474,7 @@ namespace Tomlyn.Parsing
             {
                 _lexer.State = previousState;
                 _hideNewLine = previousHideNewLine;
+                ExitContainer();
             }
 
             return Close(inlineTable);
@@ -528,6 +538,20 @@ namespace Tomlyn.Parsing
             LogError($"Unexpected token `{ToPrintable(_token)}` for a base key");
             NextToken();
             return null;
+        }
+
+        private void EnterContainer()
+        {
+            _currentContainerDepth++;
+            if (_currentContainerDepth > _effectiveMaxDepth)
+            {
+                throw new TomlException(TomlDepthHelper.GetMaxDepthExceededMessage(_effectiveMaxDepth));
+            }
+        }
+
+        private void ExitContainer()
+        {
+            _currentContainerDepth = Math.Max(1, _currentContainerDepth - 1);
         }
         
         private StringValueSyntax ParseString()

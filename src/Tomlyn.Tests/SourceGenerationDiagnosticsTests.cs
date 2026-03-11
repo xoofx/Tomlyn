@@ -52,6 +52,24 @@ public sealed class SourceGenerationDiagnosticsTests
     }
 
     [Test]
+    public void Generator_ReportsInvalidMaxDepth()
+    {
+        var source = """
+            #nullable enable
+            using Tomlyn.Serialization;
+
+            [TomlSourceGenerationOptions(MaxDepth = -1)]
+            [TomlSerializable(typeof(Person))]
+            internal partial class Ctx : TomlSerializerContext { }
+
+            public sealed class Person { public string Name { get; set; } = ""; }
+            """;
+
+        var diagnostics = RunGenerator(source);
+        Assert.That(diagnostics.Any(d => d.Id == "TOMLYN005"), Is.True);
+    }
+
+    [Test]
     public void Generator_ReportsInvalidConverterType()
     {
         var source = """

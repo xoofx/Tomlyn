@@ -77,6 +77,7 @@ var options = new TomlSerializerOptions
     PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     WriteIndented = true,
     IndentSize = 4,
+    MaxDepth = 64,
     DefaultIgnoreCondition = TomlIgnoreCondition.WhenWritingNull,
 };
 
@@ -85,6 +86,7 @@ var model = TomlSerializer.Deserialize<MyConfig>(toml, options);
 ```
 
 By default, `PropertyNamingPolicy` is `null`, meaning CLR member names are used as-is for TOML mapping keys (same default as `System.Text.Json`).
+`MaxDepth = 0` uses the built-in default of `64`.
 
 ### Source Generation
 

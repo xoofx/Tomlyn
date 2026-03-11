@@ -146,6 +146,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         public bool? PropertyNameCaseInsensitive { get; set; }
         public int? DefaultIgnoreCondition { get; set; }
         public int? DuplicateKeyHandling { get; set; }
+        public int? MaxDepth { get; set; }
         public int? MappingOrder { get; set; }
         public int? DottedKeyHandling { get; set; }
         public int? RootValueHandling { get; set; }
@@ -394,6 +395,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         if (model.Options.DuplicateKeyHandling is not null && TryGetTomlDuplicateKeyHandlingExpression(model.Options.DuplicateKeyHandling.Value, out var duplicateKeyHandlingExpression))
         {
             builder.Append("        options = options with { DuplicateKeyHandling = ").Append(duplicateKeyHandlingExpression).AppendLine(" };");
+        }
+
+        if (model.Options.MaxDepth is not null)
+        {
+            builder.Append("        options = options with { MaxDepth = ").Append(model.Options.MaxDepth.Value.ToString(CultureInfo.InvariantCulture)).AppendLine(" };");
         }
 
         if (model.Options.MappingOrder is not null && TryGetTomlMappingOrderPolicyExpression(model.Options.MappingOrder.Value, out var mappingOrderExpression))
@@ -3684,6 +3690,9 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 case "DuplicateKeyHandling":
                     if (value.Value is int dkh) options.DuplicateKeyHandling = dkh;
                     break;
+                case "MaxDepth":
+                    if (value.Value is int maxDepth) options.MaxDepth = maxDepth;
+                    break;
                 case "MappingOrder":
                     if (value.Value is int mappingOrder) options.MappingOrder = mappingOrder;
                     break;
@@ -3775,6 +3784,16 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         ValidateEnumOption(context, model, "NewLine", model.Options.NewLine, TryGetTomlNewLineKindExpression, v => model.Options.NewLine = v);
         ValidateEnumOption(context, model, "DefaultIgnoreCondition", model.Options.DefaultIgnoreCondition, TryGetTomlIgnoreConditionExpression, v => model.Options.DefaultIgnoreCondition = v);
         ValidateEnumOption(context, model, "DuplicateKeyHandling", model.Options.DuplicateKeyHandling, TryGetTomlDuplicateKeyHandlingExpression, v => model.Options.DuplicateKeyHandling = v);
+        if (model.Options.MaxDepth is not null && model.Options.MaxDepth.Value < 0)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                InvalidSourceGenerationOption,
+                model.ContextSymbol.Locations.FirstOrDefault(),
+                model.ContextSymbol.ToDisplayString(),
+                "MaxDepth must be greater than or equal to 0."));
+            model.Options.MaxDepth = null;
+        }
+
         ValidateEnumOption(context, model, "MappingOrder", model.Options.MappingOrder, TryGetTomlMappingOrderPolicyExpression, v => model.Options.MappingOrder = v);
         ValidateEnumOption(context, model, "DottedKeyHandling", model.Options.DottedKeyHandling, TryGetTomlDottedKeyHandlingExpression, v => model.Options.DottedKeyHandling = v);
         ValidateEnumOption(context, model, "RootValueHandling", model.Options.RootValueHandling, TryGetTomlRootValueHandlingExpression, v => model.Options.RootValueHandling = v);

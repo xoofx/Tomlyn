@@ -37,6 +37,9 @@ public sealed class TomlSourceGenerationOptionsAttribute : TomlAttribute
     /// <summary>Gets or sets behavior when duplicate keys are encountered while reading.</summary>
     public TomlDuplicateKeyHandling DuplicateKeyHandling { get; set; }
 
+    /// <summary>Gets or sets the maximum depth allowed when reading or writing nested TOML containers.</summary>
+    public int MaxDepth { get; set; }
+
     /// <summary>Gets or sets member ordering behavior for emitted mappings.</summary>
     public TomlMappingOrderPolicy MappingOrder { get; set; }
 
@@ -63,4 +66,3 @@ public sealed class TomlSourceGenerationOptionsAttribute : TomlAttribute
     /// </remarks>
     public Type[]? Converters { get; set; }
 }
-

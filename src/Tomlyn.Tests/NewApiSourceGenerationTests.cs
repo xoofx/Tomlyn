@@ -255,6 +255,7 @@ internal partial class TestTomlSerializerContextSnakeCase : TomlSerializerContex
     PropertyNameCaseInsensitive = true,
     DefaultIgnoreCondition = TomlIgnoreCondition.Never,
     DuplicateKeyHandling = TomlDuplicateKeyHandling.LastWins,
+    MaxDepth = 16,
     MappingOrder = TomlMappingOrderPolicy.OrderThenAlphabetical,
     DottedKeyHandling = TomlDottedKeyHandling.Expand,
     RootValueHandling = TomlRootValueHandling.WrapInRootKey,
@@ -786,6 +787,7 @@ public class NewApiSourceGenerationTests
         Assert.That(options.PropertyNameCaseInsensitive, Is.True);
         Assert.That(options.DefaultIgnoreCondition, Is.EqualTo(TomlIgnoreCondition.Never));
         Assert.That(options.DuplicateKeyHandling, Is.EqualTo(TomlDuplicateKeyHandling.LastWins));
+        Assert.That(options.MaxDepth, Is.EqualTo(16));
         Assert.That(options.MappingOrder, Is.EqualTo(TomlMappingOrderPolicy.OrderThenAlphabetical));
         Assert.That(options.DottedKeyHandling, Is.EqualTo(TomlDottedKeyHandling.Expand));
         Assert.That(options.RootValueHandling, Is.EqualTo(TomlRootValueHandling.WrapInRootKey));

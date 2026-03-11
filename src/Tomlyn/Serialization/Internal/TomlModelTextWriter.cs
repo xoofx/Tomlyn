@@ -21,7 +21,7 @@ internal static class TomlModelTextWriter
 
         var state = new State(writer, options);
         var path = new List<string>();
-        state.WriteTableBody(root, path, headerKind: HeaderKind.None);
+        state.WriteTableBody(root, path, headerKind: HeaderKind.None, depth: 1);
     }
 
     private enum HeaderKind
@@ -35,17 +35,20 @@ internal static class TomlModelTextWriter
     {
         private readonly TextWriter _writer;
         private readonly TomlSerializerOptions _options;
+        private readonly int _effectiveMaxDepth;
         private readonly string _newLine;
 
         public State(TextWriter writer, TomlSerializerOptions options)
         {
             _writer = writer;
             _options = options;
+            _effectiveMaxDepth = TomlDepthHelper.GetEffectiveMaxDepth(options.MaxDepth);
             _newLine = options.NewLine == TomlNewLineKind.CrLf ? "\r\n" : "\n";
         }
 
-        public void WriteTableBody(TomlTable table, List<string> path, HeaderKind headerKind)
+        public void WriteTableBody(TomlTable table, List<string> path, HeaderKind headerKind, int depth)
         {
+            ValidateDepth(depth);
             if (headerKind != HeaderKind.None)
             {
                 WriteHeader(path, headerKind, table.PropertiesMetadata);
@@ -57,30 +60,30 @@ internal static class TomlModelTextWriter
                 if (pair.Value is TomlTableArray tableArray)
                 {
                     if (_options.TableArrayStyle == TomlTableArrayStyle.InlineArrayOfTables &&
-                        IsInlineableTableArray(tableArray))
+                        IsInlineableTableArray(tableArray, depth + 1))
                     {
-                        WriteTableArrayInline(pair.Key, tableArray, table.PropertiesMetadata);
+                        WriteTableArrayInline(pair.Key, tableArray, table.PropertiesMetadata, depth);
                         continue;
                     }
 
                     continue;
                 }
 
-                if (pair.Value is TomlTable subTable && !ShouldInlineTable(subTable))
+                if (pair.Value is TomlTable subTable && !ShouldInlineTable(subTable, depth + 1))
                 {
                     continue;
                 }
 
-                WriteKeyValuePair(table, pair.Key, pair.Value);
+                WriteKeyValuePair(table, pair.Key, pair.Value, depth);
             }
 
             // 2) named tables
             foreach (var pair in table)
             {
-                if (pair.Value is TomlTable subTable && !ShouldInlineTable(subTable))
+                if (pair.Value is TomlTable subTable && !ShouldInlineTable(subTable, depth + 1))
                 {
                     path.Add(pair.Key);
-                    WriteTableBody(subTable, path, HeaderKind.Table);
+                    WriteTableBody(subTable, path, HeaderKind.Table, depth + 1);
                     path.RemoveAt(path.Count - 1);
                 }
             }
@@ -94,19 +97,20 @@ internal static class TomlModelTextWriter
                 }
 
                 if (_options.TableArrayStyle == TomlTableArrayStyle.InlineArrayOfTables &&
-                    IsInlineableTableArray(tableArray))
+                    IsInlineableTableArray(tableArray, depth + 1))
                 {
                     continue;
                 }
 
                 path.Add(pair.Key);
-                WriteTableArray(tableArray, path);
+                WriteTableArray(tableArray, path, depth + 1);
                 path.RemoveAt(path.Count - 1);
             }
         }
 
-        private void WriteTableArray(TomlTableArray tableArray, List<string> path)
+        private void WriteTableArray(TomlTableArray tableArray, List<string> path, int depth)
         {
+            ValidateDepth(depth);
             for (var index = 0; index < tableArray.Count; index++)
             {
                 if (index > 0)
@@ -114,11 +118,11 @@ internal static class TomlModelTextWriter
                     WriteNewLine();
                 }
 
-                WriteTableBody(tableArray[index], path, HeaderKind.TableArrayElement);
+                WriteTableBody(tableArray[index], path, HeaderKind.TableArrayElement, depth + 1);
             }
         }
 
-        private void WriteKeyValuePair(TomlTable table, string key, object value)
+        private void WriteKeyValuePair(TomlTable table, string key, object value, int depth)
         {
             WriteLeadingTrivia(table.PropertiesMetadata, key);
 
@@ -133,14 +137,15 @@ internal static class TomlModelTextWriter
                 displayKind = propertyMetadata.DisplayKind;
             }
 
-            WriteValue(value, displayKind);
+            WriteValue(value, displayKind, depth);
             WriteTrailingTrivia(table.PropertiesMetadata, key);
             WriteNewLine();
             WriteTrailingTriviaAfterEndOfLine(table.PropertiesMetadata, key);
         }
 
-        private bool ShouldInlineTable(TomlTable table)
+        private bool ShouldInlineTable(TomlTable table, int depth)
         {
+            ValidateDepth(depth);
             if (table.Kind == ObjectKind.InlineTable)
             {
                 return true;
@@ -148,14 +153,15 @@ internal static class TomlModelTextWriter
 
             return _options.InlineTablePolicy switch
             {
-                TomlInlineTablePolicy.Always => IsInlineableTable(table, maxMemberCount: int.MaxValue),
-                TomlInlineTablePolicy.WhenSmall => IsInlineableTable(table, maxMemberCount: 4),
+                TomlInlineTablePolicy.Always => IsInlineableTable(table, maxMemberCount: int.MaxValue, depth),
+                TomlInlineTablePolicy.WhenSmall => IsInlineableTable(table, maxMemberCount: 4, depth),
                 _ => false,
             };
         }
 
-        private static bool IsInlineableTable(TomlTable table, int maxMemberCount)
+        private bool IsInlineableTable(TomlTable table, int maxMemberCount, int depth)
         {
+            ValidateDepth(depth);
             if (table.Count > maxMemberCount)
             {
                 return false;
@@ -168,7 +174,7 @@ internal static class TomlModelTextWriter
                     return false;
                 }
 
-                if (pair.Value is TomlTable child && !IsInlineableTable(child, maxMemberCount: int.MaxValue))
+                if (pair.Value is TomlTable child && !IsInlineableTable(child, maxMemberCount: int.MaxValue, depth + 1))
                 {
                     return false;
                 }
@@ -177,11 +183,12 @@ internal static class TomlModelTextWriter
             return true;
         }
 
-        private static bool IsInlineableTableArray(TomlTableArray tableArray)
+        private bool IsInlineableTableArray(TomlTableArray tableArray, int depth)
         {
+            ValidateDepth(depth);
             for (var i = 0; i < tableArray.Count; i++)
             {
-                if (!IsInlineableTable(tableArray[i], maxMemberCount: int.MaxValue))
+                if (!IsInlineableTable(tableArray[i], maxMemberCount: int.MaxValue, depth + 1))
                 {
                     return false;
                 }
@@ -190,7 +197,7 @@ internal static class TomlModelTextWriter
             return true;
         }
 
-        private void WriteTableArrayInline(string key, TomlTableArray tableArray, TomlPropertiesMetadata? metadata)
+        private void WriteTableArrayInline(string key, TomlTableArray tableArray, TomlPropertiesMetadata? metadata, int depth)
         {
             WriteLeadingTrivia(metadata, key);
             WriteKey(key);
@@ -204,7 +211,7 @@ internal static class TomlModelTextWriter
                     _writer.Write(", ");
                 }
 
-                WriteInlineTable(tableArray[i]);
+                WriteInlineTable(tableArray[i], depth + 2);
             }
 
             _writer.Write("]");
@@ -251,8 +258,9 @@ internal static class TomlModelTextWriter
             WriteTrailingTriviaAfterEndOfLine(metadata, name);
         }
 
-        private void WriteInlineTable(TomlTable table)
+        private void WriteInlineTable(TomlTable table, int depth)
         {
+            ValidateDepth(depth);
             _writer.Write("{");
 
             var first = true;
@@ -269,22 +277,22 @@ internal static class TomlModelTextWriter
 
                 if (pair.Value is TomlTable nestedTable)
                 {
-                    if (!IsInlineableTable(nestedTable, maxMemberCount: int.MaxValue))
+                    if (!IsInlineableTable(nestedTable, maxMemberCount: int.MaxValue, depth + 1))
                     {
                         throw new TomlException("Inline tables cannot contain non-inline tables or table arrays.");
                     }
 
-                    WriteInlineTable(nestedTable);
+                    WriteInlineTable(nestedTable, depth + 1);
                     continue;
                 }
 
-                WriteValue(pair.Value, TomlPropertyDisplayKind.Default);
+                WriteValue(pair.Value, TomlPropertyDisplayKind.Default, depth);
             }
 
             _writer.Write("}");
         }
 
-        private void WriteValue(object value, TomlPropertyDisplayKind displayKind)
+        private void WriteValue(object value, TomlPropertyDisplayKind displayKind, int depth)
         {
             if (value is null)
             {
@@ -411,10 +419,10 @@ internal static class TomlModelTextWriter
                     return;
 #endif
                 case TomlArray array:
-                    WriteArray(array);
+                    WriteArray(array, depth + 1);
                     return;
-                case TomlTable inlineTable when ShouldInlineTable(inlineTable):
-                    WriteInlineTable(inlineTable);
+                case TomlTable inlineTable when ShouldInlineTable(inlineTable, depth + 1):
+                    WriteInlineTable(inlineTable, depth + 1);
                     return;
                 case TomlTable:
                     throw new TomlException("Non-inline tables must be emitted as table headers.");
@@ -533,8 +541,9 @@ internal static class TomlModelTextWriter
         }
 #endif
 
-        private void WriteArray(TomlArray array)
+        private void WriteArray(TomlArray array, int depth)
         {
+            ValidateDepth(depth);
             _writer.Write("[");
             for (var i = 0; i < array.Count; i++)
             {
@@ -546,18 +555,26 @@ internal static class TomlModelTextWriter
                 var value = array[i]!;
                 if (value is TomlTable nestedTable)
                 {
-                    if (!IsInlineableTable(nestedTable, maxMemberCount: int.MaxValue))
+                    if (!IsInlineableTable(nestedTable, maxMemberCount: int.MaxValue, depth + 1))
                     {
                         throw new TomlException("Arrays cannot contain non-inline tables or table arrays.");
                     }
 
-                    WriteInlineTable(nestedTable);
+                    WriteInlineTable(nestedTable, depth + 1);
                     continue;
                 }
 
-                WriteValue(value, TomlPropertyDisplayKind.Default);
+                WriteValue(value, TomlPropertyDisplayKind.Default, depth);
             }
             _writer.Write("]");
+        }
+
+        private void ValidateDepth(int depth)
+        {
+            if (depth > _effectiveMaxDepth)
+            {
+                TomlDepthHelper.ThrowDepthExceeded(_effectiveMaxDepth);
+            }
         }
 
         private void WriteKey(string name)

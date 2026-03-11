@@ -113,7 +113,12 @@ var parserOptions = new TomlParserOptions
     EagerStringValues = false,        // defer string materialization
 };
 
-var parser = TomlParser.Create(toml, parserOptions);
+var serializerOptions = new TomlSerializerOptions
+{
+    MaxDepth = 64,
+};
+
+var parser = TomlParser.Create(toml, parserOptions, serializerOptions);
 ```
 
 | Option | Default | Description |
@@ -122,6 +127,11 @@ var parser = TomlParser.Create(toml, parserOptions);
 | [`DecodeScalars`](xref:Tomlyn.Parsing.TomlParserOptions.DecodeScalars) | `false` | Decode escape sequences in strings. |
 | [`CaptureTrivia`](xref:Tomlyn.Parsing.TomlParserOptions.CaptureTrivia) | `false` | Include trivia tokens (comments, whitespace). |
 | [`EagerStringValues`](xref:Tomlyn.Parsing.TomlParserOptions.EagerStringValues) | `false` | Materialize string values eagerly. |
+
+Shared limits such as maximum nesting depth are configured via [`TomlSerializerOptions.MaxDepth`](xref:Tomlyn.TomlSerializerOptions.MaxDepth)
+and flow through low-level APIs like [`TomlParser`](xref:Tomlyn.Parsing.TomlParser),
+[`TomlReader`](xref:Tomlyn.Serialization.TomlReader), [`TomlWriter`](xref:Tomlyn.Serialization.TomlWriter),
+and the overloads on [`SyntaxParser`](xref:Tomlyn.Parsing.SyntaxParser) that accept [`TomlSerializerOptions`](xref:Tomlyn.TomlSerializerOptions).
 
 ### Input sources
 

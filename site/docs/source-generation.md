@@ -72,6 +72,7 @@ using Tomlyn.Serialization;
     PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
     WriteIndented = true,
     IndentSize = 2,
+    MaxDepth = 64,
     DefaultIgnoreCondition = TomlIgnoreCondition.WhenWritingNull)]
 [TomlSerializable(typeof(ServerConfig))]
 internal partial class MyTomlContext : TomlSerializerContext { }

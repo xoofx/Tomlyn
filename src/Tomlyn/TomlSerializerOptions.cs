@@ -89,6 +89,26 @@ public sealed record TomlSerializerOptions
     public bool PropertyNameCaseInsensitive { get; init; }
 
     /// <summary>
+    /// Gets or sets the maximum depth allowed when reading or writing nested TOML containers.
+    /// </summary>
+    /// <remarks>
+    /// A value of <c>0</c> uses the default maximum depth of 64, mirroring <c>System.Text.Json</c>.
+    /// </remarks>
+    public int MaxDepth
+    {
+        get;
+        init
+        {
+            if (value < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), value, "Max depth must be greater than or equal to 0.");
+            }
+
+            field = value;
+        }
+    }
+
+    /// <summary>
     /// Gets or sets the default ignore condition for null/default values.
     /// </summary>
     public TomlIgnoreCondition DefaultIgnoreCondition { get; init; } = TomlIgnoreCondition.WhenWritingNull;

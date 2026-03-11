@@ -18,6 +18,7 @@ namespace Tomlyn.Serialization;
 public sealed class TomlWriter
 {
     private readonly Stack<object> _stack;
+    private readonly int _effectiveMaxDepth;
     private object? _root;
     private string? _pendingPropertyName;
     private bool _pendingPropertyNameIsLiteral;
@@ -33,6 +34,7 @@ public sealed class TomlWriter
         Writer = writer;
         Options = options ?? TomlSerializerOptions.Default;
         _stack = new Stack<object>();
+        _effectiveMaxDepth = TomlDepthHelper.GetEffectiveMaxDepth(Options.MaxDepth);
     }
 
     internal TextWriter Writer { get; }
@@ -118,6 +120,7 @@ public sealed class TomlWriter
     /// </summary>
     public void WriteStartTable()
     {
+        ValidateContainerDepth();
         var inline = _stack.Count > 0 && _stack.Peek() is TomlArray;
         var table = new TomlTable(inline);
         WriteValue(table);
@@ -129,6 +132,7 @@ public sealed class TomlWriter
     /// </summary>
     public void WriteStartInlineTable()
     {
+        ValidateContainerDepth();
         var table = new TomlTable(inline: true);
         WriteValue(table);
         _stack.Push(table);
@@ -191,6 +195,7 @@ public sealed class TomlWriter
     /// </summary>
     public void WriteStartArray()
     {
+        ValidateContainerDepth();
         var array = new TomlArray();
         WriteValue(array);
         _stack.Push(array);
@@ -204,6 +209,7 @@ public sealed class TomlWriter
     /// </remarks>
     public void WriteStartTableArray()
     {
+        ValidateContainerDepth();
         var array = new TomlTableArray();
         WriteValue(array);
         _stack.Push(array);
@@ -384,5 +390,14 @@ public sealed class TomlWriter
         }
 
         current[leaf] = value;
+    }
+
+    private void ValidateContainerDepth()
+    {
+        var nextDepth = _stack.Count + 1;
+        if (nextDepth > _effectiveMaxDepth)
+        {
+            TomlDepthHelper.ThrowDepthExceeded(_effectiveMaxDepth);
+        }
     }
 }

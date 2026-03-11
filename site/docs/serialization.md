@@ -91,6 +91,7 @@ var options = new TomlSerializerOptions
     PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     WriteIndented = true,
     IndentSize = 4,
+    MaxDepth = 64,
     DefaultIgnoreCondition = TomlIgnoreCondition.WhenWritingNull,
 };
 
@@ -104,6 +105,7 @@ var toml = TomlSerializer.Serialize(config, options);
 | [`PropertyNamingPolicy`](xref:Tomlyn.TomlSerializerOptions.PropertyNamingPolicy) | [`JsonNamingPolicy?`](xref:System.Text.Json.JsonNamingPolicy) | `null` | Naming policy for CLR member names (e.g. `CamelCase`, `SnakeCaseLower`). |
 | [`DictionaryKeyPolicy`](xref:Tomlyn.TomlSerializerOptions.DictionaryKeyPolicy) | [`JsonNamingPolicy?`](xref:System.Text.Json.JsonNamingPolicy) | `null` | Naming policy for dictionary keys during serialization. |
 | [`PropertyNameCaseInsensitive`](xref:Tomlyn.TomlSerializerOptions.PropertyNameCaseInsensitive) | `bool` | `false` | Case-insensitive property matching when reading. |
+| [`MaxDepth`](xref:Tomlyn.TomlSerializerOptions.MaxDepth) | `int` | `0` (`64` effective) | Maximum nesting depth when reading or writing TOML containers. |
 | [`DefaultIgnoreCondition`](xref:Tomlyn.TomlSerializerOptions.DefaultIgnoreCondition) | [`TomlIgnoreCondition`](xref:Tomlyn.TomlIgnoreCondition) | `WhenWritingNull` | Skips null/default values when writing. |
 | [`WriteIndented`](xref:Tomlyn.TomlSerializerOptions.WriteIndented) | `bool` | `true` | Enables indentation for nested tables. |
 | [`IndentSize`](xref:Tomlyn.TomlSerializerOptions.IndentSize) | `int` | `2` | Spaces per indent level. |
