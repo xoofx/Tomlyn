@@ -21,65 +21,91 @@ internal struct PooledArrayBuilder<T> : IDisposable
 
     public int Count => _count;
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Add(T item)
     {
-        if ((uint)_count < (uint)_buffer.Length)
+        var buffer = _buffer;
+        var count = _count;
+        if ((uint)count < (uint)buffer.Length)
         {
-            _buffer[_count++] = item;
+            buffer[count] = item;
+            _count = count + 1;
             return;
         }
 
-        Grow();
-        _buffer[_count++] = item;
+        AddWithGrow(item, count);
     }
 
     public T[] ToArrayAndReturn()
     {
-        if (_count == 0)
+        var count = _count;
+        if (count == 0)
         {
             Return();
             return Array.Empty<T>();
         }
 
-        var result = new T[_count];
-        Array.Copy(_buffer, result, _count);
-        Return();
+        var buffer = _buffer;
+        var result = new T[count];
+        Array.Copy(buffer, result, count);
+        Return(buffer, count);
+        _buffer = Array.Empty<T>();
+        _count = 0;
         return result;
     }
 
-    private void Grow()
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void AddWithGrow(T item, int count)
     {
-        var nextSize = _buffer.Length == 0 ? 16 : _buffer.Length * 2;
-        var newBuffer = ArrayPool<T>.Shared.Rent(nextSize);
-        if (_count > 0)
+        Grow(count + 1);
+        _buffer[count] = item;
+        _count = count + 1;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void Grow(int requiredCapacity)
+    {
+        var buffer = _buffer;
+        var count = _count;
+        var nextSize = buffer.Length == 0 ? 16 : buffer.Length * 2;
+        if (nextSize < requiredCapacity)
         {
-            Array.Copy(_buffer, newBuffer, _count);
+            nextSize = requiredCapacity;
         }
 
-        var count = _count;
-        Return();
+        var newBuffer = ArrayPool<T>.Shared.Rent(nextSize);
+        if (count > 0)
+        {
+            Array.Copy(buffer, newBuffer, count);
+        }
+
+        Return(buffer, count);
         _buffer = newBuffer;
-        _count = count;
     }
 
     private void Return()
     {
-        var buffer = _buffer;
-        if (buffer.Length != 0)
-        {
-#if NETSTANDARD2_0
-            Array.Clear(buffer, 0, Math.Min(_count, buffer.Length));
-#else
-            if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
-            {
-                Array.Clear(buffer, 0, Math.Min(_count, buffer.Length));
-            }
-#endif
-            ArrayPool<T>.Shared.Return(buffer);
-        }
-
+        Return(_buffer, _count);
         _buffer = Array.Empty<T>();
         _count = 0;
+    }
+
+    private static void Return(T[] buffer, int count)
+    {
+        if (buffer.Length == 0)
+        {
+            return;
+        }
+
+#if NETSTANDARD2_0
+        Array.Clear(buffer, 0, Math.Min(count, buffer.Length));
+#else
+        if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+        {
+            Array.Clear(buffer, 0, Math.Min(count, buffer.Length));
+        }
+#endif
+        ArrayPool<T>.Shared.Return(buffer);
     }
 
     public void Dispose() => Return();
