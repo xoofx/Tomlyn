@@ -206,7 +206,7 @@ so you can reuse models across JSON and TOML. When both are present, the TOML-sp
 
 | Attribute | JSON equivalent | Description |
 | --- | --- | --- |
-| [`TomlPropertyNameAttribute`](xref:Tomlyn.TomlPropertyNameAttribute) | [`JsonPropertyNameAttribute`](xref:System.Text.Json.Serialization.JsonPropertyNameAttribute) | Overrides the serialized key name. |
+| [`TomlPropertyNameAttribute`](xref:Tomlyn.Serialization.TomlPropertyNameAttribute) | [`JsonPropertyNameAttribute`](xref:System.Text.Json.Serialization.JsonPropertyNameAttribute) | Overrides the serialized key name. |
 | [`TomlIgnoreAttribute`](xref:Tomlyn.Serialization.TomlIgnoreAttribute) | [`JsonIgnoreAttribute`](xref:System.Text.Json.Serialization.JsonIgnoreAttribute) | Ignores the member. Supports conditions (`Never`, `WhenWritingNull`, `WhenWritingDefault`). |
 | [`TomlIncludeAttribute`](xref:Tomlyn.Serialization.TomlIncludeAttribute) | [`JsonIncludeAttribute`](xref:System.Text.Json.Serialization.JsonIncludeAttribute) | Includes non-public members. |
 | [`TomlPropertyOrderAttribute`](xref:Tomlyn.Serialization.TomlPropertyOrderAttribute) | [`JsonPropertyOrderAttribute`](xref:System.Text.Json.Serialization.JsonPropertyOrderAttribute) | Controls ordering within tables. |
