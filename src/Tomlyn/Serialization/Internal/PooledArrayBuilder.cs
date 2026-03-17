@@ -56,8 +56,10 @@ internal struct PooledArrayBuilder<T> : IDisposable
             Array.Copy(_buffer, newBuffer, _count);
         }
 
+        var count = _count;
         Return();
         _buffer = newBuffer;
+        _count = count;
     }
 
     private void Return()
@@ -82,4 +84,3 @@ internal struct PooledArrayBuilder<T> : IDisposable
 
     public void Dispose() => Return();
 }
-

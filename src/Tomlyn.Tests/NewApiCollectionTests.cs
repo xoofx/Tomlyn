@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using NUnit.Framework;
 using Tomlyn.Model;
@@ -24,10 +26,21 @@ public sealed class DottedKeyDictionaryHolder
     public Dictionary<string, long> Map { get; set; } = new();
 }
 
+public sealed class Issue117ArrayHolder
+{
+    public int[]? Items { get; set; }
+}
+
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [TomlSerializable(typeof(GeneratedCollectionHolder))]
 [TomlSerializable(typeof(DottedKeyDictionaryHolder))]
 internal partial class TestTomlCollectionsContext : TomlSerializerContext
+{
+}
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+[TomlSerializable(typeof(Issue117ArrayHolder))]
+internal partial class TestTomlSnakeCaseCollectionsContext : TomlSerializerContext
 {
 }
 
@@ -81,6 +94,51 @@ public class NewApiCollectionTests
     }
 
     [Test]
+    [TestCase(17)]
+    [TestCase(33)]
+    public void UntypedModel_CanReadPrimitiveArraysBeyondInitialTypedBufferCapacity(int itemCount)
+    {
+        var model = TomlSerializer.Deserialize<TomlTable>(CreateItemsToml(itemCount));
+
+        Assert.That(model, Is.Not.Null);
+        Assert.That(model!.TryGetValue("items", out var rawItems), Is.True);
+        Assert.That(rawItems, Is.InstanceOf<TomlArray>());
+
+        var items = (TomlArray)rawItems!;
+        Assert.That(items.Count, Is.EqualTo(itemCount));
+        Assert.That(items.Cast<long>(), Is.EqualTo(GetExpectedLongItems(itemCount)));
+    }
+
+    [Test]
+    [TestCase(17)]
+    [TestCase(33)]
+    public void Reflection_DeserializesSnakeCaseArraysBeyondInitialTypedBufferCapacity(int itemCount)
+    {
+        var options = new TomlSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        };
+
+        var result = TomlSerializer.Deserialize<Issue117ArrayHolder>(CreateItemsToml(itemCount), options);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Items, Is.EqualTo(GetExpectedIntItems(itemCount)));
+    }
+
+    [Test]
+    [TestCase(17)]
+    [TestCase(33)]
+    public void GeneratedContext_DeserializesSnakeCaseArraysBeyondInitialTypedBufferCapacity(int itemCount)
+    {
+        var result = TomlSerializer.Deserialize<Issue117ArrayHolder>(
+            CreateItemsToml(itemCount),
+            TestTomlSnakeCaseCollectionsContext.Default);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Items, Is.EqualTo(GetExpectedIntItems(itemCount)));
+    }
+
+    [Test]
     public void Default_DottedDictionaryKeys_RoundtripAsLiteral()
     {
         var context = TestTomlCollectionsContext.Default;
@@ -106,4 +164,13 @@ public class NewApiCollectionTests
         Assert.That(roundtrip!.Map.ContainsKey("a.b"), Is.True);
         Assert.That(roundtrip.Map["a.b"], Is.EqualTo(1L));
     }
+
+    private static string CreateItemsToml(int itemCount)
+        => $"items = [{string.Join(",", Enumerable.Range(1, itemCount))}]";
+
+    private static long[] GetExpectedLongItems(int itemCount)
+        => Enumerable.Range(1, itemCount).Select(static value => (long)value).ToArray();
+
+    private static int[] GetExpectedIntItems(int itemCount)
+        => Enumerable.Range(1, itemCount).ToArray();
 }
