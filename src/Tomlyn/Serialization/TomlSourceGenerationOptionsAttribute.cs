@@ -28,6 +28,9 @@ public sealed class TomlSourceGenerationOptionsAttribute : TomlAttribute
     /// <summary>Gets or sets the policy used to convert dictionary keys during serialization.</summary>
     public JsonKnownNamingPolicy DictionaryKeyPolicy { get; set; }
 
+    /// <summary>Gets or sets the preferred object creation handling when deserializing object and collection members.</summary>
+    public JsonObjectCreationHandling PreferredObjectCreationHandling { get; set; }
+
     /// <summary>Gets or sets a value indicating whether property name matching is case-insensitive.</summary>
     public bool PropertyNameCaseInsensitive { get; set; }
 

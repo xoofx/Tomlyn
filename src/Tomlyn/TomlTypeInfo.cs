@@ -46,6 +46,26 @@ public abstract class TomlTypeInfo
     /// Reads a value from an existing TOML reader.
     /// </summary>
     public abstract object? ReadAsObject(TomlReader reader);
+
+    /// <summary>
+    /// Reads a value from an existing TOML reader, populating an existing CLR instance when supported.
+    /// </summary>
+    /// <remarks>
+    /// The return value is the effective deserialized value for the caller to use. Implementations can return the
+    /// original populated instance or a replacement value. Returning the effective value is required for populate
+    /// scenarios involving structs and nullable value types, where a modified copy must be reassigned by the caller.
+    /// The default implementation ignores <paramref name="existingValue"/> and falls back to
+    /// <see cref="ReadAsObject(TomlReader)"/>, which preserves replace semantics for metadata that does not support
+    /// in-place population.
+    /// </remarks>
+    /// <param name="reader">The TOML reader positioned at the value to read.</param>
+    /// <param name="existingValue">The existing CLR value to populate, if any.</param>
+    /// <returns>The populated or replacement value.</returns>
+    public virtual object? ReadInto(TomlReader reader, object? existingValue)
+    {
+        ArgumentGuard.ThrowIfNull(reader, nameof(reader));
+        return ReadAsObject(reader);
+    }
 }
 
 /// <summary>
@@ -87,4 +107,3 @@ public abstract class TomlTypeInfo<T> : TomlTypeInfo
         return Read(reader);
     }
 }
-

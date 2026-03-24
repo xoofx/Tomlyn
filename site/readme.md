@@ -62,7 +62,7 @@ og_type: website
         <div class="card-header display-6"><i class="bi bi-tag lunet-feature-icon lunet-icon--lists"></i> JSON attribute interop</div>
         <div class="card-body">
           Most common <code>System.Text.Json.Serialization</code> attributes work out of the box
-          (for example <code>[JsonPropertyName]</code>, <code>[JsonIgnore]</code>, <code>[JsonConstructor]</code>).
+          (for example <code>[JsonPropertyName]</code>, <code>[JsonIgnore]</code>, <code>[JsonConstructor]</code>, and <code>[JsonObjectCreationHandling]</code>).
         </div>
       </div>
     </div>

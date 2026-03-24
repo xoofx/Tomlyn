@@ -131,6 +131,7 @@ internal static class TomlReflectionTypeInfoResolver
     {
         var properties = type.GetProperties(BindingFlags.Instance | BindingFlags.Public);
         var members = new List<MemberModel>(properties.Length);
+        var typeObjectCreationHandling = GetObjectCreationHandling(type, options);
 
         foreach (var property in properties)
         {
@@ -176,6 +177,8 @@ internal static class TomlReflectionTypeInfoResolver
                 GetOrder(property),
                 ignore.WriteIgnoreCondition,
                 GetDefaultValue(property.PropertyType),
+                GetObjectCreationHandling(property, typeObjectCreationHandling),
+                HasExplicitObjectCreationHandling(property),
                 IsRequired(property),
                 IsExtensionData(property),
                 TryCreateMemberConverter(property, property.PropertyType, options)));
@@ -216,6 +219,8 @@ internal static class TomlReflectionTypeInfoResolver
                 GetOrder(field),
                 ignore.WriteIgnoreCondition,
                 GetDefaultValue(field.FieldType),
+                GetObjectCreationHandling(field, typeObjectCreationHandling),
+                HasExplicitObjectCreationHandling(field),
                 IsRequired(field),
                 IsExtensionData(field),
                 TryCreateMemberConverter(field, field.FieldType, options)));
@@ -415,6 +420,28 @@ internal static class TomlReflectionTypeInfoResolver
         }
     }
 
+    private static JsonObjectCreationHandling GetObjectCreationHandling(Type type, TomlSerializerOptions options)
+    {
+        var attribute = type.GetCustomAttribute<JsonObjectCreationHandlingAttribute>(inherit: true);
+        return attribute?.Handling ?? options.PreferredObjectCreationHandling;
+    }
+
+    private static JsonObjectCreationHandling GetObjectCreationHandling(MemberInfo member, JsonObjectCreationHandling declaringTypeHandling)
+    {
+        var attribute = member.GetCustomAttribute<JsonObjectCreationHandlingAttribute>(inherit: true);
+        if (attribute is not null)
+        {
+            return attribute.Handling;
+        }
+
+        return declaringTypeHandling;
+    }
+
+    private static bool HasExplicitObjectCreationHandling(MemberInfo member)
+    {
+        return member.IsDefined(typeof(JsonObjectCreationHandlingAttribute), inherit: true);
+    }
+
     private static string? GetSerializedName(MemberInfo member, string defaultName, TomlSerializerOptions options)
     {
         var tomlName = member.GetCustomAttribute<TomlPropertyNameAttribute>(inherit: true);
@@ -491,6 +518,8 @@ internal static class TomlReflectionTypeInfoResolver
         int Order,
         TomlIgnoreCondition? WriteIgnoreCondition,
         object? DefaultValue,
+        JsonObjectCreationHandling ObjectCreationHandling,
+        bool HasExplicitObjectCreationHandling,
         bool IsRequired,
         bool IsExtensionData,
         TomlConverter? Converter);
@@ -744,7 +773,29 @@ internal static class TomlReflectionTypeInfoResolver
             }
 
             var instance = CreateInstance();
-            if (_invokeOnDeserializing)
+            return ReadIntoExistingInstance(reader, instance, tableStartSpan, invokeDeserializingCallback: true);
+        }
+
+        public override object? ReadInto(TomlReader reader, object? existingValue)
+        {
+            ArgumentGuard.ThrowIfNull(reader, nameof(reader));
+
+            if (existingValue is null || !Type.IsInstanceOfType(existingValue))
+            {
+                return base.ReadInto(reader, existingValue);
+            }
+
+            if (reader.TokenType != TomlTokenType.StartTable)
+            {
+                throw reader.CreateException($"Expected {TomlTokenType.StartTable} token but was {reader.TokenType}.");
+            }
+
+            return ReadIntoExistingInstance(reader, existingValue, reader.CurrentSpan, invokeDeserializingCallback: true);
+        }
+
+        private object ReadIntoExistingInstance(TomlReader reader, object instance, TomlSourceSpan? tableStartSpan, bool invokeDeserializingCallback)
+        {
+            if (invokeDeserializingCallback && _invokeOnDeserializing)
             {
                 ((ITomlOnDeserializing)instance).OnTomlDeserializing();
             }
@@ -754,6 +805,7 @@ internal static class TomlReflectionTypeInfoResolver
             {
                 propertiesMetadata = new TomlPropertiesMetadata();
             }
+
             var needsSeen = Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error || _hasRequiredMembers;
             var seen = needsSeen ? new bool[_members.Count] : null;
 
@@ -784,23 +836,18 @@ internal static class TomlReflectionTypeInfoResolver
                     }
 
                     var member = _members[memberIndex];
-                    if (member.Setter is null)
+                    if (member.Setter is null && member.ObjectCreationHandling != JsonObjectCreationHandling.Populate)
                     {
                         reader.Skip();
                         continue;
                     }
 
-                    object? memberValue;
-                    if (member.Converter is { } converter)
+                    var memberValue = ReadMemberValue(reader, instance, member);
+                    if (member.Setter is not null)
                     {
-                        memberValue = converter.Read(reader, member.MemberType);
+                        member.Setter(instance, memberValue);
                     }
-                    else
-                    {
-                        var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, member.MemberType);
-                        memberValue = typeInfo.ReadAsObject(reader);
-                    }
-                    member.Setter(instance, memberValue);
+
                     continue;
                 }
 
@@ -834,6 +881,83 @@ internal static class TomlReflectionTypeInfoResolver
             }
 
             return instance;
+        }
+
+        private object? ReadMemberValue(TomlReader reader, object instance, MemberModel member)
+        {
+            if (member.ObjectCreationHandling != JsonObjectCreationHandling.Populate)
+            {
+                return ReadMemberValue(reader, member);
+            }
+
+            var existingValue = member.Getter(instance);
+            return ReadMemberValueWithPopulate(reader, member, existingValue);
+        }
+
+        private object? ReadMemberValue(TomlReader reader, MemberModel member)
+        {
+            if (member.Converter is { } converter)
+            {
+                return converter.Read(reader, member.MemberType);
+            }
+
+            var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, member.MemberType);
+            return typeInfo.ReadAsObject(reader);
+        }
+
+        private object? ReadMemberValueWithPopulate(TomlReader reader, MemberModel member, object? existingValue)
+        {
+            if (member.MemberType.IsValueType && member.Setter is null)
+            {
+                if (member.HasExplicitObjectCreationHandling)
+                {
+                    throw reader.CreateException(
+                        $"Member '{member.Member.Name}' on '{Type.FullName}' uses {nameof(JsonObjectCreationHandling)}.{nameof(JsonObjectCreationHandling.Populate)} but requires a setter because '{member.MemberType.FullName}' is a value type.");
+                }
+
+                reader.Skip();
+                return existingValue;
+            }
+
+            if (existingValue is null)
+            {
+                if (member.Setter is null)
+                {
+                    reader.Skip();
+                    return null;
+                }
+
+                return ReadMemberValue(reader, member);
+            }
+
+            object? populatedValue;
+            if (member.Converter is { } converter)
+            {
+                populatedValue = converter.Read(reader, member.MemberType);
+            }
+            else
+            {
+                var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, member.MemberType);
+                populatedValue = typeInfo.ReadInto(reader, existingValue);
+            }
+
+            if (member.Setter is null)
+            {
+                if (!ReferenceEquals(existingValue, populatedValue))
+                {
+                    if (member.HasExplicitObjectCreationHandling)
+                    {
+                        throw reader.CreateException(
+                            $"Member '{member.Member.Name}' on '{Type.FullName}' uses {nameof(JsonObjectCreationHandling)}.{nameof(JsonObjectCreationHandling.Populate)} but '{member.MemberType.FullName}' doesn't support populating.");
+                    }
+
+                    return existingValue;
+                }
+
+                return existingValue;
+            }
+
+            return populatedValue;
         }
 
         private object CreateInstance()

@@ -13,7 +13,7 @@ Tomlyn is a high-performance .NET [TOML](https://toml.io/en/) 1.1 parser, round-
 - **`System.Text.Json`-style API**: familiar surface with `TomlSerializer`, `TomlSerializerOptions`, `TomlTypeInfo<T>`
 - **TOML 1.1.0 only**: Tomlyn v1 targets [TOML 1.1.0](https://toml.io/en/v1.1.0) and does **not** support TOML 1.0
 - **Source generation**: NativeAOT / trimming friendly via `TomlSerializerContext` and `[TomlSerializable]` roots
-- **`System.Text.Json` attribute interop**: reuse `[JsonPropertyName]`, `[JsonIgnore]`, `[JsonRequired]`, `[JsonConstructor]`, polymorphism attributes
+- **`System.Text.Json` attribute interop**: reuse `[JsonPropertyName]`, `[JsonIgnore]`, `[JsonRequired]`, `[JsonConstructor]`, `[JsonObjectCreationHandling]`, and polymorphism attributes
 - **Allocation-free parsing pipeline**: incremental `TomlLexer` → `TomlParser` with precise spans for errors
 - **Low-level access**: full lexer/parser API plus a lossless, trivia-preserving syntax tree (`SyntaxParser` → `DocumentSyntax`)
 - **Reflection control**: reflection-based POCO mapping is available, but can be disabled for NativeAOT via a feature switch / MSBuild property
@@ -75,6 +75,7 @@ using Tomlyn;
 var options = new TomlSerializerOptions
 {
     PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    PreferredObjectCreationHandling = JsonObjectCreationHandling.Replace,
     WriteIndented = true,
     IndentSize = 4,
     MaxDepth = 64,
@@ -87,6 +88,7 @@ var model = TomlSerializer.Deserialize<MyConfig>(toml, options);
 
 By default, `PropertyNamingPolicy` is `null`, meaning CLR member names are used as-is for TOML mapping keys (same default as `System.Text.Json`).
 `MaxDepth = 0` uses the built-in default of `64`.
+`PreferredObjectCreationHandling = JsonObjectCreationHandling.Replace` matches `System.Text.Json`: read-only properties are not populated unless you opt into `Populate` via options or `[JsonObjectCreationHandling]`.
 
 ### Source Generation
 
@@ -99,7 +101,9 @@ public sealed class MyConfig
     public string? Global { get; set; }
 }
 
-[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[TomlSourceGenerationOptions(
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+    PreferredObjectCreationHandling = JsonObjectCreationHandling.Replace)]
 [TomlSerializable(typeof(MyConfig))]
 internal partial class MyTomlContext : TomlSerializerContext
 {

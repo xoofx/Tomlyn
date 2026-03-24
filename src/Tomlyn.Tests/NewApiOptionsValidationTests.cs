@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 using NUnit.Framework;
 
 namespace Tomlyn.Tests;
@@ -52,5 +53,18 @@ public sealed class NewApiOptionsValidationTests
         var value = TomlSerializer.Deserialize<int>(toml, options);
         Assert.AreEqual(1, value);
     }
-}
 
+    [Test]
+    public void PreferredObjectCreationHandling_InvalidValue_Throws()
+    {
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(() =>
+        {
+            _ = TomlSerializerOptions.Default with
+            {
+                PreferredObjectCreationHandling = (JsonObjectCreationHandling)99,
+            };
+        });
+
+        Assert.That(ex!.ParamName, Is.EqualTo("value"));
+    }
+}

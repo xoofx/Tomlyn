@@ -89,6 +89,7 @@ using Tomlyn;
 var options = new TomlSerializerOptions
 {
     PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+    PreferredObjectCreationHandling = JsonObjectCreationHandling.Replace,
     WriteIndented = true,
     IndentSize = 4,
     MaxDepth = 64,
@@ -104,6 +105,7 @@ var toml = TomlSerializer.Serialize(config, options);
 | --- | --- | --- | --- |
 | [`PropertyNamingPolicy`](xref:Tomlyn.TomlSerializerOptions.PropertyNamingPolicy) | [`JsonNamingPolicy?`](xref:System.Text.Json.JsonNamingPolicy) | `null` | Naming policy for CLR member names (e.g. `CamelCase`, `SnakeCaseLower`). |
 | [`DictionaryKeyPolicy`](xref:Tomlyn.TomlSerializerOptions.DictionaryKeyPolicy) | [`JsonNamingPolicy?`](xref:System.Text.Json.JsonNamingPolicy) | `null` | Naming policy for dictionary keys during serialization. |
+| [`PreferredObjectCreationHandling`](xref:Tomlyn.TomlSerializerOptions.PreferredObjectCreationHandling) | [`JsonObjectCreationHandling`](xref:System.Text.Json.Serialization.JsonObjectCreationHandling) | `Replace` | Controls whether nested object and collection members are replaced or populated during deserialization. |
 | [`PropertyNameCaseInsensitive`](xref:Tomlyn.TomlSerializerOptions.PropertyNameCaseInsensitive) | `bool` | `false` | Case-insensitive property matching when reading. |
 | [`MaxDepth`](xref:Tomlyn.TomlSerializerOptions.MaxDepth) | `int` | `0` (`64` effective) | Maximum nesting depth when reading or writing TOML containers. |
 | [`DefaultIgnoreCondition`](xref:Tomlyn.TomlSerializerOptions.DefaultIgnoreCondition) | [`TomlIgnoreCondition`](xref:Tomlyn.TomlIgnoreCondition) | `WhenWritingNull` | Skips null/default values when writing. |
@@ -132,6 +134,40 @@ This matches [`System.Text.Json.JsonSerializer`](xref:System.Text.Json.JsonSeria
 - [`JsonNamingPolicy.CamelCase`](xref:System.Text.Json.JsonNamingPolicy.CamelCase) → `myProperty`
 - [`JsonNamingPolicy.SnakeCaseLower`](xref:System.Text.Json.JsonNamingPolicy.SnakeCaseLower) → `my_property`
 - [`JsonNamingPolicy.KebabCaseLower`](xref:System.Text.Json.JsonNamingPolicy.KebabCaseLower) → `my-property`
+
+### Object creation handling
+
+Tomlyn matches [`System.Text.Json`](xref:System.Text.Json) object creation semantics:
+
+- [`JsonObjectCreationHandling.Replace`](xref:System.Text.Json.Serialization.JsonObjectCreationHandling.Replace) is the default.
+- Under `Replace`, writable members are assigned fresh values and read-only members are left untouched.
+- [`JsonObjectCreationHandling.Populate`](xref:System.Text.Json.Serialization.JsonObjectCreationHandling.Populate) reuses existing mutable object and collection instances.
+- Collection population appends incoming items; existing items are not cleared first.
+- A member-level [`JsonObjectCreationHandlingAttribute`](xref:System.Text.Json.Serialization.JsonObjectCreationHandlingAttribute) is strict: if `Populate` is applied to an unsupported read-only member such as a struct-without-setter or an immutable type, deserialization throws.
+- Type-level and global populate preferences are best-effort: members that cannot be populated are left unchanged instead of throwing.
+
+You can opt into `Populate` globally with [`TomlSerializerOptions.PreferredObjectCreationHandling`](xref:Tomlyn.TomlSerializerOptions.PreferredObjectCreationHandling), on a type, or on an individual member:
+
+```csharp
+using System.Text.Json.Serialization;
+using Tomlyn;
+
+[JsonObjectCreationHandling(JsonObjectCreationHandling.Populate)]
+public sealed class ReleaserConfiguration
+{
+    public List<string> Channels { get; } = ["stable"];
+}
+
+var options = new TomlSerializerOptions
+{
+    PreferredObjectCreationHandling = JsonObjectCreationHandling.Populate,
+};
+```
+
+Property-level [`JsonObjectCreationHandlingAttribute`](xref:System.Text.Json.Serialization.JsonObjectCreationHandlingAttribute) overrides the type-level or options default.
+
+> [!NOTE]
+> As with `System.Text.Json`, populate semantics currently do not apply to types deserialized through a parameterized constructor.
 
 ### Mapping order
 
@@ -211,6 +247,7 @@ so you can reuse models across JSON and TOML. When both are present, the TOML-sp
 | [`TomlIncludeAttribute`](xref:Tomlyn.Serialization.TomlIncludeAttribute) | [`JsonIncludeAttribute`](xref:System.Text.Json.Serialization.JsonIncludeAttribute) | Includes non-public members. |
 | [`TomlPropertyOrderAttribute`](xref:Tomlyn.Serialization.TomlPropertyOrderAttribute) | [`JsonPropertyOrderAttribute`](xref:System.Text.Json.Serialization.JsonPropertyOrderAttribute) | Controls ordering within tables. |
 | [`TomlRequiredAttribute`](xref:Tomlyn.Serialization.TomlRequiredAttribute) | [`JsonRequiredAttribute`](xref:System.Text.Json.Serialization.JsonRequiredAttribute) | Member must be present in the TOML input; missing values throw [`TomlException`](xref:Tomlyn.TomlException). |
+|  | [`JsonObjectCreationHandlingAttribute`](xref:System.Text.Json.Serialization.JsonObjectCreationHandlingAttribute) | Overrides replace/populate behavior for a specific member during deserialization. |
 | [`TomlExtensionDataAttribute`](xref:Tomlyn.Serialization.TomlExtensionDataAttribute) | [`JsonExtensionDataAttribute`](xref:System.Text.Json.Serialization.JsonExtensionDataAttribute) | Captures unmapped keys into a dictionary. |
 | [`TomlConverterAttribute`](xref:Tomlyn.Serialization.TomlConverterAttribute) | [`JsonConverterAttribute`](xref:System.Text.Json.Serialization.JsonConverterAttribute) | Selects a custom converter for a type or member (reflection only). |
 
@@ -219,6 +256,7 @@ so you can reuse models across JSON and TOML. When both are present, the TOML-sp
 | Attribute | JSON equivalent | Description |
 | --- | --- | --- |
 | [`TomlConstructorAttribute`](xref:Tomlyn.Serialization.TomlConstructorAttribute) | [`JsonConstructorAttribute`](xref:System.Text.Json.Serialization.JsonConstructorAttribute) | Selects which constructor to use for deserialization. |
+|  | [`JsonObjectCreationHandlingAttribute`](xref:System.Text.Json.Serialization.JsonObjectCreationHandlingAttribute) | Sets the default replace/populate behavior inherited by members of the type. |
 | [`TomlPolymorphicAttribute`](xref:Tomlyn.Serialization.TomlPolymorphicAttribute) | [`JsonPolymorphicAttribute`](xref:System.Text.Json.Serialization.JsonPolymorphicAttribute) | Enables discriminator-based polymorphism on a base type. |
 | [`TomlDerivedTypeAttribute`](xref:Tomlyn.Serialization.TomlDerivedTypeAttribute) | [`JsonDerivedTypeAttribute`](xref:System.Text.Json.Serialization.JsonDerivedTypeAttribute) | Registers a derived type and its discriminator value. |
 

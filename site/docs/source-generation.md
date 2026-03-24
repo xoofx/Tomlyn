@@ -70,6 +70,7 @@ using Tomlyn.Serialization;
 
 [TomlSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
+    PreferredObjectCreationHandling = JsonObjectCreationHandling.Replace,
     WriteIndented = true,
     IndentSize = 2,
     MaxDepth = 64,
@@ -77,6 +78,8 @@ using Tomlyn.Serialization;
 [TomlSerializable(typeof(ServerConfig))]
 internal partial class MyTomlContext : TomlSerializerContext { }
 ```
+
+`PreferredObjectCreationHandling` matches [`System.Text.Json`](xref:System.Text.Json): the default is [`Replace`](xref:System.Text.Json.Serialization.JsonObjectCreationHandling.Replace), and [`Populate`](xref:System.Text.Json.Serialization.JsonObjectCreationHandling.Populate) must be opted into explicitly when you want Tomlyn to reuse mutable read-only members during deserialization.
 
 ### Registering converters at compile time
 
@@ -105,12 +108,15 @@ The source generator supports these attributes at compile time:
 | [`JsonPropertyNameAttribute`](xref:System.Text.Json.Serialization.JsonPropertyNameAttribute) / [`TomlPropertyNameAttribute`](xref:Tomlyn.Serialization.TomlPropertyNameAttribute) | [`JsonConstructorAttribute`](xref:System.Text.Json.Serialization.JsonConstructorAttribute) / [`TomlConstructorAttribute`](xref:Tomlyn.Serialization.TomlConstructorAttribute) |
 | [`JsonIgnoreAttribute`](xref:System.Text.Json.Serialization.JsonIgnoreAttribute) / [`TomlIgnoreAttribute`](xref:Tomlyn.Serialization.TomlIgnoreAttribute) | [`JsonPolymorphicAttribute`](xref:System.Text.Json.Serialization.JsonPolymorphicAttribute) / [`TomlPolymorphicAttribute`](xref:Tomlyn.Serialization.TomlPolymorphicAttribute) |
 | [`JsonIncludeAttribute`](xref:System.Text.Json.Serialization.JsonIncludeAttribute) / [`TomlIncludeAttribute`](xref:Tomlyn.Serialization.TomlIncludeAttribute) | [`JsonDerivedTypeAttribute`](xref:System.Text.Json.Serialization.JsonDerivedTypeAttribute) / [`TomlDerivedTypeAttribute`](xref:Tomlyn.Serialization.TomlDerivedTypeAttribute) |
+| [`JsonObjectCreationHandlingAttribute`](xref:System.Text.Json.Serialization.JsonObjectCreationHandlingAttribute) | [`JsonObjectCreationHandlingAttribute`](xref:System.Text.Json.Serialization.JsonObjectCreationHandlingAttribute) |
 | [`JsonPropertyOrderAttribute`](xref:System.Text.Json.Serialization.JsonPropertyOrderAttribute) / [`TomlPropertyOrderAttribute`](xref:Tomlyn.Serialization.TomlPropertyOrderAttribute) | |
 | [`JsonRequiredAttribute`](xref:System.Text.Json.Serialization.JsonRequiredAttribute) / [`TomlRequiredAttribute`](xref:Tomlyn.Serialization.TomlRequiredAttribute) | |
 | [`JsonExtensionDataAttribute`](xref:System.Text.Json.Serialization.JsonExtensionDataAttribute) / [`TomlExtensionDataAttribute`](xref:Tomlyn.Serialization.TomlExtensionDataAttribute) | |
 
 [`JsonConverterAttribute`](xref:System.Text.Json.Serialization.JsonConverterAttribute) / [`TomlConverterAttribute`](xref:Tomlyn.Serialization.TomlConverterAttribute) is supported by the **reflection resolver** but is **not** modeled by generated metadata.
 For source-generated scenarios, register converters via [`TomlSourceGenerationOptionsAttribute.Converters`](xref:Tomlyn.Serialization.TomlSourceGenerationOptionsAttribute) or [`TomlSerializerOptions.Converters`](xref:Tomlyn.TomlSerializerOptions.Converters).
+
+`[JsonObjectCreationHandling]` is modeled by generated metadata for both type-level defaults and per-member overrides.
 
 > [!WARNING]
 > Using `[TomlConverter]` or `[JsonConverter]` attributes with source generation will silently fall back to reflection.

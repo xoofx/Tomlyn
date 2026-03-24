@@ -83,6 +83,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
     private const string TomlSerializableAttributeMetadataName = "Tomlyn.Serialization.TomlSerializableAttribute";
     private const string JsonSerializableAttributeMetadataName = "System.Text.Json.Serialization.JsonSerializableAttribute";
     private const string JsonSourceGenerationOptionsAttributeMetadataName = "System.Text.Json.Serialization.JsonSourceGenerationOptionsAttribute";
+    private const string JsonObjectCreationHandlingAttributeMetadataName = "System.Text.Json.Serialization.JsonObjectCreationHandlingAttribute";
     private const string TomlSourceGenerationOptionsAttributeMetadataName = "Tomlyn.Serialization.TomlSourceGenerationOptionsAttribute";
     private const string TomlConverterMetadataName = "Tomlyn.Serialization.TomlConverter";
     private const string TomlOnSerializingMetadataName = "Tomlyn.Serialization.ITomlOnSerializing";
@@ -143,6 +144,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         public int? NewLine { get; set; }
         public string? PropertyNamingPolicyExpression { get; set; }
         public string? DictionaryKeyPolicyExpression { get; set; }
+        public int? PreferredObjectCreationHandling { get; set; }
         public bool? PropertyNameCaseInsensitive { get; set; }
         public int? DefaultIgnoreCondition { get; set; }
         public int? DuplicateKeyHandling { get; set; }
@@ -380,6 +382,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         if (!string.IsNullOrEmpty(model.Options.DictionaryKeyPolicyExpression))
         {
             builder.Append("        options = options with { DictionaryKeyPolicy = ").Append(model.Options.DictionaryKeyPolicyExpression).AppendLine(" };");
+        }
+
+        if (model.Options.PreferredObjectCreationHandling is not null && TryGetJsonObjectCreationHandlingExpression(model.Options.PreferredObjectCreationHandling.Value, out var objectCreationHandlingExpression))
+        {
+            builder.Append("        options = options with { PreferredObjectCreationHandling = ").Append(objectCreationHandlingExpression).AppendLine(" };");
         }
 
         if (model.Options.PropertyNameCaseInsensitive is not null)
@@ -623,7 +630,10 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         builder.Append("        public override void Write(TomlWriter writer, ").Append(typeName).AppendLine(" value)");
         builder.AppendLine("        {");
-        builder.AppendLine("            if (value is null) throw new TomlException(\"TOML does not support null values.\");");
+        if (!type.IsValueType)
+        {
+            builder.AppendLine("            if (value is null) throw new TomlException(\"TOML does not support null values.\");");
+        }
         if (callsOnSerializing)
         {
             builder.AppendLine("            ((global::Tomlyn.Serialization.ITomlOnSerializing)value).OnTomlSerializing();");
@@ -730,10 +740,18 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         {
             var bufferedConstructor = constructor ?? new PocoConstructor(null, ImmutableArray<PocoConstructorParameter>.Empty, null, setsRequiredMembers: false);
             EmitPocoReadWithConstructor(builder, model, type, poco, bufferedConstructor, readReturnType, callsOnDeserializing, callsOnDeserialized, useObjectInitializerConstruction: true);
+            if (!poco.Members.Any(static member => member.IsInitOnly))
+            {
+                EmitPocoReadIntoExisting(builder, typeName, poco, callsOnDeserializing, callsOnDeserialized);
+            }
         }
         else if (constructor is { IsValid: true } ctor && !ctor.Parameters.IsDefaultOrEmpty)
         {
             EmitPocoReadWithConstructor(builder, model, type, poco, ctor, readReturnType, callsOnDeserializing, callsOnDeserialized, useObjectInitializerConstruction: false);
+            if (!poco.Members.Any(static member => member.IsInitOnly))
+            {
+                EmitPocoReadIntoExisting(builder, typeName, poco, callsOnDeserializing, callsOnDeserialized);
+            }
         }
         else
         {
@@ -858,6 +876,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             }
             builder.AppendLine("            return value;");
             builder.AppendLine("        }");
+            EmitPocoReadIntoExisting(builder, typeName, poco, callsOnDeserializing, callsOnDeserialized);
         }
 
         builder.AppendLine("    }");
@@ -1468,6 +1487,147 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.AppendLine("        }");
     }
 
+    private static void EmitPocoReadIntoExisting(
+        StringBuilder builder,
+        string typeName,
+        PocoShape poco,
+        bool callsOnDeserializing,
+        bool callsOnDeserialized)
+    {
+        builder.AppendLine();
+        builder.AppendLine("        public override object? ReadInto(TomlReader reader, object? existingValue)");
+        builder.AppendLine("        {");
+        builder.Append("            if (existingValue is not ").Append(typeName).AppendLine(" value)");
+        builder.AppendLine("            {");
+        builder.AppendLine("                return Read(reader);");
+        builder.AppendLine("            }");
+        builder.AppendLine("            if (reader.TokenType != TomlTokenType.StartTable) throw reader.CreateException($\"Expected {TomlTokenType.StartTable} token but was {reader.TokenType}.\");");
+        builder.AppendLine("            var tableStartSpan = reader.CurrentSpan;");
+        if (callsOnDeserializing)
+        {
+            builder.AppendLine("            ((global::Tomlyn.Serialization.ITomlOnDeserializing)value).OnTomlDeserializing();");
+        }
+
+        var hasRequiredMembers = poco.Members.Any(static m => m.IsRequired);
+        if (poco.Members.Length <= 64)
+        {
+            if (poco.Members.Length > 0)
+            {
+                builder.AppendLine("            ulong seenMask = 0;");
+            }
+
+            if (hasRequiredMembers)
+            {
+                ulong requiredMask = 0;
+                for (var i = 0; i < poco.Members.Length; i++)
+                {
+                    if (poco.Members[i].IsRequired)
+                    {
+                        requiredMask |= 1UL << i;
+                    }
+                }
+
+                builder.Append("            const ulong requiredMask = ").Append(requiredMask.ToString(CultureInfo.InvariantCulture)).AppendLine("UL;");
+            }
+        }
+        else
+        {
+            builder.Append("            var seen = (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error");
+            if (hasRequiredMembers)
+            {
+                builder.Append(" || true");
+            }
+
+            builder.Append(") ? new bool[").Append(poco.Members.Length.ToString(CultureInfo.InvariantCulture)).AppendLine("] : null;");
+        }
+
+        builder.AppendLine("            reader.Read();");
+        builder.AppendLine("            while (reader.TokenType != TomlTokenType.EndTable)");
+        builder.AppendLine("            {");
+        builder.AppendLine("                if (reader.TokenType != TomlTokenType.PropertyName) throw reader.CreateException($\"Expected {TomlTokenType.PropertyName} token but was {reader.TokenType}.\");");
+        builder.AppendLine("                if (Options.PropertyNameCaseInsensitive)");
+        builder.AppendLine("                {");
+        builder.AppendLine("                    var name = reader.PropertyName!;");
+        builder.AppendLine("                    reader.Read();");
+        EmitMemberDispatch(builder, poco, ignoreCase: true);
+        builder.AppendLine("                }");
+        builder.AppendLine("                else");
+        builder.AppendLine("                {");
+        EmitMemberDispatch(builder, poco, ignoreCase: false);
+        builder.AppendLine("                }");
+        builder.AppendLine("            }");
+        builder.AppendLine("            var endTableSpan = reader.CurrentSpan;");
+        builder.AppendLine("            reader.Read();");
+
+        if (hasRequiredMembers)
+        {
+            if (poco.Members.Length <= 64)
+            {
+                builder.AppendLine("            if (requiredMask != 0 && (seenMask & requiredMask) != requiredMask)");
+                builder.AppendLine("            {");
+                builder.AppendLine("                var span = endTableSpan ?? tableStartSpan;");
+                for (var i = 0; i < poco.Members.Length; i++)
+                {
+                    if (!poco.Members[i].IsRequired)
+                    {
+                        continue;
+                    }
+
+                    var serializedName = EscapeStringLiteral(poco.Members[i].SerializedName);
+                    builder.Append("                if ((seenMask & (1UL << ").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(")) == 0)");
+                    builder.AppendLine("                {");
+                    builder.Append("                    throw span is { } locatedSpan ? new TomlException(locatedSpan, $\"Missing required TOML key '")
+                        .Append(serializedName)
+                        .Append("' when deserializing '{typeof(")
+                        .Append(typeName)
+                        .Append(").FullName}'.\") : new TomlException($\"Missing required TOML key '")
+                        .Append(serializedName)
+                        .Append("' when deserializing '{typeof(")
+                        .Append(typeName)
+                        .Append(").FullName}'.\");");
+                    builder.AppendLine("                }");
+                }
+                builder.AppendLine("            }");
+            }
+            else
+            {
+                builder.AppendLine("            if (seen is not null)");
+                builder.AppendLine("            {");
+                builder.AppendLine("                var span = endTableSpan ?? tableStartSpan;");
+                for (var i = 0; i < poco.Members.Length; i++)
+                {
+                    if (!poco.Members[i].IsRequired)
+                    {
+                        continue;
+                    }
+
+                    var serializedName = EscapeStringLiteral(poco.Members[i].SerializedName);
+                    builder.Append("                if (!seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("])");
+                    builder.AppendLine("                {");
+                    builder.Append("                    throw span is { } locatedSpan ? new TomlException(locatedSpan, $\"Missing required TOML key '")
+                        .Append(serializedName)
+                        .Append("' when deserializing '{typeof(")
+                        .Append(typeName)
+                        .Append(").FullName}'.\") : new TomlException($\"Missing required TOML key '")
+                        .Append(serializedName)
+                        .Append("' when deserializing '{typeof(")
+                        .Append(typeName)
+                        .Append(").FullName}'.\");");
+                    builder.AppendLine("                }");
+                }
+                builder.AppendLine("            }");
+            }
+        }
+
+        if (callsOnDeserialized)
+        {
+            builder.AppendLine("            ((global::Tomlyn.Serialization.ITomlOnDeserialized)value).OnTomlDeserialized();");
+        }
+
+        builder.AppendLine("            return value;");
+        builder.AppendLine("        }");
+    }
+
     private static void EmitPocoConstructionAssignment(
         StringBuilder builder,
         string targetName,
@@ -1522,6 +1682,135 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.AppendLine("            }");
     }
 
+    private static string? GetPopulateConditionExpression(PocoMember member)
+    {
+        return member.ObjectCreationHandling switch
+        {
+            ObjectCreationHandlingKind.Replace => null,
+            ObjectCreationHandlingKind.Populate => "true",
+            _ => "Options.PreferredObjectCreationHandling == global::System.Text.Json.Serialization.JsonObjectCreationHandling.Populate",
+        };
+    }
+
+    private static void EmitMemberRead(StringBuilder builder, PocoMember member, int index, string indent)
+    {
+        var memberTypeName = member.Type.ToDisplayString(FullyQualifiedNullableFormat);
+        var typeInfoPropertyName = GetTypeInfoPropertyName(member.Type);
+        var populateCondition = GetPopulateConditionExpression(member);
+        var existingLocal = "__existing" + index.ToString(CultureInfo.InvariantCulture);
+        var populatedLocal = "__populated" + index.ToString(CultureInfo.InvariantCulture);
+        var memberAccess = "value." + member.MemberName;
+        var populateErrorPrefix =
+            $"Member '{EscapeStringLiteral(member.MemberName)}' on '{{value.GetType().FullName}}' uses JsonObjectCreationHandling.Populate";
+        var isExplicitPopulate = member.HasExplicitObjectCreationHandling && member.ObjectCreationHandling == ObjectCreationHandlingKind.Populate;
+
+        if (populateCondition is null)
+        {
+            if (!member.CanSet)
+            {
+                builder.Append(indent).AppendLine("reader.Skip();");
+            }
+            else
+            {
+                builder.Append(indent).Append(memberAccess).Append(" = _context.").Append(typeInfoPropertyName).AppendLine(".Read(reader)!;");
+            }
+
+            return;
+        }
+
+        if (populateCondition != "true")
+        {
+            builder.Append(indent).Append("if (").Append(populateCondition).AppendLine(")");
+            builder.Append(indent).AppendLine("{");
+        }
+
+        if (!member.CanSet && member.Type.IsValueType)
+        {
+            if (isExplicitPopulate)
+            {
+                builder.Append(indent).Append("    throw new TomlException($\"")
+                    .Append(populateErrorPrefix)
+                    .Append(" but requires a setter because '")
+                    .Append(EscapeStringLiteral(memberTypeName))
+                    .AppendLine("' is a value type.\");");
+            }
+            else
+            {
+                builder.Append(populateCondition == "true" ? indent : indent + "    ").AppendLine("reader.Skip();");
+            }
+        }
+        else
+        {
+            var branchIndent = populateCondition == "true" ? indent : indent + "    ";
+            builder.Append(branchIndent).Append("var ").Append(existingLocal).Append(" = ").Append(memberAccess).AppendLine(";");
+
+            if (CanBeNull(member.Type))
+            {
+                builder.Append(branchIndent).Append("if (").Append(existingLocal).AppendLine(" is null)");
+                builder.Append(branchIndent).AppendLine("{");
+                if (!member.CanSet)
+                {
+                    builder.Append(branchIndent).AppendLine("    reader.Skip();");
+                }
+                else
+                {
+                    builder.Append(branchIndent).Append("    ").Append(memberAccess).Append(" = _context.").Append(typeInfoPropertyName).AppendLine(".Read(reader)!;");
+                }
+                builder.Append(branchIndent).AppendLine("}");
+                builder.Append(branchIndent).AppendLine("else");
+                builder.Append(branchIndent).AppendLine("{");
+            }
+
+            var populateIndent = CanBeNull(member.Type)
+                ? (populateCondition == "true" ? indent + "    " : indent + "        ")
+                : (populateCondition == "true" ? indent : indent + "    ");
+            builder.Append(populateIndent).Append("var ").Append(populatedLocal).Append(" = _context.").Append(typeInfoPropertyName).Append(".ReadInto(reader, ").Append(existingLocal).AppendLine(");");
+            if (member.CanSet)
+            {
+                builder.Append(populateIndent).Append(memberAccess).Append(" = (").Append(memberTypeName).Append(")").Append(populatedLocal).AppendLine("!;");
+            }
+            else
+            {
+                builder.Append(populateIndent).Append("if (!object.ReferenceEquals(").Append(existingLocal).Append(", ").Append(populatedLocal).AppendLine("))");
+                builder.Append(populateIndent).AppendLine("{");
+                if (isExplicitPopulate)
+                {
+                    builder.Append(populateIndent).Append("    throw new TomlException($\"")
+                        .Append(populateErrorPrefix)
+                        .AppendLine(" but it doesn't support populating.\");");
+                }
+                builder.Append(populateIndent).AppendLine("}");
+            }
+
+            if (CanBeNull(member.Type))
+            {
+                builder.Append(branchIndent).AppendLine("}");
+            }
+        }
+
+        if (populateCondition != "true")
+        {
+            builder.Append(indent).AppendLine("}");
+        }
+
+        if (populateCondition == "true")
+        {
+            return;
+        }
+
+        builder.Append(indent).AppendLine("else");
+        builder.Append(indent).AppendLine("{");
+        if (!member.CanSet)
+        {
+            builder.Append(indent).AppendLine("    reader.Skip();");
+        }
+        else
+        {
+            builder.Append(indent).Append("    ").Append(memberAccess).Append(" = _context.").Append(typeInfoPropertyName).AppendLine(".Read(reader)!;");
+        }
+        builder.Append(indent).AppendLine("}");
+    }
+
     private static void EmitMemberDispatch(StringBuilder builder, PocoShape poco, bool ignoreCase)
     {
         var useSeenMask = poco.Members.Length <= 64;
@@ -1531,6 +1820,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             for (var i = 0; i < poco.Members.Length; i++)
             {
                 var member = poco.Members[i];
+                var alwaysThrowsOnRead =
+                    !member.CanSet &&
+                    member.Type.IsValueType &&
+                    member.HasExplicitObjectCreationHandling &&
+                    member.ObjectCreationHandling == ObjectCreationHandlingKind.Populate;
                 builder.Append("                    ").Append(i == 0 ? "if" : "else if").Append("(string.Equals(name, \"").Append(EscapeStringLiteral(member.SerializedName)).Append("\", ").Append(comparison).AppendLine("))");
                 builder.AppendLine("                    {");
                 if (useSeenMask)
@@ -1576,15 +1870,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     }
                     builder.AppendLine("                        }");
                 }
-                if (!member.CanSet)
+                EmitMemberRead(builder, member, i, "                        ");
+                if (!alwaysThrowsOnRead)
                 {
-                    builder.AppendLine("                        reader.Skip();");
+                    builder.AppendLine("                        continue;");
                 }
-                else
-                {
-                    builder.Append("                        value.").Append(member.MemberName).Append(" = _context.").Append(GetTypeInfoPropertyName(member.Type)).AppendLine(".Read(reader)!;");
-                }
-                builder.AppendLine("                        continue;");
                 builder.AppendLine("                    }");
             }
 
@@ -1632,6 +1922,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
             foreach (var (index, member) in kvp.Value)
             {
+                var alwaysThrowsOnRead =
+                    !member.CanSet &&
+                    member.Type.IsValueType &&
+                    member.HasExplicitObjectCreationHandling &&
+                    member.ObjectCreationHandling == ObjectCreationHandlingKind.Populate;
                 builder.Append("                                if (reader.PropertyNameEquals(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\"))");
                 builder.AppendLine("                                {");
                 if (useSeenMask)
@@ -1678,15 +1973,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     builder.AppendLine("                                    }");
                 }
                 builder.AppendLine("                                    reader.Read();");
-                if (!member.CanSet)
+                EmitMemberRead(builder, member, index, "                                    ");
+                if (!alwaysThrowsOnRead)
                 {
-                    builder.AppendLine("                                    reader.Skip();");
+                    builder.AppendLine("                                    continue;");
                 }
-                else
-                {
-                    builder.Append("                                    value.").Append(member.MemberName).Append(" = _context.").Append(GetTypeInfoPropertyName(member.Type)).AppendLine(".Read(reader)!;");
-                }
-                builder.AppendLine("                                    continue;");
                 builder.AppendLine("                                }");
             }
 
@@ -2105,13 +2396,15 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private sealed class PocoMember
     {
-        public PocoMember(string memberName, string serializedName, ITypeSymbol type, int order, WriteIgnoreKind writeIgnore, bool isRequired, bool isCompilerRequired, bool canSet, bool isInitOnly)
+        public PocoMember(string memberName, string serializedName, ITypeSymbol type, int order, WriteIgnoreKind writeIgnore, ObjectCreationHandlingKind objectCreationHandling, bool hasExplicitObjectCreationHandling, bool isRequired, bool isCompilerRequired, bool canSet, bool isInitOnly)
         {
             MemberName = memberName;
             SerializedName = serializedName;
             Type = type;
             Order = order;
             WriteIgnore = writeIgnore;
+            ObjectCreationHandling = objectCreationHandling;
+            HasExplicitObjectCreationHandling = hasExplicitObjectCreationHandling;
             IsRequired = isRequired;
             IsCompilerRequired = isCompilerRequired;
             CanSet = canSet;
@@ -2123,6 +2416,8 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         public ITypeSymbol Type { get; }
         public int Order { get; }
         public WriteIgnoreKind WriteIgnore { get; }
+        public ObjectCreationHandlingKind ObjectCreationHandling { get; }
+        public bool HasExplicitObjectCreationHandling { get; }
         public bool IsRequired { get; }
         public bool IsCompilerRequired { get; }
         public bool CanSet { get; }
@@ -2269,6 +2564,13 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         WhenWritingDefault = 2,
     }
 
+    private enum ObjectCreationHandlingKind
+    {
+        Default = 0,
+        Replace = 1,
+        Populate = 2,
+    }
+
     private readonly struct IgnoreBehavior
     {
         public IgnoreBehavior(bool ignoreAlways, WriteIgnoreKind writeIgnore)
@@ -2365,6 +2667,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         var namingPolicy = model.Options.PropertyNamingPolicyExpression;
+        var typeObjectCreationHandling = GetObjectCreationHandling(named);
 
         var members = ImmutableArray.CreateBuilder<PocoMember>();
         PocoExtensionData? extensionData = null;
@@ -2388,6 +2691,13 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             var canSet = member.SetMethod is not null && member.SetMethod.DeclaredAccessibility == Accessibility.Public;
             var isInitOnly = member.SetMethod?.IsInitOnly == true;
             var isCompilerRequired = member.IsRequired;
+            var memberObjectCreationHandling = GetObjectCreationHandling(member);
+            var hasExplicitObjectCreationHandling = memberObjectCreationHandling != ObjectCreationHandlingKind.Default;
+            var objectCreationHandling = memberObjectCreationHandling;
+            if (objectCreationHandling == ObjectCreationHandlingKind.Default)
+            {
+                objectCreationHandling = typeObjectCreationHandling;
+            }
 
             if (IsExtensionData(member))
             {
@@ -2437,7 +2747,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             var serializedName = GetSerializedName(member, member.Name, namingPolicy);
             var order = GetOrder(member);
             var required = IsRequired(member);
-            members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore, required, isCompilerRequired, canSet, isInitOnly));
+            members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore, objectCreationHandling, hasExplicitObjectCreationHandling, required, isCompilerRequired, canSet, isInitOnly));
         }
 
         foreach (var member in named.GetMembers().OfType<IFieldSymbol>())
@@ -2503,10 +2813,18 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 continue;
             }
 
+            var memberObjectCreationHandling = GetObjectCreationHandling(member);
+            var hasExplicitObjectCreationHandling = memberObjectCreationHandling != ObjectCreationHandlingKind.Default;
+            var objectCreationHandling = memberObjectCreationHandling;
+            if (objectCreationHandling == ObjectCreationHandlingKind.Default)
+            {
+                objectCreationHandling = typeObjectCreationHandling;
+            }
+
             var serializedName = GetSerializedName(member, member.Name, namingPolicy);
             var order = GetOrder(member);
             var required = IsRequired(member);
-            members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore, required, member.IsRequired, canSet: true, isInitOnly: false));
+            members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore, objectCreationHandling, hasExplicitObjectCreationHandling, required, member.IsRequired, canSet: true, isInitOnly: false));
         }
 
         PocoConstructor? constructorModel = null;
@@ -3348,6 +3666,42 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         return memberName;
     }
 
+    private static ObjectCreationHandlingKind GetObjectCreationHandling(ISymbol symbol)
+    {
+        foreach (var attr in symbol.GetAttributes())
+        {
+            if (attr.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) != "global::" + JsonObjectCreationHandlingAttributeMetadataName)
+            {
+                continue;
+            }
+
+            if (attr.ConstructorArguments.Length == 1 && attr.ConstructorArguments[0].Value is int constructorValue)
+            {
+                return constructorValue switch
+                {
+                    0 => ObjectCreationHandlingKind.Replace,
+                    1 => ObjectCreationHandlingKind.Populate,
+                    _ => ObjectCreationHandlingKind.Default,
+                };
+            }
+
+            foreach (var namedArgument in attr.NamedArguments)
+            {
+                if (namedArgument.Key == "Handling" && namedArgument.Value.Value is int namedValue)
+                {
+                    return namedValue switch
+                    {
+                        0 => ObjectCreationHandlingKind.Replace,
+                        1 => ObjectCreationHandlingKind.Populate,
+                        _ => ObjectCreationHandlingKind.Default,
+                    };
+                }
+            }
+        }
+
+        return ObjectCreationHandlingKind.Default;
+    }
+
     private static int GetOrder(ISymbol member)
     {
         int? tomlOrder = null;
@@ -3651,6 +4005,9 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 case "DictionaryKeyPolicy":
                     options.DictionaryKeyPolicyExpression ??= ToJsonNamingPolicyExpression(value);
                     break;
+                case "PreferredObjectCreationHandling":
+                    if (options.PreferredObjectCreationHandling is null && value.Value is int objectCreationHandling) options.PreferredObjectCreationHandling = objectCreationHandling;
+                    break;
                 case "PropertyNameCaseInsensitive":
                     if (options.PropertyNameCaseInsensitive is null && value.Value is bool pnci) options.PropertyNameCaseInsensitive = pnci;
                     break;
@@ -3683,6 +4040,9 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     break;
                 case "DictionaryKeyPolicy":
                     options.DictionaryKeyPolicyExpression = ToJsonNamingPolicyExpression(value);
+                    break;
+                case "PreferredObjectCreationHandling":
+                    if (value.Value is int preferredObjectCreationHandling) options.PreferredObjectCreationHandling = preferredObjectCreationHandling;
                     break;
                 case "DefaultIgnoreCondition":
                     if (value.Value is int dic) options.DefaultIgnoreCondition = dic;
@@ -3781,6 +4141,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             model.Options.IndentSize = null;
         }
 
+        ValidateEnumOption(context, model, "PreferredObjectCreationHandling", model.Options.PreferredObjectCreationHandling, TryGetJsonObjectCreationHandlingExpression, v => model.Options.PreferredObjectCreationHandling = v);
         ValidateEnumOption(context, model, "NewLine", model.Options.NewLine, TryGetTomlNewLineKindExpression, v => model.Options.NewLine = v);
         ValidateEnumOption(context, model, "DefaultIgnoreCondition", model.Options.DefaultIgnoreCondition, TryGetTomlIgnoreConditionExpression, v => model.Options.DefaultIgnoreCondition = v);
         ValidateEnumOption(context, model, "DuplicateKeyHandling", model.Options.DuplicateKeyHandling, TryGetTomlDuplicateKeyHandlingExpression, v => model.Options.DuplicateKeyHandling = v);
@@ -3878,6 +4239,18 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             0 => "global::Tomlyn.TomlIgnoreCondition.Never",
             1 => "global::Tomlyn.TomlIgnoreCondition.WhenWritingNull",
             2 => "global::Tomlyn.TomlIgnoreCondition.WhenWritingDefault",
+            _ => null!,
+        };
+
+        return expression is not null;
+    }
+
+    private static bool TryGetJsonObjectCreationHandlingExpression(int value, out string expression)
+    {
+        expression = value switch
+        {
+            0 => "global::System.Text.Json.Serialization.JsonObjectCreationHandling.Replace",
+            1 => "global::System.Text.Json.Serialization.JsonObjectCreationHandling.Populate",
             _ => null!,
         };
 

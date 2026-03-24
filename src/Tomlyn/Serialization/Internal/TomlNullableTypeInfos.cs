@@ -38,6 +38,18 @@ internal sealed class TomlNullableTypeInfo<T> : TomlTypeInfo<T?>
         ArgumentGuard.ThrowIfNull(reader, nameof(reader));
         return _inner.Read(reader);
     }
+
+    public override object? ReadInto(TomlReader reader, object? existingValue)
+    {
+        ArgumentGuard.ThrowIfNull(reader, nameof(reader));
+
+        if (existingValue is T value)
+        {
+            return _inner.ReadInto(reader, value);
+        }
+
+        return Read(reader);
+    }
 }
 
 internal sealed class TomlUntypedNullableTypeInfo : TomlTypeInfo
@@ -67,5 +79,17 @@ internal sealed class TomlUntypedNullableTypeInfo : TomlTypeInfo
     {
         ArgumentGuard.ThrowIfNull(reader, nameof(reader));
         return _inner.ReadAsObject(reader);
+    }
+
+    public override object? ReadInto(TomlReader reader, object? existingValue)
+    {
+        ArgumentGuard.ThrowIfNull(reader, nameof(reader));
+
+        if (existingValue is not null)
+        {
+            return _inner.ReadInto(reader, existingValue);
+        }
+
+        return ReadAsObject(reader);
     }
 }
