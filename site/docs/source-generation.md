@@ -111,12 +111,14 @@ The source generator supports these attributes at compile time:
 | [`JsonObjectCreationHandlingAttribute`](xref:System.Text.Json.Serialization.JsonObjectCreationHandlingAttribute) | [`JsonObjectCreationHandlingAttribute`](xref:System.Text.Json.Serialization.JsonObjectCreationHandlingAttribute) |
 | [`JsonPropertyOrderAttribute`](xref:System.Text.Json.Serialization.JsonPropertyOrderAttribute) / [`TomlPropertyOrderAttribute`](xref:Tomlyn.Serialization.TomlPropertyOrderAttribute) | |
 | [`JsonRequiredAttribute`](xref:System.Text.Json.Serialization.JsonRequiredAttribute) / [`TomlRequiredAttribute`](xref:Tomlyn.Serialization.TomlRequiredAttribute) | |
+| [`TomlSingleOrArrayAttribute`](xref:Tomlyn.Serialization.TomlSingleOrArrayAttribute) | |
 | [`JsonExtensionDataAttribute`](xref:System.Text.Json.Serialization.JsonExtensionDataAttribute) / [`TomlExtensionDataAttribute`](xref:Tomlyn.Serialization.TomlExtensionDataAttribute) | |
 
 [`JsonConverterAttribute`](xref:System.Text.Json.Serialization.JsonConverterAttribute) / [`TomlConverterAttribute`](xref:Tomlyn.Serialization.TomlConverterAttribute) is supported by the **reflection resolver** but is **not** modeled by generated metadata.
 For source-generated scenarios, register converters via [`TomlSourceGenerationOptionsAttribute.Converters`](xref:Tomlyn.Serialization.TomlSourceGenerationOptionsAttribute) or [`TomlSerializerOptions.Converters`](xref:Tomlyn.TomlSerializerOptions.Converters).
 
 `[JsonObjectCreationHandling]` is modeled by generated metadata for both type-level defaults and per-member overrides.
+`[TomlSingleOrArray]` is also modeled by generated metadata, so single-value collection inputs remain NativeAOT-friendly.
 
 > [!WARNING]
 > Using `[TomlConverter]` or `[JsonConverter]` attributes with source generation will silently fall back to reflection.

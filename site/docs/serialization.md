@@ -169,6 +169,44 @@ Property-level [`JsonObjectCreationHandlingAttribute`](xref:System.Text.Json.Ser
 > [!NOTE]
 > As with `System.Text.Json`, populate semantics currently do not apply to types deserialized through a parameterized constructor.
 
+### Single value or array collections
+
+Use [`TomlSingleOrArrayAttribute`](xref:Tomlyn.Serialization.TomlSingleOrArrayAttribute) on a collection member when the TOML input may contain either a single value or an array:
+
+```csharp
+using System.Text.Json.Serialization;
+using Tomlyn.Serialization;
+
+public sealed class PackagingConfiguration
+{
+    public PackagingConfiguration()
+    {
+        RuntimeIdentifiers = new List<string>();
+    }
+
+    [TomlSingleOrArray]
+    [JsonPropertyName("rid")]
+    public List<string> RuntimeIdentifiers { get; }
+}
+```
+
+Then both of these inputs are accepted:
+
+```toml
+rid = "win-x64"
+```
+
+```toml
+rid = ["win-x64", "linux-x64"]
+```
+
+Behavior matches the declared collection semantics:
+
+- A single TOML value is treated as a collection containing exactly one element.
+- Mutable read-only list/set-style members append into the existing collection instance.
+- Writable members still use replace semantics unless object creation handling says to populate.
+- Without [`TomlSingleOrArrayAttribute`](xref:Tomlyn.Serialization.TomlSingleOrArrayAttribute), collection members require a TOML array.
+
 ### Mapping order
 
 [`MappingOrder`](xref:Tomlyn.TomlSerializerOptions.MappingOrder) controls the order properties appear in the serialized output:
@@ -248,6 +286,7 @@ so you can reuse models across JSON and TOML. When both are present, the TOML-sp
 | [`TomlPropertyOrderAttribute`](xref:Tomlyn.Serialization.TomlPropertyOrderAttribute) | [`JsonPropertyOrderAttribute`](xref:System.Text.Json.Serialization.JsonPropertyOrderAttribute) | Controls ordering within tables. |
 | [`TomlRequiredAttribute`](xref:Tomlyn.Serialization.TomlRequiredAttribute) | [`JsonRequiredAttribute`](xref:System.Text.Json.Serialization.JsonRequiredAttribute) | Member must be present in the TOML input; missing values throw [`TomlException`](xref:Tomlyn.TomlException). |
 |  | [`JsonObjectCreationHandlingAttribute`](xref:System.Text.Json.Serialization.JsonObjectCreationHandlingAttribute) | Overrides replace/populate behavior for a specific member during deserialization. |
+| [`TomlSingleOrArrayAttribute`](xref:Tomlyn.Serialization.TomlSingleOrArrayAttribute) |  | Allows a collection member to accept either a single TOML value or a TOML array during deserialization. |
 | [`TomlExtensionDataAttribute`](xref:Tomlyn.Serialization.TomlExtensionDataAttribute) | [`JsonExtensionDataAttribute`](xref:System.Text.Json.Serialization.JsonExtensionDataAttribute) | Captures unmapped keys into a dictionary. |
 | [`TomlConverterAttribute`](xref:Tomlyn.Serialization.TomlConverterAttribute) | [`JsonConverterAttribute`](xref:System.Text.Json.Serialization.JsonConverterAttribute) | Selects a custom converter for a type or member (reflection only). |
 

@@ -86,6 +86,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
     private const string JsonObjectCreationHandlingAttributeMetadataName = "System.Text.Json.Serialization.JsonObjectCreationHandlingAttribute";
     private const string TomlSourceGenerationOptionsAttributeMetadataName = "Tomlyn.Serialization.TomlSourceGenerationOptionsAttribute";
     private const string TomlConverterMetadataName = "Tomlyn.Serialization.TomlConverter";
+    private const string TomlSingleOrArrayAttributeMetadataName = "Tomlyn.Serialization.TomlSingleOrArrayAttribute";
     private const string TomlOnSerializingMetadataName = "Tomlyn.Serialization.ITomlOnSerializing";
     private const string TomlOnSerializedMetadataName = "Tomlyn.Serialization.ITomlOnSerialized";
     private const string TomlOnDeserializingMetadataName = "Tomlyn.Serialization.ITomlOnDeserializing";
@@ -1003,7 +1004,15 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             builder.AppendLine("                    {");
             builder.Append("                        if (__argSeen").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(" && Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error) throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
             builder.Append("                        __argSeen").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(" = true;");
-            builder.Append("                        __arg").Append(i.ToString(CultureInfo.InvariantCulture)).Append(" = _context.").Append(GetTypeInfoPropertyName(parameter.ParameterType)).AppendLine(".Read(reader)!;");
+            if (parameter.LinkedMemberIndex >= 0 && parameter.LinkedMemberIndex < poco.Members.Length && poco.Members[parameter.LinkedMemberIndex].HasSingleOrArray)
+            {
+                var linkedMember = poco.Members[parameter.LinkedMemberIndex];
+                EmitSingleOrArrayReadAssignment(builder, parameter.ParameterType, "__arg" + i.ToString(CultureInfo.InvariantCulture), "                        ", "Member '" + EscapeStringLiteral(linkedMember.MemberName) + "' on '" + EscapeStringLiteral(typeName) + "' uses [TomlSingleOrArray]");
+            }
+            else
+            {
+                builder.Append("                        __arg").Append(i.ToString(CultureInfo.InvariantCulture)).Append(" = _context.").Append(GetTypeInfoPropertyName(parameter.ParameterType)).AppendLine(".Read(reader)!;");
+            }
 
             if (parameter.LinkedMemberIndex >= 0 && parameter.LinkedMemberIndex < poco.Members.Length)
             {
@@ -1068,7 +1077,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 builder.AppendLine("                        }");
             }
 
-            if (!member.CanSet)
+            if (!member.CanSet && !member.HasSingleOrArray)
             {
                 builder.AppendLine("                        reader.Skip();");
                 builder.AppendLine("                        continue;");
@@ -1076,7 +1085,14 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 continue;
             }
 
-            builder.Append("                        __memberValue").Append(i.ToString(CultureInfo.InvariantCulture)).Append(" = _context.").Append(GetTypeInfoPropertyName(member.Type)).AppendLine(".Read(reader)!;");
+            if (member.HasSingleOrArray)
+            {
+                EmitSingleOrArrayReadAssignment(builder, member.Type, "__memberValue" + i.ToString(CultureInfo.InvariantCulture), "                        ", "Member '" + EscapeStringLiteral(member.MemberName) + "' on '" + EscapeStringLiteral(typeName) + "' uses [TomlSingleOrArray]");
+            }
+            else
+            {
+                builder.Append("                        __memberValue").Append(i.ToString(CultureInfo.InvariantCulture)).Append(" = _context.").Append(GetTypeInfoPropertyName(member.Type)).AppendLine(".Read(reader)!;");
+            }
             builder.Append("                        __memberSeen").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(" = true;");
             builder.AppendLine("                        continue;");
             builder.AppendLine("                    }");
@@ -1143,7 +1159,15 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     builder.Append("                                    if (__argSeen").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine(" && Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error) throw reader.CreateException($\"Duplicate key '{reader.PropertyName}' was encountered.\");");
                     builder.Append("                                    __argSeen").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine(" = true;");
                     builder.AppendLine("                                    reader.Read();");
-                    builder.Append("                                    __arg").Append(action.Index.ToString(CultureInfo.InvariantCulture)).Append(" = _context.").Append(GetTypeInfoPropertyName(parameter.ParameterType)).AppendLine(".Read(reader)!;");
+                    if (parameter.LinkedMemberIndex >= 0 && parameter.LinkedMemberIndex < poco.Members.Length && poco.Members[parameter.LinkedMemberIndex].HasSingleOrArray)
+                    {
+                        var linkedMember = poco.Members[parameter.LinkedMemberIndex];
+                        EmitSingleOrArrayReadAssignment(builder, parameter.ParameterType, "__arg" + action.Index.ToString(CultureInfo.InvariantCulture), "                                    ", "Member '" + EscapeStringLiteral(linkedMember.MemberName) + "' on '" + EscapeStringLiteral(typeName) + "' uses [TomlSingleOrArray]");
+                    }
+                    else
+                    {
+                        builder.Append("                                    __arg").Append(action.Index.ToString(CultureInfo.InvariantCulture)).Append(" = _context.").Append(GetTypeInfoPropertyName(parameter.ParameterType)).AppendLine(".Read(reader)!;");
+                    }
 
                     if (parameter.LinkedMemberIndex >= 0 && parameter.LinkedMemberIndex < poco.Members.Length)
                     {
@@ -1201,14 +1225,21 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     }
 
                     builder.AppendLine("                                    reader.Read();");
-                    if (!member.CanSet)
+                    if (!member.CanSet && !member.HasSingleOrArray)
                     {
                         builder.AppendLine("                                    reader.Skip();");
                         builder.AppendLine("                                    continue;");
                     }
                     else
                     {
-                        builder.Append("                                    __memberValue").Append(action.Index.ToString(CultureInfo.InvariantCulture)).Append(" = _context.").Append(GetTypeInfoPropertyName(member.Type)).AppendLine(".Read(reader)!;");
+                        if (member.HasSingleOrArray)
+                        {
+                            EmitSingleOrArrayReadAssignment(builder, member.Type, "__memberValue" + action.Index.ToString(CultureInfo.InvariantCulture), "                                    ", "Member '" + EscapeStringLiteral(member.MemberName) + "' on '" + EscapeStringLiteral(typeName) + "' uses [TomlSingleOrArray]");
+                        }
+                        else
+                        {
+                            builder.Append("                                    __memberValue").Append(action.Index.ToString(CultureInfo.InvariantCulture)).Append(" = _context.").Append(GetTypeInfoPropertyName(member.Type)).AppendLine(".Read(reader)!;");
+                        }
                         builder.Append("                                    __memberSeen").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine(" = true;");
                         builder.AppendLine("                                    continue;");
                     }
@@ -1345,6 +1376,32 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 var member = poco.Members[i];
                 if (!member.CanSet)
                 {
+                    if (member.HasSingleOrArray)
+                    {
+                        var addCollectionExpression = GetSingleOrArrayAddCollectionExpression(member.Type, "__existing", "__memberValue" + i.ToString(CultureInfo.InvariantCulture) + "!");
+                        builder.Append("            if (__memberSeen").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(")");
+                        builder.AppendLine("            {");
+                        builder.Append("                var __existing = value.").Append(member.MemberName).AppendLine(";");
+                        builder.AppendLine("                if (__existing is null)");
+                        builder.AppendLine("                {");
+                        builder.Append("                    throw new TomlException($\"Member '").Append(EscapeStringLiteral(member.MemberName))
+                            .Append("' on '{value.GetType().FullName}' uses [TomlSingleOrArray] but the existing collection is null or cannot be populated.\");")
+                            .AppendLine();
+                        builder.AppendLine("                }");
+                        if (addCollectionExpression is null)
+                        {
+                            builder.Append("                throw new TomlException($\"Member '").Append(EscapeStringLiteral(member.MemberName))
+                                .Append("' on '{value.GetType().FullName}' uses [TomlSingleOrArray] but '")
+                                .Append(EscapeStringLiteral(member.Type.ToDisplayString(FullyQualifiedNullableFormat)))
+                                .AppendLine("' doesn't support populating the existing collection.\");");
+                        }
+                        else
+                        {
+                            builder.Append("                _ = ").Append(addCollectionExpression).AppendLine(";");
+                        }
+                        builder.AppendLine("            }");
+                    }
+
                     continue;
                 }
 
@@ -1692,8 +1749,256 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         };
     }
 
+    private static string GetSingleOrArrayPopulateConditionExpression(PocoMember member)
+    {
+        var populateCondition = GetPopulateConditionExpression(member);
+        if (!member.CanSet)
+        {
+            return "true";
+        }
+
+        return populateCondition ?? "false";
+    }
+
+    private static bool TryGetSingleOrArrayElementType(ITypeSymbol type, out ITypeSymbol elementType, out bool isArray, out SequenceKind kind)
+    {
+        if (TryGetArrayElementType(type, out elementType))
+        {
+            isArray = true;
+            kind = default;
+            return true;
+        }
+
+        if (TryGetSequenceElementType(type, out elementType, out kind))
+        {
+            isArray = false;
+            return true;
+        }
+
+        elementType = null!;
+        isArray = false;
+        kind = default;
+        return false;
+    }
+
+    private static bool CanPopulateSingleOrArraySequence(SequenceKind kind)
+    {
+        return kind is SequenceKind.List or SequenceKind.ListBackedEnumerable or SequenceKind.HashSet or SequenceKind.HashSetBackedEnumerable;
+    }
+
+    private static string? GetSingleOrArrayCreateExpression(ITypeSymbol collectionType)
+    {
+        if (!TryGetSingleOrArrayElementType(collectionType, out var elementType, out var isArray, out var kind))
+        {
+            return null;
+        }
+
+        var elementTypeName = elementType.ToDisplayString(FullyQualifiedNullableFormat);
+        var readElementExpression = "_context." + GetTypeInfoPropertyName(elementType) + ".Read(reader)!";
+
+        if (isArray)
+        {
+            return "global::Tomlyn.Serialization.Internal.TomlSingleOrArrayCollectionHelper.CreateSingleElementArray<" + elementTypeName + ">(" + readElementExpression + ")";
+        }
+
+        return kind switch
+        {
+            SequenceKind.List or SequenceKind.ListBackedEnumerable => "global::Tomlyn.Serialization.Internal.TomlSingleOrArrayCollectionHelper.CreateSingleElementList<" + elementTypeName + ">(" + readElementExpression + ")",
+            SequenceKind.HashSet or SequenceKind.HashSetBackedEnumerable => "global::Tomlyn.Serialization.Internal.TomlSingleOrArrayCollectionHelper.CreateSingleElementHashSet<" + elementTypeName + ">(" + readElementExpression + ")",
+            SequenceKind.ImmutableArray => "global::Tomlyn.Serialization.Internal.TomlSingleOrArrayCollectionHelper.CreateSingleElementImmutableArray<" + elementTypeName + ">(" + readElementExpression + ")",
+            SequenceKind.ImmutableList => "global::Tomlyn.Serialization.Internal.TomlSingleOrArrayCollectionHelper.CreateSingleElementImmutableList<" + elementTypeName + ">(" + readElementExpression + ")",
+            SequenceKind.ImmutableHashSet => "global::Tomlyn.Serialization.Internal.TomlSingleOrArrayCollectionHelper.CreateSingleElementImmutableHashSet<" + elementTypeName + ">(" + readElementExpression + ")",
+            _ => null,
+        };
+    }
+
+    private static string? GetSingleOrArrayCanPopulateExpression(ITypeSymbol collectionType, string existingExpression)
+    {
+        if (!TryGetSingleOrArrayElementType(collectionType, out var elementType, out var isArray, out var kind) || isArray || !CanPopulateSingleOrArraySequence(kind))
+        {
+            return null;
+        }
+
+        var elementTypeName = elementType.ToDisplayString(FullyQualifiedNullableFormat);
+        return "global::Tomlyn.Serialization.Internal.TomlSingleOrArrayCollectionHelper.CanPopulateCollection<" + elementTypeName + ">(" + existingExpression + ")";
+    }
+
+    private static string? GetSingleOrArrayAddSingleExpression(ITypeSymbol collectionType, string existingExpression)
+    {
+        if (!TryGetSingleOrArrayElementType(collectionType, out var elementType, out var isArray, out var kind) || isArray || !CanPopulateSingleOrArraySequence(kind))
+        {
+            return null;
+        }
+
+        var elementTypeName = elementType.ToDisplayString(FullyQualifiedNullableFormat);
+        var readElementExpression = "_context." + GetTypeInfoPropertyName(elementType) + ".Read(reader)!";
+        return "global::Tomlyn.Serialization.Internal.TomlSingleOrArrayCollectionHelper.AddSingleElementToCollection<" + elementTypeName + ">(" + existingExpression + ", " + readElementExpression + ")";
+    }
+
+    private static string? GetSingleOrArrayAddCollectionExpression(ITypeSymbol collectionType, string existingExpression, string incomingExpression)
+    {
+        if (!TryGetSingleOrArrayElementType(collectionType, out var elementType, out var isArray, out var kind) || isArray || !CanPopulateSingleOrArraySequence(kind))
+        {
+            return null;
+        }
+
+        var elementTypeName = elementType.ToDisplayString(FullyQualifiedNullableFormat);
+        return "global::Tomlyn.Serialization.Internal.TomlSingleOrArrayCollectionHelper.AddCollectionToExisting<" + elementTypeName + ">(" + existingExpression + ", (global::System.Collections.Generic.IEnumerable<" + elementTypeName + ">)" + incomingExpression + ")";
+    }
+
+    private static void EmitSingleOrArrayReadAssignment(StringBuilder builder, ITypeSymbol collectionType, string targetExpression, string indent, string errorPrefix)
+    {
+        var collectionTypeName = collectionType.ToDisplayString(FullyQualifiedNullableFormat);
+        var createExpression = GetSingleOrArrayCreateExpression(collectionType);
+
+        builder.Append(indent).AppendLine("if (reader.TokenType == TomlTokenType.StartArray)");
+        builder.Append(indent).AppendLine("{");
+        builder.Append(indent).Append("    ").Append(targetExpression).Append(" = _context.").Append(GetTypeInfoPropertyName(collectionType)).AppendLine(".Read(reader)!;");
+        builder.Append(indent).AppendLine("}");
+        builder.Append(indent).AppendLine("else");
+        builder.Append(indent).AppendLine("{");
+        if (createExpression is null)
+        {
+            builder.Append(indent).Append("    throw new TomlException(\"").Append(errorPrefix)
+                .Append(" but '").Append(EscapeStringLiteral(collectionTypeName))
+                .AppendLine("' is not a supported collection type.\");");
+        }
+        else
+        {
+            builder.Append(indent).Append("    ").Append(targetExpression).Append(" = (").Append(collectionTypeName).Append(")").Append(createExpression).AppendLine("!;");
+        }
+        builder.Append(indent).AppendLine("}");
+    }
+
+    private static void EmitSingleOrArrayMemberRead(StringBuilder builder, PocoMember member, string indent)
+    {
+        var memberTypeName = member.Type.ToDisplayString(FullyQualifiedNullableFormat);
+        var memberAccess = "value." + member.MemberName;
+        var populateCondition = GetSingleOrArrayPopulateConditionExpression(member);
+        var errorPrefix = $"Member '{EscapeStringLiteral(member.MemberName)}' on '{{value.GetType().FullName}}' uses [TomlSingleOrArray]";
+        var createExpression = GetSingleOrArrayCreateExpression(member.Type);
+        var canPopulateExpression = GetSingleOrArrayCanPopulateExpression(member.Type, memberAccess + "!");
+        var addSingleExpression = GetSingleOrArrayAddSingleExpression(member.Type, memberAccess + "!");
+
+        builder.Append(indent).AppendLine("if (reader.TokenType == TomlTokenType.StartArray)");
+        builder.Append(indent).AppendLine("{");
+        builder.Append(indent).Append("    if (").Append(populateCondition).Append(" && ").Append(memberAccess).AppendLine(" is not null)");
+        builder.Append(indent).AppendLine("    {");
+        if (canPopulateExpression is not null)
+        {
+            builder.Append(indent).Append("        if (").Append(canPopulateExpression).AppendLine(")");
+            builder.Append(indent).AppendLine("        {");
+            builder.Append(indent).Append("            var __populated = _context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".ReadInto(reader, ").Append(memberAccess).AppendLine(");");
+            if (member.CanSet)
+            {
+                builder.Append(indent).Append("            ").Append(memberAccess).Append(" = (").Append(memberTypeName).AppendLine(")__populated!;");
+            }
+            else
+            {
+                builder.Append(indent).Append("            if (!object.ReferenceEquals(").Append(memberAccess).Append(", __populated))").AppendLine();
+                builder.Append(indent).AppendLine("            {");
+                builder.Append(indent).Append("                throw new TomlException($\"").Append(errorPrefix)
+                    .Append(" but '").Append(EscapeStringLiteral(memberTypeName))
+                    .AppendLine("' doesn't support populating the existing collection.\");");
+                builder.Append(indent).AppendLine("            }");
+            }
+            builder.Append(indent).AppendLine("        }");
+            builder.Append(indent).AppendLine("        else");
+            builder.Append(indent).AppendLine("        {");
+        }
+
+        if (!member.CanSet)
+        {
+            builder.Append(indent).Append("            throw new TomlException($\"").Append(errorPrefix)
+                .Append(" but '").Append(EscapeStringLiteral(memberTypeName))
+                .AppendLine("' doesn't support populating the existing collection.\");");
+        }
+        else
+        {
+            builder.Append(indent).Append("            ").Append(memberAccess).Append(" = _context.").Append(GetTypeInfoPropertyName(member.Type)).AppendLine(".Read(reader)!;");
+        }
+
+        if (canPopulateExpression is not null)
+        {
+            builder.Append(indent).AppendLine("        }");
+        }
+        builder.Append(indent).AppendLine("    }");
+        builder.Append(indent).AppendLine("    else");
+        builder.Append(indent).AppendLine("    {");
+        if (!member.CanSet)
+        {
+            builder.Append(indent).Append("        throw new TomlException($\"").Append(errorPrefix)
+                .AppendLine(" but the existing collection is null or cannot be populated.\");");
+        }
+        else
+        {
+            builder.Append(indent).Append("        ").Append(memberAccess).Append(" = _context.").Append(GetTypeInfoPropertyName(member.Type)).AppendLine(".Read(reader)!;");
+        }
+        builder.Append(indent).AppendLine("    }");
+        builder.Append(indent).AppendLine("}");
+        builder.Append(indent).AppendLine("else");
+        builder.Append(indent).AppendLine("{");
+        if (createExpression is null)
+        {
+            builder.Append(indent).Append("    throw new TomlException($\"").Append(errorPrefix)
+                .Append(" but '").Append(EscapeStringLiteral(memberTypeName))
+                .AppendLine("' is not a supported collection type.\");");
+        }
+        else
+        {
+            builder.Append(indent).Append("    if (").Append(populateCondition).Append(" && ").Append(memberAccess).AppendLine(" is not null)");
+            builder.Append(indent).AppendLine("    {");
+            if (canPopulateExpression is not null && addSingleExpression is not null)
+            {
+                builder.Append(indent).Append("        if (").Append(canPopulateExpression).AppendLine(")");
+                builder.Append(indent).AppendLine("        {");
+                builder.Append(indent).Append("            _ = ").Append(addSingleExpression).AppendLine(";");
+                builder.Append(indent).AppendLine("        }");
+                builder.Append(indent).AppendLine("        else");
+                builder.Append(indent).AppendLine("        {");
+            }
+
+            if (!member.CanSet)
+            {
+                builder.Append(indent).Append("            throw new TomlException($\"").Append(errorPrefix)
+                    .Append(" but '").Append(EscapeStringLiteral(memberTypeName))
+                    .AppendLine("' doesn't support populating the existing collection.\");");
+            }
+            else
+            {
+                builder.Append(indent).Append("            ").Append(memberAccess).Append(" = (").Append(memberTypeName).Append(")").Append(createExpression).AppendLine("!;");
+            }
+
+            if (canPopulateExpression is not null && addSingleExpression is not null)
+            {
+                builder.Append(indent).AppendLine("        }");
+            }
+
+            builder.Append(indent).AppendLine("    }");
+            builder.Append(indent).AppendLine("    else");
+            builder.Append(indent).AppendLine("    {");
+            if (!member.CanSet)
+            {
+                builder.Append(indent).Append("        throw new TomlException($\"").Append(errorPrefix)
+                    .AppendLine(" but the existing collection is null or cannot be populated.\");");
+            }
+            else
+            {
+                builder.Append(indent).Append("        ").Append(memberAccess).Append(" = (").Append(memberTypeName).Append(")").Append(createExpression).AppendLine("!;");
+            }
+            builder.Append(indent).AppendLine("    }");
+        }
+        builder.Append(indent).AppendLine("}");
+    }
+
     private static void EmitMemberRead(StringBuilder builder, PocoMember member, int index, string indent)
     {
+        if (member.HasSingleOrArray)
+        {
+            EmitSingleOrArrayMemberRead(builder, member, indent);
+            return;
+        }
+
         var memberTypeName = member.Type.ToDisplayString(FullyQualifiedNullableFormat);
         var typeInfoPropertyName = GetTypeInfoPropertyName(member.Type);
         var populateCondition = GetPopulateConditionExpression(member);
@@ -2396,7 +2701,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private sealed class PocoMember
     {
-        public PocoMember(string memberName, string serializedName, ITypeSymbol type, int order, WriteIgnoreKind writeIgnore, ObjectCreationHandlingKind objectCreationHandling, bool hasExplicitObjectCreationHandling, bool isRequired, bool isCompilerRequired, bool canSet, bool isInitOnly)
+        public PocoMember(string memberName, string serializedName, ITypeSymbol type, int order, WriteIgnoreKind writeIgnore, ObjectCreationHandlingKind objectCreationHandling, bool hasExplicitObjectCreationHandling, bool hasSingleOrArray, bool isRequired, bool isCompilerRequired, bool canSet, bool isInitOnly)
         {
             MemberName = memberName;
             SerializedName = serializedName;
@@ -2405,6 +2710,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             WriteIgnore = writeIgnore;
             ObjectCreationHandling = objectCreationHandling;
             HasExplicitObjectCreationHandling = hasExplicitObjectCreationHandling;
+            HasSingleOrArray = hasSingleOrArray;
             IsRequired = isRequired;
             IsCompilerRequired = isCompilerRequired;
             CanSet = canSet;
@@ -2418,6 +2724,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         public WriteIgnoreKind WriteIgnore { get; }
         public ObjectCreationHandlingKind ObjectCreationHandling { get; }
         public bool HasExplicitObjectCreationHandling { get; }
+        public bool HasSingleOrArray { get; }
         public bool IsRequired { get; }
         public bool IsCompilerRequired { get; }
         public bool CanSet { get; }
@@ -2691,6 +2998,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             var canSet = member.SetMethod is not null && member.SetMethod.DeclaredAccessibility == Accessibility.Public;
             var isInitOnly = member.SetMethod?.IsInitOnly == true;
             var isCompilerRequired = member.IsRequired;
+            var hasSingleOrArray = HasAttribute(member, TomlSingleOrArrayAttributeMetadataName);
             var memberObjectCreationHandling = GetObjectCreationHandling(member);
             var hasExplicitObjectCreationHandling = memberObjectCreationHandling != ObjectCreationHandlingKind.Default;
             var objectCreationHandling = memberObjectCreationHandling;
@@ -2747,7 +3055,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             var serializedName = GetSerializedName(member, member.Name, namingPolicy);
             var order = GetOrder(member);
             var required = IsRequired(member);
-            members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore, objectCreationHandling, hasExplicitObjectCreationHandling, required, isCompilerRequired, canSet, isInitOnly));
+            members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore, objectCreationHandling, hasExplicitObjectCreationHandling, hasSingleOrArray, required, isCompilerRequired, canSet, isInitOnly));
         }
 
         foreach (var member in named.GetMembers().OfType<IFieldSymbol>())
@@ -2813,6 +3121,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 continue;
             }
 
+            var hasSingleOrArray = HasAttribute(member, TomlSingleOrArrayAttributeMetadataName);
             var memberObjectCreationHandling = GetObjectCreationHandling(member);
             var hasExplicitObjectCreationHandling = memberObjectCreationHandling != ObjectCreationHandlingKind.Default;
             var objectCreationHandling = memberObjectCreationHandling;
@@ -2824,7 +3133,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             var serializedName = GetSerializedName(member, member.Name, namingPolicy);
             var order = GetOrder(member);
             var required = IsRequired(member);
-            members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore, objectCreationHandling, hasExplicitObjectCreationHandling, required, member.IsRequired, canSet: true, isInitOnly: false));
+            members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore, objectCreationHandling, hasExplicitObjectCreationHandling, hasSingleOrArray, required, member.IsRequired, canSet: true, isInitOnly: false));
         }
 
         PocoConstructor? constructorModel = null;

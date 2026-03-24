@@ -102,6 +102,18 @@ public sealed class TomlExtensionDataAttribute : TomlAttribute
 }
 
 /// <summary>
+/// Allows a collection member to be deserialized from either a single TOML value or a TOML array.
+/// </summary>
+/// <remarks>
+/// When the TOML input contains a single value instead of an array, Tomlyn treats it as a collection containing
+/// exactly one element. For mutable read-only collection members, values are appended to the existing collection.
+/// </remarks>
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = false)]
+public sealed class TomlSingleOrArrayAttribute : TomlAttribute
+{
+}
+
+/// <summary>
 /// Specifies a custom <see cref="TomlConverter"/> to use when serializing or deserializing a member or type.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Enum | AttributeTargets.Interface |

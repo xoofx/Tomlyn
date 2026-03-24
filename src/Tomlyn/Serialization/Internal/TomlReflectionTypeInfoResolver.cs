@@ -179,6 +179,7 @@ internal static class TomlReflectionTypeInfoResolver
                 GetDefaultValue(property.PropertyType),
                 GetObjectCreationHandling(property, typeObjectCreationHandling),
                 HasExplicitObjectCreationHandling(property),
+                HasSingleOrArrayAttribute(property),
                 IsRequired(property),
                 IsExtensionData(property),
                 TryCreateMemberConverter(property, property.PropertyType, options)));
@@ -221,6 +222,7 @@ internal static class TomlReflectionTypeInfoResolver
                 GetDefaultValue(field.FieldType),
                 GetObjectCreationHandling(field, typeObjectCreationHandling),
                 HasExplicitObjectCreationHandling(field),
+                HasSingleOrArrayAttribute(field),
                 IsRequired(field),
                 IsExtensionData(field),
                 TryCreateMemberConverter(field, field.FieldType, options)));
@@ -442,6 +444,11 @@ internal static class TomlReflectionTypeInfoResolver
         return member.IsDefined(typeof(JsonObjectCreationHandlingAttribute), inherit: true);
     }
 
+    private static bool HasSingleOrArrayAttribute(MemberInfo member)
+    {
+        return member.IsDefined(typeof(TomlSingleOrArrayAttribute), inherit: true);
+    }
+
     private static string? GetSerializedName(MemberInfo member, string defaultName, TomlSerializerOptions options)
     {
         var tomlName = member.GetCustomAttribute<TomlPropertyNameAttribute>(inherit: true);
@@ -520,6 +527,7 @@ internal static class TomlReflectionTypeInfoResolver
         object? DefaultValue,
         JsonObjectCreationHandling ObjectCreationHandling,
         bool HasExplicitObjectCreationHandling,
+        bool HasSingleOrArray,
         bool IsRequired,
         bool IsExtensionData,
         TomlConverter? Converter);
@@ -836,7 +844,7 @@ internal static class TomlReflectionTypeInfoResolver
                     }
 
                     var member = _members[memberIndex];
-                    if (member.Setter is null && member.ObjectCreationHandling != JsonObjectCreationHandling.Populate)
+                    if (member.Setter is null && member.ObjectCreationHandling != JsonObjectCreationHandling.Populate && !member.HasSingleOrArray)
                     {
                         reader.Skip();
                         continue;
@@ -885,6 +893,11 @@ internal static class TomlReflectionTypeInfoResolver
 
         private object? ReadMemberValue(TomlReader reader, object instance, MemberModel member)
         {
+            if (member.HasSingleOrArray)
+            {
+                return ReadSingleOrArrayMemberValue(reader, instance, member);
+            }
+
             if (member.ObjectCreationHandling != JsonObjectCreationHandling.Populate)
             {
                 return ReadMemberValue(reader, member);
@@ -958,6 +971,76 @@ internal static class TomlReflectionTypeInfoResolver
             }
 
             return populatedValue;
+        }
+
+        private object? ReadSingleOrArrayMemberValue(TomlReader reader, object instance, MemberModel member)
+        {
+            var existingValue = member.Getter(instance);
+            var shouldPopulateExisting = existingValue is not null && (member.Setter is null || member.ObjectCreationHandling == JsonObjectCreationHandling.Populate);
+
+            if (reader.TokenType == TomlTokenType.StartArray)
+            {
+                if (!shouldPopulateExisting)
+                {
+                    return ReadMemberValue(reader, member);
+                }
+
+                if (!TomlSingleOrArrayCollectionHelper.CanPopulate(member.MemberType, existingValue!))
+                {
+                    if (member.Setter is null)
+                    {
+                        throw reader.CreateException(
+                            $"Member '{member.Member.Name}' on '{Type.FullName}' uses [TomlSingleOrArray] but '{member.MemberType.FullName}' doesn't support populating the existing collection.");
+                    }
+
+                    return ReadMemberValue(reader, member);
+                }
+
+                if (member.Converter is { } converter)
+                {
+                    return converter.Read(reader, member.MemberType);
+                }
+
+                var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, member.MemberType);
+                var populatedValue = typeInfo.ReadInto(reader, existingValue);
+                if (member.Setter is null && !ReferenceEquals(existingValue, populatedValue))
+                {
+                    throw reader.CreateException(
+                        $"Member '{member.Member.Name}' on '{Type.FullName}' uses [TomlSingleOrArray] but '{member.MemberType.FullName}' doesn't support populating the existing collection.");
+                }
+
+                return populatedValue;
+            }
+
+            if (!TomlSingleOrArrayCollectionHelper.IsSupported(member.MemberType))
+            {
+                throw reader.CreateException(
+                    $"Member '{member.Member.Name}' on '{Type.FullName}' uses [TomlSingleOrArray] but '{member.MemberType.FullName}' is not a supported collection type.");
+            }
+
+            if (shouldPopulateExisting)
+            {
+                if (!TomlSingleOrArrayCollectionHelper.CanPopulate(member.MemberType, existingValue!))
+                {
+                    if (member.Setter is null)
+                    {
+                        throw reader.CreateException(
+                            $"Member '{member.Member.Name}' on '{Type.FullName}' uses [TomlSingleOrArray] but '{member.MemberType.FullName}' doesn't support populating the existing collection.");
+                    }
+
+                    return TomlSingleOrArrayCollectionHelper.ReadSingleElementAsCollection(reader, Options, member.MemberType);
+                }
+
+                return TomlSingleOrArrayCollectionHelper.ReadSingleElementIntoExisting(reader, Options, member.MemberType, existingValue!);
+            }
+
+            if (member.Setter is null)
+            {
+                throw reader.CreateException(
+                    $"Member '{member.Member.Name}' on '{Type.FullName}' uses [TomlSingleOrArray] but the existing collection is null or cannot be populated.");
+            }
+
+            return TomlSingleOrArrayCollectionHelper.ReadSingleElementAsCollection(reader, Options, member.MemberType);
         }
 
         private object CreateInstance()
@@ -1114,14 +1197,18 @@ internal static class TomlReflectionTypeInfoResolver
                     memberSeen[memberIndex] = true;
                     var member = _members[memberIndex];
 
-                    if (member.Setter is null)
+                    if (member.Setter is null && !member.HasSingleOrArray)
                     {
                         reader.Skip();
                         continue;
                     }
 
                     object? value;
-                    if (member.Converter is { } converter)
+                    if (member.HasSingleOrArray && reader.TokenType != TomlTokenType.StartArray)
+                    {
+                        value = TomlSingleOrArrayCollectionHelper.ReadSingleElementAsCollection(reader, Options, member.MemberType);
+                    }
+                    else if (member.Converter is { } converter)
                     {
                         value = converter.Read(reader, member.MemberType);
                     }
@@ -1194,6 +1281,22 @@ internal static class TomlReflectionTypeInfoResolver
                 var member = _members[i];
                 if (member.Setter is null)
                 {
+                    if (member.HasSingleOrArray)
+                    {
+                        var existingValue = member.Getter(instance);
+                        if (existingValue is null)
+                        {
+                            throw new TomlException($"Member '{member.Member.Name}' on '{Type.FullName}' uses [TomlSingleOrArray] but the existing collection is null or cannot be populated.");
+                        }
+
+                        if (!TomlSingleOrArrayCollectionHelper.CanPopulate(member.MemberType, existingValue))
+                        {
+                            throw new TomlException($"Member '{member.Member.Name}' on '{Type.FullName}' uses [TomlSingleOrArray] but '{member.MemberType.FullName}' doesn't support populating the existing collection.");
+                        }
+
+                        TomlSingleOrArrayCollectionHelper.PopulateExistingFromCollection(member.MemberType, existingValue, memberValues[i]!);
+                    }
+
                     continue;
                 }
 

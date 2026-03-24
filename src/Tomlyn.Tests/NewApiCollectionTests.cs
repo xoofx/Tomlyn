@@ -31,9 +31,30 @@ public sealed class Issue117ArrayHolder
     public int[]? Items { get; set; }
 }
 
+public sealed class SingleOrArrayCollectionHolder
+{
+    public SingleOrArrayCollectionHolder()
+    {
+        RuntimeIdentifiers = new List<string>();
+    }
+
+    [TomlSingleOrArray]
+    [JsonPropertyName("rid")]
+    public List<string> RuntimeIdentifiers { get; }
+}
+
+public sealed class SingleOrArraySettableCollectionHolder
+{
+    [TomlSingleOrArray]
+    [JsonPropertyName("rid")]
+    public List<string> RuntimeIdentifiers { get; set; } = new() { "existing" };
+}
+
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [TomlSerializable(typeof(GeneratedCollectionHolder))]
 [TomlSerializable(typeof(DottedKeyDictionaryHolder))]
+[TomlSerializable(typeof(SingleOrArrayCollectionHolder))]
+[TomlSerializable(typeof(SingleOrArraySettableCollectionHolder))]
 internal partial class TestTomlCollectionsContext : TomlSerializerContext
 {
 }
@@ -163,6 +184,71 @@ public class NewApiCollectionTests
         Assert.That(roundtrip, Is.Not.Null);
         Assert.That(roundtrip!.Map.ContainsKey("a.b"), Is.True);
         Assert.That(roundtrip.Map["a.b"], Is.EqualTo(1L));
+    }
+
+    [Test]
+    public void Reflection_GetOnlyList_WithTomlSingleOrArray_CanReadSingleValue()
+    {
+        var result = TomlSerializer.Deserialize<SingleOrArrayCollectionHolder>("rid = \"test\"\n");
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.RuntimeIdentifiers, Is.EqualTo(new[] { "test" }));
+    }
+
+    [Test]
+    public void Reflection_GetOnlyList_WithTomlSingleOrArray_CanReadArray()
+    {
+        var result = TomlSerializer.Deserialize<SingleOrArrayCollectionHolder>("rid = [\"test1\", \"test2\"]\n");
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.RuntimeIdentifiers, Is.EqualTo(new[] { "test1", "test2" }));
+    }
+
+    [Test]
+    public void Reflection_SettableList_WithTomlSingleOrArray_ReplacesOnSingleValue()
+    {
+        var result = TomlSerializer.Deserialize<SingleOrArraySettableCollectionHolder>("rid = \"test\"\n");
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.RuntimeIdentifiers, Is.EqualTo(new[] { "test" }));
+    }
+
+    [Test]
+    public void Reflection_WithoutTomlSingleOrArray_SingleValueStillFails()
+    {
+        var ex = Assert.Throws<TomlException>(() => TomlSerializer.Deserialize<GeneratedCollectionHolder>("Values = 1\n"));
+
+        Assert.That(ex!.Message, Does.Contain("Expected StartArray"));
+    }
+
+    [Test]
+    public void GeneratedContext_GetOnlyList_WithTomlSingleOrArray_CanReadSingleValue()
+    {
+        var context = TestTomlCollectionsContext.Default;
+        var result = TomlSerializer.Deserialize("rid = \"test\"\n", context.SingleOrArrayCollectionHolder);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.RuntimeIdentifiers, Is.EqualTo(new[] { "test" }));
+    }
+
+    [Test]
+    public void GeneratedContext_GetOnlyList_WithTomlSingleOrArray_CanReadArray()
+    {
+        var context = TestTomlCollectionsContext.Default;
+        var result = TomlSerializer.Deserialize("rid = [\"test1\", \"test2\"]\n", context.SingleOrArrayCollectionHolder);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.RuntimeIdentifiers, Is.EqualTo(new[] { "test1", "test2" }));
+    }
+
+    [Test]
+    public void GeneratedContext_SettableList_WithTomlSingleOrArray_ReplacesOnSingleValue()
+    {
+        var context = TestTomlCollectionsContext.Default;
+        var result = TomlSerializer.Deserialize("rid = \"test\"\n", context.SingleOrArraySettableCollectionHolder);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.RuntimeIdentifiers, Is.EqualTo(new[] { "test" }));
     }
 
     private static string CreateItemsToml(int itemCount)

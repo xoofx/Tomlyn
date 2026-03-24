@@ -14,6 +14,7 @@ Tomlyn is a high-performance .NET [TOML](https://toml.io/en/) 1.1 parser, round-
 - **TOML 1.1.0 only**: Tomlyn v1 targets [TOML 1.1.0](https://toml.io/en/v1.1.0) and does **not** support TOML 1.0
 - **Source generation**: NativeAOT / trimming friendly via `TomlSerializerContext` and `[TomlSerializable]` roots
 - **`System.Text.Json` attribute interop**: reuse `[JsonPropertyName]`, `[JsonIgnore]`, `[JsonRequired]`, `[JsonConstructor]`, `[JsonObjectCreationHandling]`, and polymorphism attributes
+- **Flexible collection input**: opt a collection member into accepting either a single TOML value or an array via `[TomlSingleOrArray]`
 - **Allocation-free parsing pipeline**: incremental `TomlLexer` → `TomlParser` with precise spans for errors
 - **Low-level access**: full lexer/parser API plus a lossless, trivia-preserving syntax tree (`SyntaxParser` → `DocumentSyntax`)
 - **Reflection control**: reflection-based POCO mapping is available, but can be disabled for NativeAOT via a feature switch / MSBuild property
@@ -112,6 +113,37 @@ internal partial class MyTomlContext : TomlSerializerContext
 var config = TomlSerializer.Deserialize(toml, MyTomlContext.Default.MyConfig);
 var tomlOut = TomlSerializer.Serialize(config, MyTomlContext.Default.MyConfig);
 ```
+
+### Single Value Or Array Collections
+
+```csharp
+using System.Text.Json.Serialization;
+using Tomlyn.Serialization;
+
+public sealed class PackagingConfiguration
+{
+    public PackagingConfiguration()
+    {
+        RuntimeIdentifiers = new List<string>();
+    }
+
+    [TomlSingleOrArray]
+    [JsonPropertyName("rid")]
+    public List<string> RuntimeIdentifiers { get; }
+}
+```
+
+With `[TomlSingleOrArray]`, both of these TOML payloads are valid:
+
+```toml
+rid = "win-x64"
+```
+
+```toml
+rid = ["win-x64", "linux-x64"]
+```
+
+For mutable read-only collection members, Tomlyn appends into the existing collection instance. Without `[TomlSingleOrArray]`, collection members still require a TOML array.
 
 ### Reflection Control
 
