@@ -1933,7 +1933,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
     private static void EmitRepeatedTableExtensionIntoTarget(StringBuilder builder, ITypeSymbol type, string existingExpression, string targetExpression, string indent)
     {
         var typeName = type.ToDisplayString(FullyQualifiedNullableFormat);
-        builder.Append(indent).Append("if (global::Tomlyn.Serialization.Internal.TomlTableHeaderExtensionHelper.IsTableHeaderExtension(reader) && ").Append(existingExpression).AppendLine(" is not null)");
+        builder.Append(indent).Append("if (reader.TokenType == TomlTokenType.StartTable && reader.CurrentSpan is null && ").Append(existingExpression).AppendLine(" is not null)");
         builder.Append(indent).AppendLine("{");
         builder.Append(indent).Append("    var __tableExtension = _context.").Append(GetTypeInfoPropertyName(type)).Append(".ReadInto(reader, ").Append(existingExpression).AppendLine(");");
         builder.Append(indent).Append("    ").Append(targetExpression).Append(" = (").Append(typeName).AppendLine(")__tableExtension!;");
@@ -1945,7 +1945,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
     {
         var memberAccess = "value." + member.MemberName;
         var memberTypeName = member.Type.ToDisplayString(FullyQualifiedNullableFormat);
-        builder.Append(indent).Append("if (global::Tomlyn.Serialization.Internal.TomlTableHeaderExtensionHelper.IsTableHeaderExtension(reader) && ").Append(memberAccess).AppendLine(" is not null)");
+        builder.Append(indent).Append("if (reader.TokenType == TomlTokenType.StartTable && reader.CurrentSpan is null && ").Append(memberAccess).AppendLine(" is not null)");
         builder.Append(indent).AppendLine("{");
         builder.Append(indent).Append("    var __tableExtension = _context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".ReadInto(reader, ").Append(memberAccess).AppendLine(");");
         builder.Append(indent).Append("    if (!object.ReferenceEquals(").Append(memberAccess).Append(", __tableExtension))").AppendLine();

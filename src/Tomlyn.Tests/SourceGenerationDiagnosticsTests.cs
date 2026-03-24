@@ -167,6 +167,37 @@ public sealed class SourceGenerationDiagnosticsTests
         StringAssert.Contains("string __arg1 = default!;", generatedSource);
     }
 
+    [Test]
+    public void Generator_DoesNotReferenceInternalRuntimeHelpers_FromConsumerAssembly()
+    {
+        var source = """
+            #nullable enable
+            using System.Text.Json.Serialization;
+            using Tomlyn.Serialization;
+
+            public sealed class Root
+            {
+                [JsonPropertyName("child")]
+                public Child Child { get; } = new();
+            }
+
+            public sealed class Child
+            {
+                public string Name { get; set; } = "";
+            }
+
+            [TomlSourceGenerationOptions(PreferredObjectCreationHandling = JsonObjectCreationHandling.Populate)]
+            [TomlSerializable(typeof(Root))]
+            internal partial class Ctx : TomlSerializerContext { }
+            """;
+
+        var result = RunGeneratorTest(source);
+        var generatedSource = string.Join(Environment.NewLine, result.GeneratedSources);
+
+        Assert.That(result.Diagnostics.Any(d => d.Id == "CS0122"), Is.False);
+        StringAssert.DoesNotContain("TomlTableHeaderExtensionHelper", generatedSource);
+    }
+
     private static ImmutableArray<Diagnostic> RunGenerator(string source)
         => RunGeneratorTest(source).Diagnostics;
 
