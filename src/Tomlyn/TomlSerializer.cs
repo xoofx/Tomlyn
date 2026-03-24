@@ -475,12 +475,12 @@ public static class TomlSerializer
     /// </summary>
     [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
     [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
-    public static bool TryDeserialize<T>(string toml, out T? value, TomlSerializerOptions? options = null)
+    public static bool TryDeserialize<T>(string toml, [NotNullWhen(true)] out T? value, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(toml, nameof(toml));
         try
         {
-            value = Deserialize<T>(toml, options);
+            value = Deserialize<T>(toml, options)!;
             return true;
         }
         catch (TomlException)
@@ -495,13 +495,13 @@ public static class TomlSerializer
     /// </summary>
     [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
     [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
-    public static bool TryDeserialize(string toml, Type returnType, out object? value, TomlSerializerOptions? options = null)
+    public static bool TryDeserialize(string toml, Type returnType, [NotNullWhen(true)] out object? value, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(toml, nameof(toml));
         ArgumentGuard.ThrowIfNull(returnType, nameof(returnType));
         try
         {
-            value = Deserialize(toml, returnType, options);
+            value = Deserialize(toml, returnType, options)!;
             return true;
         }
         catch (TomlException)
@@ -514,13 +514,13 @@ public static class TomlSerializer
     /// <summary>
     /// Attempts to deserialize a TOML payload from text using generated metadata from a serializer context.
     /// </summary>
-    public static bool TryDeserialize<T>(string toml, TomlSerializerContext context, out T? value)
+    public static bool TryDeserialize<T>(string toml, TomlSerializerContext context, [NotNullWhen(true)] out T? value)
     {
         ArgumentGuard.ThrowIfNull(toml, nameof(toml));
         ArgumentGuard.ThrowIfNull(context, nameof(context));
         try
         {
-            value = Deserialize<T>(toml, context);
+            value = Deserialize<T>(toml, context)!;
             return true;
         }
         catch (TomlException)
@@ -533,14 +533,14 @@ public static class TomlSerializer
     /// <summary>
     /// Attempts to deserialize a TOML payload from text into an explicit destination type using generated metadata from a serializer context.
     /// </summary>
-    public static bool TryDeserialize(string toml, Type returnType, TomlSerializerContext context, out object? value)
+    public static bool TryDeserialize(string toml, Type returnType, TomlSerializerContext context, [NotNullWhen(true)] out object? value)
     {
         ArgumentGuard.ThrowIfNull(toml, nameof(toml));
         ArgumentGuard.ThrowIfNull(returnType, nameof(returnType));
         ArgumentGuard.ThrowIfNull(context, nameof(context));
         try
         {
-            value = Deserialize(toml, returnType, context);
+            value = Deserialize(toml, returnType, context)!;
             return true;
         }
         catch (TomlException)
@@ -555,12 +555,12 @@ public static class TomlSerializer
     /// </summary>
     [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
     [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
-    public static bool TryDeserialize<T>(TextReader reader, out T? value, TomlSerializerOptions? options = null)
+    public static bool TryDeserialize<T>(TextReader reader, [NotNullWhen(true)] out T? value, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(reader, nameof(reader));
         try
         {
-            value = Deserialize<T>(reader, options);
+            value = Deserialize<T>(reader, options)!;
             return true;
         }
         catch (TomlException)
@@ -575,13 +575,13 @@ public static class TomlSerializer
     /// </summary>
     [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
     [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
-    public static bool TryDeserialize(TextReader reader, Type returnType, out object? value, TomlSerializerOptions? options = null)
+    public static bool TryDeserialize(TextReader reader, Type returnType, [NotNullWhen(true)] out object? value, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(reader, nameof(reader));
         ArgumentGuard.ThrowIfNull(returnType, nameof(returnType));
         try
         {
-            value = Deserialize(reader, returnType, options);
+            value = Deserialize(reader, returnType, options)!;
             return true;
         }
         catch (TomlException)
@@ -594,13 +594,13 @@ public static class TomlSerializer
     /// <summary>
     /// Attempts to deserialize a TOML payload from a text reader using generated metadata from a serializer context.
     /// </summary>
-    public static bool TryDeserialize<T>(TextReader reader, TomlSerializerContext context, out T? value)
+    public static bool TryDeserialize<T>(TextReader reader, TomlSerializerContext context, [NotNullWhen(true)] out T? value)
     {
         ArgumentGuard.ThrowIfNull(reader, nameof(reader));
         ArgumentGuard.ThrowIfNull(context, nameof(context));
         try
         {
-            value = Deserialize<T>(reader, context);
+            value = Deserialize<T>(reader, context)!;
             return true;
         }
         catch (TomlException)
@@ -613,14 +613,14 @@ public static class TomlSerializer
     /// <summary>
     /// Attempts to deserialize a TOML payload from a text reader into an explicit destination type using generated metadata from a serializer context.
     /// </summary>
-    public static bool TryDeserialize(TextReader reader, Type returnType, TomlSerializerContext context, out object? value)
+    public static bool TryDeserialize(TextReader reader, Type returnType, TomlSerializerContext context, [NotNullWhen(true)] out object? value)
     {
         ArgumentGuard.ThrowIfNull(reader, nameof(reader));
         ArgumentGuard.ThrowIfNull(returnType, nameof(returnType));
         ArgumentGuard.ThrowIfNull(context, nameof(context));
         try
         {
-            value = Deserialize(reader, returnType, context);
+            value = Deserialize(reader, returnType, context)!;
             return true;
         }
         catch (TomlException)
@@ -635,12 +635,12 @@ public static class TomlSerializer
     /// </summary>
     [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
     [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
-    public static bool TryDeserialize<T>(Stream stream, out T? value, TomlSerializerOptions? options = null)
+    public static bool TryDeserialize<T>(Stream stream, [NotNullWhen(true)] out T? value, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(stream, nameof(stream));
         try
         {
-            value = Deserialize<T>(stream, options);
+            value = Deserialize<T>(stream, options)!;
             return true;
         }
         catch (TomlException)
@@ -655,13 +655,13 @@ public static class TomlSerializer
     /// </summary>
     [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
     [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
-    public static bool TryDeserialize(Stream stream, Type returnType, out object? value, TomlSerializerOptions? options = null)
+    public static bool TryDeserialize(Stream stream, Type returnType, [NotNullWhen(true)] out object? value, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(stream, nameof(stream));
         ArgumentGuard.ThrowIfNull(returnType, nameof(returnType));
         try
         {
-            value = Deserialize(stream, returnType, options);
+            value = Deserialize(stream, returnType, options)!;
             return true;
         }
         catch (TomlException)
@@ -674,13 +674,13 @@ public static class TomlSerializer
     /// <summary>
     /// Attempts to deserialize a TOML payload from a stream using UTF-8 encoding and generated metadata from a serializer context.
     /// </summary>
-    public static bool TryDeserialize<T>(Stream stream, TomlSerializerContext context, out T? value)
+    public static bool TryDeserialize<T>(Stream stream, TomlSerializerContext context, [NotNullWhen(true)] out T? value)
     {
         ArgumentGuard.ThrowIfNull(stream, nameof(stream));
         ArgumentGuard.ThrowIfNull(context, nameof(context));
         try
         {
-            value = Deserialize<T>(stream, context);
+            value = Deserialize<T>(stream, context)!;
             return true;
         }
         catch (TomlException)
@@ -693,14 +693,14 @@ public static class TomlSerializer
     /// <summary>
     /// Attempts to deserialize a TOML payload from a stream using UTF-8 encoding into an explicit destination type using generated metadata from a serializer context.
     /// </summary>
-    public static bool TryDeserialize(Stream stream, Type returnType, TomlSerializerContext context, out object? value)
+    public static bool TryDeserialize(Stream stream, Type returnType, TomlSerializerContext context, [NotNullWhen(true)] out object? value)
     {
         ArgumentGuard.ThrowIfNull(stream, nameof(stream));
         ArgumentGuard.ThrowIfNull(returnType, nameof(returnType));
         ArgumentGuard.ThrowIfNull(context, nameof(context));
         try
         {
-            value = Deserialize(stream, returnType, context);
+            value = Deserialize(stream, returnType, context)!;
             return true;
         }
         catch (TomlException)
