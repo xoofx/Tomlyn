@@ -1002,7 +1002,14 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             wroteAnyCondition = true;
             builder.Append("                    ").Append(prefix).Append("(string.Equals(name, \"").Append(EscapeStringLiteral(parameter.KeyName)).Append("\", ").Append(comparison).AppendLine("))");
             builder.AppendLine("                    {");
-            builder.Append("                        if (__argSeen").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(" && Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error) throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
+            builder.AppendLine("                        if (__argSeen" + i.ToString(CultureInfo.InvariantCulture) + " && Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
+            builder.AppendLine("                        {");
+            if (CanEmitTableHeaderExtension(parameter.ParameterType))
+            {
+                EmitRepeatedTableExtensionIntoTarget(builder, parameter.ParameterType, "__arg" + i.ToString(CultureInfo.InvariantCulture), "__arg" + i.ToString(CultureInfo.InvariantCulture), "                            ");
+            }
+            builder.AppendLine("                            throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
+            builder.AppendLine("                        }");
             builder.Append("                        __argSeen").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(" = true;");
             if (parameter.LinkedMemberIndex >= 0 && parameter.LinkedMemberIndex < poco.Members.Length && poco.Members[parameter.LinkedMemberIndex].HasSingleOrArray)
             {
@@ -1049,17 +1056,27 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             builder.Append("                    ").Append(prefix).Append("(string.Equals(name, \"").Append(EscapeStringLiteral(member.SerializedName)).Append("\", ").Append(comparison).AppendLine("))");
             builder.AppendLine("                    {");
 
-            if (useSeenMask)
-            {
-                builder.Append("                        const ulong bit = 1UL << ").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
-                builder.AppendLine("                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
-                builder.AppendLine("                        {");
-                builder.AppendLine("                            if ((seenMask & bit) != 0) throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
-                builder.AppendLine("                        }");
-                if (member.IsRequired)
+                if (useSeenMask)
                 {
-                    builder.AppendLine("                        seenMask |= bit;");
-                }
+                    builder.Append("                        const ulong bit = 1UL << ").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
+                    builder.AppendLine("                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
+                    builder.AppendLine("                        {");
+                    builder.AppendLine("                            if ((seenMask & bit) != 0)");
+                    builder.AppendLine("                            {");
+                    var existingExpression = member.CanSet
+                        ? "__memberValue" + i.ToString(CultureInfo.InvariantCulture)
+                        : GetLinkedParameterExpression(i);
+                    if (existingExpression is not null && CanEmitTableHeaderExtension(member.Type))
+                    {
+                        EmitRepeatedTableExtensionIntoTarget(builder, member.Type, existingExpression, existingExpression, "                                ");
+                    }
+                    builder.AppendLine("                                throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
+                    builder.AppendLine("                            }");
+                    builder.AppendLine("                        }");
+                    if (member.IsRequired)
+                    {
+                        builder.AppendLine("                        seenMask |= bit;");
+                    }
                 else
                 {
                     builder.AppendLine("                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error) seenMask |= bit;");
@@ -1071,7 +1088,17 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 builder.AppendLine("                        {");
                 builder.AppendLine("                            if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
                 builder.AppendLine("                            {");
-                builder.Append("                                if (seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("]) throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
+                builder.Append("                                if (seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("])");
+                builder.AppendLine("                                {");
+                var existingExpression = member.CanSet
+                    ? "__memberValue" + i.ToString(CultureInfo.InvariantCulture)
+                    : GetLinkedParameterExpression(i);
+                if (existingExpression is not null && CanEmitTableHeaderExtension(member.Type))
+                {
+                    EmitRepeatedTableExtensionIntoTarget(builder, member.Type, existingExpression, existingExpression, "                                    ");
+                }
+                builder.AppendLine("                                    throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
+                builder.AppendLine("                                }");
                 builder.AppendLine("                            }");
                 builder.Append("                            seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
                 builder.AppendLine("                        }");
@@ -1156,7 +1183,16 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 if (action.IsParameter)
                 {
                     var parameter = ctor.Parameters[action.Index];
-                    builder.Append("                                    if (__argSeen").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine(" && Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error) throw reader.CreateException($\"Duplicate key '{reader.PropertyName}' was encountered.\");");
+                    builder.Append("                                    if (__argSeen").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine(" && Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
+                    builder.AppendLine("                                    {");
+                    builder.AppendLine("                                        var __duplicateName = reader.PropertyName!;");
+                    builder.AppendLine("                                        reader.Read();");
+                    if (CanEmitTableHeaderExtension(parameter.ParameterType))
+                    {
+                        EmitRepeatedTableExtensionIntoTarget(builder, parameter.ParameterType, "__arg" + action.Index.ToString(CultureInfo.InvariantCulture), "__arg" + action.Index.ToString(CultureInfo.InvariantCulture), "                                        ");
+                    }
+                    builder.AppendLine("                                        throw reader.CreateException($\"Duplicate key '{__duplicateName}' was encountered.\");");
+                    builder.AppendLine("                                    }");
                     builder.Append("                                    __argSeen").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine(" = true;");
                     builder.AppendLine("                                    reader.Read();");
                     if (parameter.LinkedMemberIndex >= 0 && parameter.LinkedMemberIndex < poco.Members.Length && poco.Members[parameter.LinkedMemberIndex].HasSingleOrArray)
@@ -1201,7 +1237,19 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                         builder.Append("                                    const ulong bit = 1UL << ").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
                         builder.AppendLine("                                    if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
                         builder.AppendLine("                                    {");
-                        builder.AppendLine("                                        if ((seenMask & bit) != 0) throw reader.CreateException($\"Duplicate key '{reader.PropertyName}' was encountered.\");");
+                        builder.AppendLine("                                        if ((seenMask & bit) != 0)");
+                        builder.AppendLine("                                        {");
+                        builder.AppendLine("                                            var __duplicateName = reader.PropertyName!;");
+                        builder.AppendLine("                                            reader.Read();");
+                        var existingExpression = member.CanSet
+                            ? "__memberValue" + action.Index.ToString(CultureInfo.InvariantCulture)
+                            : GetLinkedParameterExpression(action.Index);
+                        if (existingExpression is not null && CanEmitTableHeaderExtension(member.Type))
+                        {
+                            EmitRepeatedTableExtensionIntoTarget(builder, member.Type, existingExpression, existingExpression, "                                            ");
+                        }
+                        builder.AppendLine("                                            throw reader.CreateException($\"Duplicate key '{__duplicateName}' was encountered.\");");
+                        builder.AppendLine("                                        }");
                         builder.AppendLine("                                    }");
                         if (member.IsRequired)
                         {
@@ -1218,7 +1266,19 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                         builder.AppendLine("                                    {");
                         builder.AppendLine("                                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
                         builder.AppendLine("                                        {");
-                        builder.Append("                                            if (seen[").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine("]) throw reader.CreateException($\"Duplicate key '{reader.PropertyName}' was encountered.\");");
+                        builder.Append("                                            if (seen[").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine("])");
+                        builder.AppendLine("                                            {");
+                        builder.AppendLine("                                                var __duplicateName = reader.PropertyName!;");
+                        builder.AppendLine("                                                reader.Read();");
+                        var existingExpression = member.CanSet
+                            ? "__memberValue" + action.Index.ToString(CultureInfo.InvariantCulture)
+                            : GetLinkedParameterExpression(action.Index);
+                        if (existingExpression is not null && CanEmitTableHeaderExtension(member.Type))
+                        {
+                            EmitRepeatedTableExtensionIntoTarget(builder, member.Type, existingExpression, existingExpression, "                                                ");
+                        }
+                        builder.AppendLine("                                                throw reader.CreateException($\"Duplicate key '{__duplicateName}' was encountered.\");");
+                        builder.AppendLine("                                            }");
                         builder.AppendLine("                                        }");
                         builder.Append("                                        seen[").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
                         builder.AppendLine("                                    }");
@@ -1870,6 +1930,37 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.Append(indent).AppendLine("}");
     }
 
+    private static void EmitRepeatedTableExtensionIntoTarget(StringBuilder builder, ITypeSymbol type, string existingExpression, string targetExpression, string indent)
+    {
+        var typeName = type.ToDisplayString(FullyQualifiedNullableFormat);
+        builder.Append(indent).Append("if (global::Tomlyn.Serialization.Internal.TomlTableHeaderExtensionHelper.IsTableHeaderExtension(reader) && ").Append(existingExpression).AppendLine(" is not null)");
+        builder.Append(indent).AppendLine("{");
+        builder.Append(indent).Append("    var __tableExtension = _context.").Append(GetTypeInfoPropertyName(type)).Append(".ReadInto(reader, ").Append(existingExpression).AppendLine(");");
+        builder.Append(indent).Append("    ").Append(targetExpression).Append(" = (").Append(typeName).AppendLine(")__tableExtension!;");
+        builder.Append(indent).AppendLine("    continue;");
+        builder.Append(indent).AppendLine("}");
+    }
+
+    private static void EmitRepeatedTableExtensionIntoReadOnlyMember(StringBuilder builder, PocoMember member, string indent)
+    {
+        var memberAccess = "value." + member.MemberName;
+        var memberTypeName = member.Type.ToDisplayString(FullyQualifiedNullableFormat);
+        builder.Append(indent).Append("if (global::Tomlyn.Serialization.Internal.TomlTableHeaderExtensionHelper.IsTableHeaderExtension(reader) && ").Append(memberAccess).AppendLine(" is not null)");
+        builder.Append(indent).AppendLine("{");
+        builder.Append(indent).Append("    var __tableExtension = _context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".ReadInto(reader, ").Append(memberAccess).AppendLine(");");
+        builder.Append(indent).Append("    if (!object.ReferenceEquals(").Append(memberAccess).Append(", __tableExtension))").AppendLine();
+        builder.Append(indent).AppendLine("    {");
+        builder.Append(indent).Append("        throw new TomlException($\"Member '").Append(EscapeStringLiteral(member.MemberName))
+            .Append("' on '{value.GetType().FullName}' cannot be extended by an additional TOML table definition because '")
+            .Append(EscapeStringLiteral(memberTypeName))
+            .AppendLine("' does not support in-place population.\");");
+        builder.Append(indent).AppendLine("    }");
+        builder.Append(indent).AppendLine("    continue;");
+        builder.Append(indent).AppendLine("}");
+    }
+
+    private static bool CanEmitTableHeaderExtension(ITypeSymbol type) => !type.IsValueType;
+
     private static void EmitSingleOrArrayMemberRead(StringBuilder builder, PocoMember member, string indent)
     {
         var memberTypeName = member.Type.ToDisplayString(FullyQualifiedNullableFormat);
@@ -2139,7 +2230,24 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                         builder.Append("                        const ulong bit = 1UL << ").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
                         builder.AppendLine("                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
                         builder.AppendLine("                        {");
-                        builder.AppendLine("                            if ((seenMask & bit) != 0) throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
+                        builder.AppendLine("                            if ((seenMask & bit) != 0)");
+                        builder.AppendLine("                            {");
+                        if (member.CanSet)
+                        {
+                            if (CanEmitTableHeaderExtension(member.Type))
+                            {
+                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, "value." + member.MemberName, "value." + member.MemberName, "                                ");
+                            }
+                        }
+                        else
+                        {
+                            if (CanEmitTableHeaderExtension(member.Type))
+                            {
+                                EmitRepeatedTableExtensionIntoReadOnlyMember(builder, member, "                                ");
+                            }
+                        }
+                        builder.AppendLine("                                throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
+                        builder.AppendLine("                            }");
                         builder.AppendLine("                        }");
                         builder.AppendLine("                        seenMask |= bit;");
                     }
@@ -2148,7 +2256,24 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                         builder.AppendLine("                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
                         builder.AppendLine("                        {");
                         builder.Append("                            const ulong bit = 1UL << ").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
-                        builder.AppendLine("                            if ((seenMask & bit) != 0) throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
+                        builder.AppendLine("                            if ((seenMask & bit) != 0)");
+                        builder.AppendLine("                            {");
+                        if (member.CanSet)
+                        {
+                            if (CanEmitTableHeaderExtension(member.Type))
+                            {
+                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, "value." + member.MemberName, "value." + member.MemberName, "                                ");
+                            }
+                        }
+                        else
+                        {
+                            if (CanEmitTableHeaderExtension(member.Type))
+                            {
+                                EmitRepeatedTableExtensionIntoReadOnlyMember(builder, member, "                                ");
+                            }
+                        }
+                        builder.AppendLine("                                throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
+                        builder.AppendLine("                            }");
                         builder.AppendLine("                            seenMask |= bit;");
                         builder.AppendLine("                        }");
                     }
@@ -2161,7 +2286,24 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     {
                         builder.AppendLine("                            if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
                         builder.AppendLine("                            {");
-                        builder.Append("                                if (seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("]) throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
+                        builder.Append("                                if (seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("])");
+                        builder.AppendLine("                                {");
+                        if (member.CanSet)
+                        {
+                            if (CanEmitTableHeaderExtension(member.Type))
+                            {
+                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, "value." + member.MemberName, "value." + member.MemberName, "                                    ");
+                            }
+                        }
+                        else
+                        {
+                            if (CanEmitTableHeaderExtension(member.Type))
+                            {
+                                EmitRepeatedTableExtensionIntoReadOnlyMember(builder, member, "                                    ");
+                            }
+                        }
+                        builder.AppendLine("                                    throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
+                        builder.AppendLine("                                }");
                         builder.AppendLine("                            }");
                         builder.Append("                            seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
                     }
@@ -2169,7 +2311,24 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     {
                         builder.AppendLine("                            if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
                         builder.AppendLine("                            {");
-                        builder.Append("                                if (seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("]) throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
+                        builder.Append("                                if (seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("])");
+                        builder.AppendLine("                                {");
+                        if (member.CanSet)
+                        {
+                            if (CanEmitTableHeaderExtension(member.Type))
+                            {
+                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, "value." + member.MemberName, "value." + member.MemberName, "                                    ");
+                            }
+                        }
+                        else
+                        {
+                            if (CanEmitTableHeaderExtension(member.Type))
+                            {
+                                EmitRepeatedTableExtensionIntoReadOnlyMember(builder, member, "                                    ");
+                            }
+                        }
+                        builder.AppendLine("                                    throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
+                        builder.AppendLine("                                }");
                         builder.Append("                                seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
                         builder.AppendLine("                            }");
                     }
@@ -2241,7 +2400,24 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                         builder.Append("                                    const ulong bit = 1UL << ").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
                         builder.AppendLine("                                    if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
                         builder.AppendLine("                                    {");
-                        builder.AppendLine("                                        if ((seenMask & bit) != 0) throw reader.CreateException($\"Duplicate key '{reader.PropertyName}' was encountered.\");");
+                        builder.AppendLine("                                        if ((seenMask & bit) != 0)");
+                        builder.AppendLine("                                        {");
+                        if (member.CanSet)
+                        {
+                            if (CanEmitTableHeaderExtension(member.Type))
+                            {
+                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, "value." + member.MemberName, "value." + member.MemberName, "                                            ");
+                            }
+                        }
+                        else
+                        {
+                            if (CanEmitTableHeaderExtension(member.Type))
+                            {
+                                EmitRepeatedTableExtensionIntoReadOnlyMember(builder, member, "                                            ");
+                            }
+                        }
+                        builder.AppendLine("                                            throw reader.CreateException($\"Duplicate key '{reader.PropertyName}' was encountered.\");");
+                        builder.AppendLine("                                        }");
                         builder.AppendLine("                                    }");
                         builder.AppendLine("                                    seenMask |= bit;");
                     }
@@ -2250,7 +2426,26 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                         builder.AppendLine("                                    if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
                         builder.AppendLine("                                    {");
                         builder.Append("                                        const ulong bit = 1UL << ").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
-                        builder.AppendLine("                                        if ((seenMask & bit) != 0) throw reader.CreateException($\"Duplicate key '{reader.PropertyName}' was encountered.\");");
+                        builder.AppendLine("                                        if ((seenMask & bit) != 0)");
+                        builder.AppendLine("                                        {");
+                        builder.AppendLine("                                            var __duplicateName = reader.PropertyName!;");
+                        builder.AppendLine("                                            reader.Read();");
+                        if (member.CanSet)
+                        {
+                            if (CanEmitTableHeaderExtension(member.Type))
+                            {
+                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, "value." + member.MemberName, "value." + member.MemberName, "                                            ");
+                            }
+                        }
+                        else
+                        {
+                            if (CanEmitTableHeaderExtension(member.Type))
+                            {
+                                EmitRepeatedTableExtensionIntoReadOnlyMember(builder, member, "                                            ");
+                            }
+                        }
+                        builder.AppendLine("                                            throw reader.CreateException($\"Duplicate key '{__duplicateName}' was encountered.\");");
+                        builder.AppendLine("                                        }");
                         builder.AppendLine("                                        seenMask |= bit;");
                         builder.AppendLine("                                    }");
                     }
@@ -2263,7 +2458,26 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     {
                         builder.AppendLine("                                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
                         builder.AppendLine("                                        {");
-                        builder.Append("                                            if (seen[").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine("]) throw reader.CreateException($\"Duplicate key '{reader.PropertyName}' was encountered.\");");
+                        builder.Append("                                            if (seen[").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine("])");
+                        builder.AppendLine("                                            {");
+                        builder.AppendLine("                                                var __duplicateName = reader.PropertyName!;");
+                        builder.AppendLine("                                                reader.Read();");
+                        if (member.CanSet)
+                        {
+                            if (CanEmitTableHeaderExtension(member.Type))
+                            {
+                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, "value." + member.MemberName, "value." + member.MemberName, "                                                ");
+                            }
+                        }
+                        else
+                        {
+                            if (CanEmitTableHeaderExtension(member.Type))
+                            {
+                                EmitRepeatedTableExtensionIntoReadOnlyMember(builder, member, "                                                ");
+                            }
+                        }
+                        builder.AppendLine("                                                throw reader.CreateException($\"Duplicate key '{reader.PropertyName}' was encountered.\");");
+                        builder.AppendLine("                                            }");
                         builder.AppendLine("                                        }");
                         builder.Append("                                        seen[").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
                     }
@@ -2271,7 +2485,24 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     {
                         builder.AppendLine("                                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
                         builder.AppendLine("                                        {");
-                        builder.Append("                                            if (seen[").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine("]) throw reader.CreateException($\"Duplicate key '{reader.PropertyName}' was encountered.\");");
+                        builder.Append("                                            if (seen[").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine("])");
+                        builder.AppendLine("                                            {");
+                        if (member.CanSet)
+                        {
+                            if (CanEmitTableHeaderExtension(member.Type))
+                            {
+                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, "value." + member.MemberName, "value." + member.MemberName, "                                                ");
+                            }
+                        }
+                        else
+                        {
+                            if (CanEmitTableHeaderExtension(member.Type))
+                            {
+                                EmitRepeatedTableExtensionIntoReadOnlyMember(builder, member, "                                                ");
+                            }
+                        }
+                        builder.AppendLine("                                                throw reader.CreateException($\"Duplicate key '{__duplicateName}' was encountered.\");");
+                        builder.AppendLine("                                            }");
                         builder.Append("                                            seen[").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
                         builder.AppendLine("                                        }");
                     }

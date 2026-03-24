@@ -1097,7 +1097,7 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
         return table;
     }
 
-    private static void ReadTableInto(TomlReader reader, TomlTable table)
+    internal static void ReadTableInto(TomlReader reader, TomlTable table)
     {
         if (reader.TokenType != TomlTokenType.StartTable)
         {

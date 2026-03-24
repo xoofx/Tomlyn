@@ -405,12 +405,28 @@ internal sealed class TomlSourceGeneratedDictionaryTypeInfo<TDictionary, TValue>
             }
 
             var key = reader.PropertyName!;
-            if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error && dict.ContainsKey(key))
+            reader.Read();
+            if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error &&
+                dict.TryGetValue(key, out var existingValue))
             {
+                if (TryReadTableHeaderExtension(reader, existingValue, out var mergedValue))
+                {
+                    dict[key] = mergedValue;
+                    continue;
+                }
+
                 throw reader.CreateException($"Duplicate key '{key}' was encountered.");
             }
 
-            reader.Read();
+            if (TomlTableHeaderExtensionHelper.IsTableHeaderExtension(reader) && dict.TryGetValue(key, out existingValue))
+            {
+                if (TryReadTableHeaderExtension(reader, existingValue, out var mergedValue))
+                {
+                    dict[key] = mergedValue;
+                    continue;
+                }
+            }
+
             dict[key] = ReadValue(reader);
         }
 
@@ -446,12 +462,27 @@ internal sealed class TomlSourceGeneratedDictionaryTypeInfo<TDictionary, TValue>
             }
 
             var key = reader.PropertyName!;
+            reader.Read();
             if (seen is not null && !seen.Add(key))
             {
+                if (dict.TryGetValue(key, out var duplicateExistingValue) && TryReadTableHeaderExtension(reader, duplicateExistingValue, out var mergedValue))
+                {
+                    dict[key] = mergedValue;
+                    continue;
+                }
+
                 throw reader.CreateException($"Duplicate key '{key}' was encountered.");
             }
 
-            reader.Read();
+            if (TomlTableHeaderExtensionHelper.IsTableHeaderExtension(reader) && dict.TryGetValue(key, out var currentValue))
+            {
+                if (TryReadTableHeaderExtension(reader, currentValue, out var mergedValue))
+                {
+                    dict[key] = mergedValue;
+                    continue;
+                }
+            }
+
             dict[key] = ReadValue(reader);
         }
 
@@ -506,6 +537,20 @@ internal sealed class TomlSourceGeneratedDictionaryTypeInfo<TDictionary, TValue>
         }
 
         return (TValue)_valueTypeInfo!.ReadAsObject(reader)!;
+    }
+
+    private bool TryReadTableHeaderExtension(TomlReader reader, TValue existingValue, out TValue mergedValue)
+    {
+        EnsureValueTypeInfo();
+
+        if (!TomlTableHeaderExtensionHelper.TryReadIntoExisting(reader, existingValue, _valueTypeInfo!, out var merged))
+        {
+            mergedValue = existingValue;
+            return false;
+        }
+
+        mergedValue = (TValue)merged!;
+        return true;
     }
 }
 

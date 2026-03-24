@@ -833,8 +833,14 @@ internal static class TomlReflectionTypeInfoResolver
 
                 if (_indexByName.TryGetValue(name, out var memberIndex))
                 {
+                    var member = _members[memberIndex];
                     if (seen is not null && seen[memberIndex])
                     {
+                        if (TryReadTableHeaderExtension(reader, instance, member))
+                        {
+                            continue;
+                        }
+
                         throw reader.CreateException($"Duplicate key '{name}' was encountered.");
                     }
 
@@ -843,7 +849,6 @@ internal static class TomlReflectionTypeInfoResolver
                         seen[memberIndex] = true;
                     }
 
-                    var member = _members[memberIndex];
                     if (member.Setter is null && member.ObjectCreationHandling != JsonObjectCreationHandling.Populate && !member.HasSingleOrArray)
                     {
                         reader.Skip();
@@ -1154,6 +1159,19 @@ internal static class TomlReflectionTypeInfoResolver
                 {
                     if (ctorSeen[parameterIndex] && Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)
                     {
+                        var duplicateBinding = _parameters[parameterIndex];
+                        if (TryReadTableHeaderExtension(reader, ctorArgs, parameterIndex, duplicateBinding.ParameterType, out var updatedArgument))
+                        {
+                            ctorArgs[parameterIndex] = updatedArgument;
+                            if (duplicateBinding.MemberIndex is { } duplicateLinkedMemberIndex && duplicateLinkedMemberIndex >= 0 && duplicateLinkedMemberIndex < _members.Count)
+                            {
+                                memberSeen[duplicateLinkedMemberIndex] = true;
+                                memberValues[duplicateLinkedMemberIndex] = updatedArgument;
+                            }
+
+                            continue;
+                        }
+
                         throw reader.CreateException($"Duplicate key '{name}' was encountered.");
                     }
 
@@ -1191,6 +1209,12 @@ internal static class TomlReflectionTypeInfoResolver
                 {
                     if (memberSeen[memberIndex] && Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)
                     {
+                        var duplicateMember = _members[memberIndex];
+                        if (TryReadTableHeaderExtension(reader, memberValues, memberIndex, duplicateMember))
+                        {
+                            continue;
+                        }
+
                         throw reader.CreateException($"Duplicate key '{name}' was encountered.");
                     }
 
@@ -1323,6 +1347,68 @@ internal static class TomlReflectionTypeInfoResolver
             }
 
             return instance;
+        }
+
+        private bool TryReadTableHeaderExtension(TomlReader reader, object instance, MemberModel member)
+        {
+            if (member.Converter is not null)
+            {
+                return false;
+            }
+
+            var existingValue = member.Getter(instance);
+            if (existingValue is null)
+            {
+                return false;
+            }
+
+            var typeInfo = reader.ResolveTypeInfo(member.MemberType);
+            if (!TomlTableHeaderExtensionHelper.TryReadIntoExisting(reader, existingValue, typeInfo, out var populatedValue))
+            {
+                return false;
+            }
+
+            if (member.Setter is not null)
+            {
+                member.Setter(instance, populatedValue);
+                return true;
+            }
+
+            if (!ReferenceEquals(existingValue, populatedValue))
+            {
+                throw reader.CreateException(
+                    $"Member '{member.Member.Name}' on '{Type.FullName}' cannot be extended by an additional TOML table definition because '{member.MemberType.FullName}' does not support in-place population.");
+            }
+
+            return true;
+        }
+
+        private bool TryReadTableHeaderExtension(TomlReader reader, object?[] values, int index, Type valueType, out object? populatedValue)
+        {
+            populatedValue = values[index];
+            if (populatedValue is null)
+            {
+                return false;
+            }
+
+            var typeInfo = reader.ResolveTypeInfo(valueType);
+            return TomlTableHeaderExtensionHelper.TryReadIntoExisting(reader, populatedValue, typeInfo, out populatedValue);
+        }
+
+        private bool TryReadTableHeaderExtension(TomlReader reader, object?[] values, int index, MemberModel member)
+        {
+            if (member.Converter is not null)
+            {
+                return false;
+            }
+
+            if (!TryReadTableHeaderExtension(reader, values, index, member.MemberType, out var populatedValue))
+            {
+                return false;
+            }
+
+            values[index] = populatedValue;
+            return true;
         }
 
         private static void CapturePropertyMetadata(
