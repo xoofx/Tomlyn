@@ -27,13 +27,12 @@ public static class TomlSerializer
         "Reflection-based TOML serialization is not compatible with trimming/NativeAOT. " +
         "Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.";
 
-    private static readonly bool ReflectionEnabledByDefault = TomlSerializerFeatureSwitches.IsReflectionEnabledByDefaultCalculated;
     private static readonly Encoding DefaultStreamEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
     /// <summary>
     /// Gets a value indicating whether reflection-based serialization is enabled by default.
     /// </summary>
-    public static bool IsReflectionEnabledByDefault => ReflectionEnabledByDefault;
+    public static bool IsReflectionEnabledByDefault => TomlSerializerFeatureSwitches.IsReflectionEnabledByDefaultCalculated;
 
     /// <summary>
     /// Serializes a value into TOML text.

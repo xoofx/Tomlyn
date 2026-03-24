@@ -20,6 +20,7 @@ internal static class TomlTypeInfoResolverPipeline
     private const string ReflectionBasedSerializationMessage =
         "Reflection-based TOML serialization is not compatible with trimming/NativeAOT. " +
         "Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.";
+    private const string ReflectionSwitchName = TomlSerializerFeatureSwitches.ReflectionSwitchName;
 
     private static readonly ConditionalWeakTable<TomlSerializerOptions, ConcurrentDictionary<Type, TomlTypeInfo>> CacheByOptions = new();
 
@@ -81,7 +82,7 @@ internal static class TomlTypeInfoResolverPipeline
                 $"Dictionaries must have string keys to be representable as TOML tables. Type '{type.FullName}' is not supported without a custom converter.");
         }
 
-        if (TomlSerializerFeatureSwitches.IsReflectionEnabledByDefaultCalculated)
+        if (TomlSerializer.IsReflectionEnabledByDefault)
         {
             var typeInfo = ResolveFromReflection(options, type);
             return TomlPolymorphicTypeInfo.TryWrap(typeInfo);
@@ -94,8 +95,9 @@ internal static class TomlTypeInfoResolverPipeline
         }
 
         throw new TomlException(
-            $"No TOML metadata is available for type '{type.FullName}'. " +
-            $"Provide {nameof(TomlSerializerOptions)}.{nameof(TomlSerializerOptions.TypeInfoResolver)} (source generation) or a custom resolver.");
+            $"Reflection serialization is disabled and no TOML metadata was found for type '{type.FullName}'. " +
+            $"Provide {nameof(TomlSerializerOptions)}.{nameof(TomlSerializerOptions.TypeInfoResolver)} (source generation) or a custom resolver, " +
+            $"or enable the '{ReflectionSwitchName}' AppContext switch.");
     }
 
     [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]

@@ -16,7 +16,7 @@ internal static class TomlSerializerFeatureSwitches
     [FeatureSwitchDefinition(ReflectionSwitchName)]
 #endif
     public static bool IsReflectionEnabledByDefault
-        => AppContext.TryGetSwitch(ReflectionSwitchName, out var enabled) ? enabled : true;
+        => !AppContext.TryGetSwitch(ReflectionSwitchName, out var enabled) || enabled;
 
     public static readonly bool IsReflectionEnabledByDefaultCalculated = IsReflectionEnabledByDefault;
 }
