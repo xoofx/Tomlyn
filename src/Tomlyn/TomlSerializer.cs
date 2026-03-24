@@ -18,7 +18,7 @@ namespace Tomlyn;
 /// </summary>
 public static class TomlSerializer
 {
-    private const int CachedStringBuilderCapacity = 1024;
+    private const int InitialStringBuilderCapacity = 1024;
 
     [ThreadStatic]
     private static StringBuilder? t_cachedStringBuilder;
@@ -60,8 +60,9 @@ public static class TomlSerializer
     {
         ArgumentGuard.ThrowIfNull(inputType, nameof(inputType));
         var effectiveOptions = options ?? TomlSerializerOptions.Default;
-        var typeInfo = ResolveTypeInfo(effectiveOptions, inputType);
-        return SerializeToString(value, typeInfo);
+        var operationState = new TomlSerializationOperationState(effectiveOptions);
+        var typeInfo = ResolveTypeInfo(operationState, inputType);
+        return SerializeToString(value, typeInfo, operationState);
     }
 
     /// <summary>
@@ -73,7 +74,7 @@ public static class TomlSerializer
         ArgumentGuard.ThrowIfNull(context, nameof(context));
 
         var typeInfo = ResolveTypeInfo(context, inputType);
-        return SerializeToString(value, typeInfo);
+        return SerializeToString(value, typeInfo, new TomlSerializationOperationState(typeInfo.Options));
     }
 
     /// <summary>
@@ -82,7 +83,7 @@ public static class TomlSerializer
     public static string Serialize<T>(T value, TomlTypeInfo<T> typeInfo)
     {
         ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
-        return SerializeToString(value, typeInfo);
+        return SerializeToString(value, typeInfo, new TomlSerializationOperationState(typeInfo.Options));
     }
 
     /// <summary>
@@ -101,15 +102,15 @@ public static class TomlSerializer
     public static string Serialize(object? value, TomlTypeInfo typeInfo)
     {
         ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
-        return SerializeToString(value, typeInfo);
+        return SerializeToString(value, typeInfo, new TomlSerializationOperationState(typeInfo.Options));
     }
 
-    private static string SerializeToString(object? value, TomlTypeInfo typeInfo)
+    private static string SerializeToString(object? value, TomlTypeInfo typeInfo, TomlSerializationOperationState operationState)
     {
         var builder = t_cachedStringBuilder;
         if (builder is null)
         {
-            builder = new StringBuilder(CachedStringBuilderCapacity);
+            builder = new StringBuilder(InitialStringBuilderCapacity);
             t_cachedStringBuilder = builder;
         }
         else
@@ -117,19 +118,19 @@ public static class TomlSerializer
             builder.Clear();
         }
 
-        string result;
         try
         {
-            using var writer = new StringWriter(builder, CultureInfo.InvariantCulture);
-            Serialize(writer, value, typeInfo);
-            result = builder.ToString();
+            using (var writer = new StringWriter(builder, CultureInfo.InvariantCulture))
+            {
+                Serialize(writer, value, typeInfo, operationState);
+            }
+
+            return builder.ToString();
         }
         finally
         {
             builder.Clear();
         }
-
-        return result;
     }
 
     /// <summary>
@@ -389,9 +390,9 @@ public static class TomlSerializer
         ArgumentGuard.ThrowIfNull(reader, nameof(reader));
         ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
 
-        var options = typeInfo.Options;
-        var tomlReader = TomlReader.Create(reader, options);
-        return DeserializeCore(tomlReader, typeInfo, options);
+        var operationState = new TomlSerializationOperationState(typeInfo.Options);
+        var tomlReader = TomlReader.Create(reader, typeInfo.Options, operationState);
+        return DeserializeCore(tomlReader, typeInfo);
     }
 
     /// <summary>
@@ -717,16 +718,17 @@ public static class TomlSerializer
         ArgumentGuard.ThrowIfNull(toml, nameof(toml));
         ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
 
-        var options = typeInfo.Options;
-        var reader = TomlReader.Create(toml, options);
-        return DeserializeCore(reader, typeInfo, options);
+        var operationState = new TomlSerializationOperationState(typeInfo.Options);
+        var reader = TomlReader.Create(toml, typeInfo.Options, operationState);
+        return DeserializeCore(reader, typeInfo);
     }
 
-    private static object? DeserializeCore(TomlReader reader, TomlTypeInfo typeInfo, TomlSerializerOptions options)
+    private static object? DeserializeCore(TomlReader reader, TomlTypeInfo typeInfo)
     {
         reader.Read(); // StartDocument
         reader.Read(); // value start
 
+        var options = typeInfo.Options;
         if (options.RootValueHandling == TomlRootValueHandling.WrapInRootKey)
         {
             if (reader.TokenType != TomlTokenType.StartTable)
@@ -762,9 +764,13 @@ public static class TomlSerializer
     /// Serializes a value to a writer using explicit metadata.
     /// </summary>
     public static void Serialize(TextWriter writer, object? value, TomlTypeInfo typeInfo)
+        => Serialize(writer, value, typeInfo, new TomlSerializationOperationState(typeInfo.Options));
+
+    private static void Serialize(TextWriter writer, object? value, TomlTypeInfo typeInfo, TomlSerializationOperationState operationState)
     {
         ArgumentGuard.ThrowIfNull(writer, nameof(writer));
         ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
+        ArgumentGuard.ThrowIfNull(operationState, nameof(operationState));
 
         var options = typeInfo.Options;
         if (options.RootValueHandling != TomlRootValueHandling.WrapInRootKey &&
@@ -776,7 +782,7 @@ public static class TomlSerializer
             return;
         }
 
-        var tomlWriter = new TomlWriter(writer, options);
+        var tomlWriter = new TomlWriter(writer, options, operationState);
         tomlWriter.WriteStartDocument();
 
         if (options.RootValueHandling == TomlRootValueHandling.WrapInRootKey)
@@ -798,7 +804,14 @@ public static class TomlSerializer
     [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     private static TomlTypeInfo ResolveTypeInfo(TomlSerializerOptions options, Type type)
     {
-        return TomlTypeInfoResolverPipeline.Resolve(options, type);
+        return ResolveTypeInfo(new TomlSerializationOperationState(options), type);
+    }
+
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
+    private static TomlTypeInfo ResolveTypeInfo(TomlSerializationOperationState operationState, Type type)
+    {
+        return operationState.ResolveTypeInfo(type);
     }
 
     private static TomlTypeInfo ResolveTypeInfo(TomlSerializerContext context, Type type)

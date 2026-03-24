@@ -3,12 +3,10 @@
 // See license.txt file in the project root for full license information.
 
 using System;
-using System.Collections.Concurrent;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 using Tomlyn.Helpers;
 using Tomlyn.Serialization;
@@ -17,35 +15,41 @@ namespace Tomlyn.Serialization.Internal;
 
 internal static class TomlTypeInfoResolverPipeline
 {
-    private const string ReflectionBasedSerializationMessage =
+    internal const string ReflectionBasedSerializationMessage =
         "Reflection-based TOML serialization is not compatible with trimming/NativeAOT. " +
         "Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.";
     private const string ReflectionSwitchName = TomlSerializerFeatureSwitches.ReflectionSwitchName;
-
-    private static readonly ConditionalWeakTable<TomlSerializerOptions, ConcurrentDictionary<Type, TomlTypeInfo>> CacheByOptions = new();
 
     [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
     [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
     public static TomlTypeInfo Resolve(TomlSerializerOptions options, Type type)
     {
         ArgumentGuard.ThrowIfNull(options, nameof(options));
+        return Resolve(new TomlSerializationOperationState(options), type);
+    }
+
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
+    public static TomlTypeInfo Resolve(TomlSerializationOperationState state, Type type)
+    {
+        ArgumentGuard.ThrowIfNull(state, nameof(state));
         ArgumentGuard.ThrowIfNull(type, nameof(type));
 
-        var cache = CacheByOptions.GetOrCreateValue(options);
-        if (cache.TryGetValue(type, out var cached))
+        if (state.TryGetCachedTypeInfo(type, out var cached))
         {
             return cached;
         }
 
-        var resolved = ResolveUncached(options, type);
-        cache.TryAdd(type, resolved);
+        var resolved = ResolveUncached(state, type);
+        state.CacheTypeInfo(type, resolved);
         return resolved;
     }
 
     [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
     [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
-    private static TomlTypeInfo ResolveUncached(TomlSerializerOptions options, Type type)
+    private static TomlTypeInfo ResolveUncached(TomlSerializationOperationState state, Type type)
     {
+        var options = state.Options;
         var fromTypeConverterAttribute = TryResolveFromConverterAttributes(options, type);
         if (fromTypeConverterAttribute is not null)
         {
@@ -70,7 +74,7 @@ internal static class TomlTypeInfoResolverPipeline
             return TomlPolymorphicTypeInfo.TryWrap(builtIn);
         }
 
-        var nullable = TryResolveNullable(type, options);
+        var nullable = TryResolveNullable(type, state);
         if (nullable is not null)
         {
             return nullable;
@@ -102,7 +106,7 @@ internal static class TomlTypeInfoResolverPipeline
 
     [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
     [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
-    private static TomlTypeInfo? TryResolveNullable(Type type, TomlSerializerOptions options)
+    private static TomlTypeInfo? TryResolveNullable(Type type, TomlSerializationOperationState state)
     {
         var underlyingType = Nullable.GetUnderlyingType(type);
         if (underlyingType is null)
@@ -110,8 +114,8 @@ internal static class TomlTypeInfoResolverPipeline
             return null;
         }
 
-        var inner = Resolve(options, underlyingType);
-        return new TomlUntypedNullableTypeInfo(type, options, inner);
+        var inner = Resolve(state, underlyingType);
+        return new TomlUntypedNullableTypeInfo(type, state.Options, inner);
     }
 
     private static bool IsNonStringKeyDictionary([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type type)

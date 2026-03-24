@@ -247,7 +247,7 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
             throw new TomlException($"Type '{runtimeType.FullName}' is not registered as a derived type for '{Type.FullName}'.");
         }
 
-        var runtimeTypeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, runtimeType);
+        var runtimeTypeInfo = writer.ResolveTypeInfo(runtimeType);
 
         // Default derived type (null discriminator) - serialize without discriminator
         if (discriminator is null)
@@ -256,7 +256,7 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
             return;
         }
 
-        var tempWriter = new TomlWriter(TextWriter.Null, Options);
+        var tempWriter = new TomlWriter(TextWriter.Null, Options, writer.OperationState);
         tempWriter.WriteStartDocument();
         runtimeTypeInfo.Write(tempWriter, value);
 
@@ -294,7 +294,7 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
             // No discriminator found - try default derived type first
             if (_defaultDerivedType is not null)
             {
-                var defaultTypeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, _defaultDerivedType);
+                var defaultTypeInfo = reader.ResolveTypeInfo(_defaultDerivedType);
                 var defaultReader = TomlReader.Create(buffer);
                 defaultReader.Read(); // StartDocument
                 defaultReader.Read(); // value start
@@ -323,12 +323,12 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
 
         if (_derivedTypeByDiscriminator.TryGetValue(discriminator, out var derivedType))
         {
-            targetTypeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, derivedType);
+            targetTypeInfo = reader.ResolveTypeInfo(derivedType);
         }
         else if (_defaultDerivedType is not null)
         {
             // Unknown discriminator - use default derived type
-            targetTypeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, _defaultDerivedType);
+            targetTypeInfo = reader.ResolveTypeInfo(_defaultDerivedType);
         }
         else if (_unknownDerivedTypeHandling == TomlUnknownDerivedTypeHandling.FallBackToBaseType && !Type.IsInterface && !Type.IsAbstract)
         {

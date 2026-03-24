@@ -714,7 +714,7 @@ internal static class TomlReflectionTypeInfoResolver
                 }
                 else
                 {
-                    var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, member.MemberType);
+                    var typeInfo = writer.ResolveTypeInfo(member.MemberType);
                     typeInfo.Write(writer, memberValue);
                 }
             }
@@ -749,7 +749,7 @@ internal static class TomlReflectionTypeInfoResolver
                         }
                         else
                         {
-                            var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, _extensionDataValueType!);
+                            var typeInfo = writer.ResolveTypeInfo(_extensionDataValueType!);
                             typeInfo.Write(writer, entry.Value);
                         }
                     }
@@ -914,7 +914,7 @@ internal static class TomlReflectionTypeInfoResolver
                 return converter.Read(reader, member.MemberType);
             }
 
-            var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, member.MemberType);
+            var typeInfo = reader.ResolveTypeInfo(member.MemberType);
             return typeInfo.ReadAsObject(reader);
         }
 
@@ -950,7 +950,7 @@ internal static class TomlReflectionTypeInfoResolver
             }
             else
             {
-                var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, member.MemberType);
+                var typeInfo = reader.ResolveTypeInfo(member.MemberType);
                 populatedValue = typeInfo.ReadInto(reader, existingValue);
             }
 
@@ -985,7 +985,7 @@ internal static class TomlReflectionTypeInfoResolver
                     return ReadMemberValue(reader, member);
                 }
 
-                if (!TomlSingleOrArrayCollectionHelper.CanPopulate(member.MemberType, existingValue!))
+                if (!reader.OperationState.SingleOrArrayCollections.CanPopulate(member.MemberType, existingValue!))
                 {
                     if (member.Setter is null)
                     {
@@ -1001,7 +1001,7 @@ internal static class TomlReflectionTypeInfoResolver
                     return converter.Read(reader, member.MemberType);
                 }
 
-                var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, member.MemberType);
+                var typeInfo = reader.ResolveTypeInfo(member.MemberType);
                 var populatedValue = typeInfo.ReadInto(reader, existingValue);
                 if (member.Setter is null && !ReferenceEquals(existingValue, populatedValue))
                 {
@@ -1012,7 +1012,7 @@ internal static class TomlReflectionTypeInfoResolver
                 return populatedValue;
             }
 
-            if (!TomlSingleOrArrayCollectionHelper.IsSupported(member.MemberType))
+            if (!reader.OperationState.SingleOrArrayCollections.IsSupported(member.MemberType))
             {
                 throw reader.CreateException(
                     $"Member '{member.Member.Name}' on '{Type.FullName}' uses [TomlSingleOrArray] but '{member.MemberType.FullName}' is not a supported collection type.");
@@ -1020,7 +1020,7 @@ internal static class TomlReflectionTypeInfoResolver
 
             if (shouldPopulateExisting)
             {
-                if (!TomlSingleOrArrayCollectionHelper.CanPopulate(member.MemberType, existingValue!))
+                if (!reader.OperationState.SingleOrArrayCollections.CanPopulate(member.MemberType, existingValue!))
                 {
                     if (member.Setter is null)
                     {
@@ -1028,10 +1028,10 @@ internal static class TomlReflectionTypeInfoResolver
                             $"Member '{member.Member.Name}' on '{Type.FullName}' uses [TomlSingleOrArray] but '{member.MemberType.FullName}' doesn't support populating the existing collection.");
                     }
 
-                    return TomlSingleOrArrayCollectionHelper.ReadSingleElementAsCollection(reader, Options, member.MemberType);
+                    return reader.OperationState.SingleOrArrayCollections.ReadSingleElementAsCollection(reader, member.MemberType);
                 }
 
-                return TomlSingleOrArrayCollectionHelper.ReadSingleElementIntoExisting(reader, Options, member.MemberType, existingValue!);
+                return reader.OperationState.SingleOrArrayCollections.ReadSingleElementIntoExisting(reader, member.MemberType, existingValue!);
             }
 
             if (member.Setter is null)
@@ -1040,7 +1040,7 @@ internal static class TomlReflectionTypeInfoResolver
                     $"Member '{member.Member.Name}' on '{Type.FullName}' uses [TomlSingleOrArray] but the existing collection is null or cannot be populated.");
             }
 
-            return TomlSingleOrArrayCollectionHelper.ReadSingleElementAsCollection(reader, Options, member.MemberType);
+            return reader.OperationState.SingleOrArrayCollections.ReadSingleElementAsCollection(reader, member.MemberType);
         }
 
         private object CreateInstance()
@@ -1118,7 +1118,7 @@ internal static class TomlReflectionTypeInfoResolver
                 return TomlUntypedObjectConverter.ReadValue(reader);
             }
 
-            var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, _extensionDataValueType!);
+            var typeInfo = reader.ResolveTypeInfo(_extensionDataValueType!);
             return typeInfo.ReadAsObject(reader);
         }
 
@@ -1173,7 +1173,7 @@ internal static class TomlReflectionTypeInfoResolver
                     }
                     else
                     {
-                        var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, binding.ParameterType);
+                        var typeInfo = reader.ResolveTypeInfo(binding.ParameterType);
                         value = typeInfo.ReadAsObject(reader);
                     }
                     ctorArgs[parameterIndex] = value;
@@ -1206,7 +1206,7 @@ internal static class TomlReflectionTypeInfoResolver
                     object? value;
                     if (member.HasSingleOrArray && reader.TokenType != TomlTokenType.StartArray)
                     {
-                        value = TomlSingleOrArrayCollectionHelper.ReadSingleElementAsCollection(reader, Options, member.MemberType);
+                        value = reader.OperationState.SingleOrArrayCollections.ReadSingleElementAsCollection(reader, member.MemberType);
                     }
                     else if (member.Converter is { } converter)
                     {
@@ -1214,7 +1214,7 @@ internal static class TomlReflectionTypeInfoResolver
                     }
                     else
                     {
-                        var typeInfo = TomlTypeInfoResolverPipeline.Resolve(Options, member.MemberType);
+                        var typeInfo = reader.ResolveTypeInfo(member.MemberType);
                         value = typeInfo.ReadAsObject(reader);
                     }
                     memberValues[memberIndex] = value;
@@ -1289,12 +1289,12 @@ internal static class TomlReflectionTypeInfoResolver
                             throw new TomlException($"Member '{member.Member.Name}' on '{Type.FullName}' uses [TomlSingleOrArray] but the existing collection is null or cannot be populated.");
                         }
 
-                        if (!TomlSingleOrArrayCollectionHelper.CanPopulate(member.MemberType, existingValue))
+                        if (!reader.OperationState.SingleOrArrayCollections.CanPopulate(member.MemberType, existingValue))
                         {
                             throw new TomlException($"Member '{member.Member.Name}' on '{Type.FullName}' uses [TomlSingleOrArray] but '{member.MemberType.FullName}' doesn't support populating the existing collection.");
                         }
 
-                        TomlSingleOrArrayCollectionHelper.PopulateExistingFromCollection(member.MemberType, existingValue, memberValues[i]!);
+                        reader.OperationState.SingleOrArrayCollections.PopulateExistingFromCollection(member.MemberType, existingValue, memberValues[i]!);
                     }
 
                     continue;

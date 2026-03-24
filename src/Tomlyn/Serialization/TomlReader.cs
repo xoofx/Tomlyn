@@ -4,10 +4,12 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using Tomlyn.Helpers;
 using Tomlyn.Model;
 using Tomlyn.Parsing;
+using Tomlyn.Serialization.Internal;
 using Tomlyn.Syntax;
 using Tomlyn.Text;
 
@@ -19,6 +21,7 @@ namespace Tomlyn.Serialization;
 public sealed class TomlReader
 {
     private readonly TomlSerializerOptions _options;
+    private readonly TomlSerializationOperationState _operationState;
     private readonly TomlParser? _parser;
     private readonly TomlReaderToken[]? _buffer;
     private readonly string? _filteredPropertyName;
@@ -37,7 +40,7 @@ public sealed class TomlReader
     private TomlSyntaxTriviaMetadata[]? _currentTrailingTrivia;
     private TomlTokenType _tokenType;
 
-    private TomlReader(TomlParser parser, TomlSerializerOptions options)
+    private TomlReader(TomlParser parser, TomlSerializerOptions options, TomlSerializationOperationState operationState)
     {
         _parser = parser;
         _buffer = null;
@@ -45,10 +48,11 @@ public sealed class TomlReader
         _bufferIndex = 0;
         _bufferDepth = 0;
         _options = options ?? TomlSerializerOptions.Default;
+        _operationState = operationState ?? throw new ArgumentNullException(nameof(operationState));
         _tokenType = TomlTokenType.None;
     }
 
-    private TomlReader(TomlReaderToken[] buffer, TomlSerializerOptions options, string? filteredPropertyName)
+    private TomlReader(TomlReaderToken[] buffer, TomlSerializerOptions options, string? filteredPropertyName, TomlSerializationOperationState operationState)
     {
         _parser = null;
         _buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
@@ -56,6 +60,7 @@ public sealed class TomlReader
         _bufferIndex = 0;
         _bufferDepth = 0;
         _options = options ?? TomlSerializerOptions.Default;
+        _operationState = operationState ?? throw new ArgumentNullException(nameof(operationState));
         _tokenType = TomlTokenType.None;
     }
 
@@ -66,13 +71,14 @@ public sealed class TomlReader
     {
         ArgumentGuard.ThrowIfNull(toml, nameof(toml));
         var effectiveOptions = options ?? TomlSerializerOptions.Default;
+        var operationState = new TomlSerializationOperationState(effectiveOptions);
         var parserOptions = new Tomlyn.Parsing.TomlParserOptions
         {
             CaptureTrivia = effectiveOptions.MetadataStore is not null,
             EagerStringValues = true,
         };
         var parser = TomlParser.Create(toml, parserOptions, effectiveOptions);
-        return new TomlReader(parser, effectiveOptions);
+        return new TomlReader(parser, effectiveOptions, operationState);
     }
 
     /// <summary>
@@ -82,19 +88,50 @@ public sealed class TomlReader
     {
         ArgumentGuard.ThrowIfNull(reader, nameof(reader));
         var effectiveOptions = options ?? TomlSerializerOptions.Default;
+        var operationState = new TomlSerializationOperationState(effectiveOptions);
         var parserOptions = new Tomlyn.Parsing.TomlParserOptions
         {
             CaptureTrivia = effectiveOptions.MetadataStore is not null,
             EagerStringValues = true,
         };
         var parser = TomlParser.Create(reader, parserOptions, effectiveOptions);
-        return new TomlReader(parser, effectiveOptions);
+        return new TomlReader(parser, effectiveOptions, operationState);
+    }
+
+    internal static TomlReader Create(string toml, TomlSerializerOptions options, TomlSerializationOperationState operationState)
+    {
+        ArgumentGuard.ThrowIfNull(toml, nameof(toml));
+        ArgumentGuard.ThrowIfNull(options, nameof(options));
+        ArgumentGuard.ThrowIfNull(operationState, nameof(operationState));
+
+        var parserOptions = new Tomlyn.Parsing.TomlParserOptions
+        {
+            CaptureTrivia = options.MetadataStore is not null,
+            EagerStringValues = true,
+        };
+        var parser = TomlParser.Create(toml, parserOptions, options);
+        return new TomlReader(parser, options, operationState);
+    }
+
+    internal static TomlReader Create(TextReader reader, TomlSerializerOptions options, TomlSerializationOperationState operationState)
+    {
+        ArgumentGuard.ThrowIfNull(reader, nameof(reader));
+        ArgumentGuard.ThrowIfNull(options, nameof(options));
+        ArgumentGuard.ThrowIfNull(operationState, nameof(operationState));
+
+        var parserOptions = new Tomlyn.Parsing.TomlParserOptions
+        {
+            CaptureTrivia = options.MetadataStore is not null,
+            EagerStringValues = true,
+        };
+        var parser = TomlParser.Create(reader, parserOptions, options);
+        return new TomlReader(parser, options, operationState);
     }
 
     internal static TomlReader Create(TomlReaderBuffer buffer, string? filteredPropertyName = null)
     {
         ArgumentGuard.ThrowIfNull(buffer, nameof(buffer));
-        return new TomlReader(buffer.Tokens, buffer.Options, filteredPropertyName);
+        return new TomlReader(buffer.Tokens, buffer.Options, filteredPropertyName, buffer.OperationState);
     }
 
     /// <summary>
@@ -138,6 +175,8 @@ public sealed class TomlReader
     /// Gets the serializer options associated with this reader instance.
     /// </summary>
     public TomlSerializerOptions Options => _options;
+
+    internal TomlSerializationOperationState OperationState => _operationState;
 
     /// <summary>
     /// Gets the current line number (1-based).
@@ -596,6 +635,13 @@ public sealed class TomlReader
         return new TomlException(message);
     }
 
+    [RequiresUnreferencedCode(TomlTypeInfoResolverPipeline.ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(TomlTypeInfoResolverPipeline.ReflectionBasedSerializationMessage)]
+    internal TomlTypeInfo ResolveTypeInfo(Type type)
+    {
+        return _operationState.ResolveTypeInfo(type);
+    }
+
     internal TomlReaderBuffer CaptureCurrentValueToBuffer()
     {
         if (_buffer is not null)
@@ -639,7 +685,7 @@ public sealed class TomlReader
 
         tokens.Add(new TomlReaderToken(TomlTokenType.EndDocument, span: null, rawText: null, leadingTrivia: null, trailingTrivia: null, propertyName: null, stringValue: null, data: 0, stringTokenKind: default, dateTime: default, hasDateTime: false));
 
-        return new TomlReaderBuffer(tokens.ToArray(), _options);
+        return new TomlReaderBuffer(tokens.ToArray(), _options, _operationState);
     }
 
     private void AddCurrentToken(List<TomlReaderToken> tokens)
@@ -709,13 +755,16 @@ internal readonly struct TomlReaderToken
 
 internal sealed class TomlReaderBuffer
 {
-    public TomlReaderBuffer(TomlReaderToken[] tokens, TomlSerializerOptions options)
+    public TomlReaderBuffer(TomlReaderToken[] tokens, TomlSerializerOptions options, TomlSerializationOperationState operationState)
     {
         Tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
         Options = options ?? TomlSerializerOptions.Default;
+        OperationState = operationState ?? throw new ArgumentNullException(nameof(operationState));
     }
 
     public TomlReaderToken[] Tokens { get; }
 
     public TomlSerializerOptions Options { get; }
+
+    public TomlSerializationOperationState OperationState { get; }
 }

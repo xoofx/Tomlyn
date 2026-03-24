@@ -177,7 +177,7 @@ public sealed class TomlPolymorphicTypeInfo<TBase> : TomlTypeInfo<TBase>
             return;
         }
 
-        var tempWriter = new TomlWriter(TextWriter.Null, Options);
+        var tempWriter = new TomlWriter(TextWriter.Null, Options, writer.OperationState);
         tempWriter.WriteStartDocument();
         runtimeTypeInfo.Write(tempWriter, value);
         tempWriter.WriteEndDocument();

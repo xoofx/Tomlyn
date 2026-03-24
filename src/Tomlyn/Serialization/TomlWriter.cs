@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using Tomlyn;
 using Tomlyn.Helpers;
@@ -19,6 +20,7 @@ public sealed class TomlWriter
 {
     private readonly Stack<object> _stack;
     private readonly int _effectiveMaxDepth;
+    private readonly TomlSerializationOperationState _operationState;
     private object? _root;
     private string? _pendingPropertyName;
     private bool _pendingPropertyNameIsLiteral;
@@ -29,10 +31,16 @@ public sealed class TomlWriter
     /// Initializes a new instance of the <see cref="TomlWriter"/> class.
     /// </summary>
     public TomlWriter(TextWriter writer, TomlSerializerOptions? options = null)
+        : this(writer, options, operationState: null)
+    {
+    }
+
+    internal TomlWriter(TextWriter writer, TomlSerializerOptions? options, TomlSerializationOperationState? operationState)
     {
         ArgumentGuard.ThrowIfNull(writer, nameof(writer));
         Writer = writer;
         Options = options ?? TomlSerializerOptions.Default;
+        _operationState = operationState ?? new TomlSerializationOperationState(Options);
         _stack = new Stack<object>();
         _effectiveMaxDepth = TomlDepthHelper.GetEffectiveMaxDepth(Options.MaxDepth);
     }
@@ -67,6 +75,15 @@ public sealed class TomlWriter
     /// Gets the options instance used by this writer.
     /// </summary>
     public TomlSerializerOptions Options { get; }
+
+    internal TomlSerializationOperationState OperationState => _operationState;
+
+    [RequiresUnreferencedCode(TomlTypeInfoResolverPipeline.ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(TomlTypeInfoResolverPipeline.ReflectionBasedSerializationMessage)]
+    internal TomlTypeInfo ResolveTypeInfo(Type type)
+    {
+        return _operationState.ResolveTypeInfo(type);
+    }
 
     /// <summary>
     /// Writes the start of a TOML document.

@@ -3,7 +3,6 @@
 // See license.txt file in the project root for full license information.
 
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
@@ -11,9 +10,9 @@ using Tomlyn.Helpers;
 
 namespace Tomlyn.Serialization.Internal;
 
-internal static class TomlSingleOrArrayCollectionHelper
+internal sealed class TomlSingleOrArrayCollectionHelper
 {
-    private static readonly ConcurrentDictionary<Type, CollectionHandler?> Handlers = new();
+    private readonly Dictionary<Type, CollectionHandler?> _handlers = new();
 
     public static bool CanPopulateCollection<T>(object existingValue)
     {
@@ -60,14 +59,14 @@ internal static class TomlSingleOrArrayCollectionHelper
 
     [RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
     [RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
-    public static bool IsSupported(Type collectionType)
+    public bool IsSupported(Type collectionType)
     {
         return GetHandler(collectionType) is not null;
     }
 
     [RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
     [RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
-    public static bool CanPopulate(Type collectionType, object existingValue)
+    public bool CanPopulate(Type collectionType, object existingValue)
     {
         ArgumentGuard.ThrowIfNull(collectionType, nameof(collectionType));
         ArgumentGuard.ThrowIfNull(existingValue, nameof(existingValue));
@@ -77,34 +76,32 @@ internal static class TomlSingleOrArrayCollectionHelper
 
     [RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
     [RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
-    public static object ReadSingleElementAsCollection(TomlReader reader, TomlSerializerOptions options, Type collectionType)
+    public object ReadSingleElementAsCollection(TomlReader reader, Type collectionType)
     {
         ArgumentGuard.ThrowIfNull(reader, nameof(reader));
-        ArgumentGuard.ThrowIfNull(options, nameof(options));
         ArgumentGuard.ThrowIfNull(collectionType, nameof(collectionType));
 
         var handler = GetRequiredHandler(collectionType);
-        var element = ReadElement(reader, options, handler.ElementType);
+        var element = ReadElement(reader, handler.ElementType);
         return handler.CreateSingleElementCollection(element);
     }
 
     [RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
     [RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
-    public static object ReadSingleElementIntoExisting(TomlReader reader, TomlSerializerOptions options, Type collectionType, object existingValue)
+    public object ReadSingleElementIntoExisting(TomlReader reader, Type collectionType, object existingValue)
     {
         ArgumentGuard.ThrowIfNull(reader, nameof(reader));
-        ArgumentGuard.ThrowIfNull(options, nameof(options));
         ArgumentGuard.ThrowIfNull(collectionType, nameof(collectionType));
         ArgumentGuard.ThrowIfNull(existingValue, nameof(existingValue));
 
         var handler = GetRequiredHandler(collectionType);
-        var element = ReadElement(reader, options, handler.ElementType);
+        var element = ReadElement(reader, handler.ElementType);
         return handler.AddSingleElement(existingValue, element);
     }
 
     [RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
     [RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
-    public static object PopulateExistingFromCollection(Type collectionType, object existingValue, object incomingCollection)
+    public object PopulateExistingFromCollection(Type collectionType, object existingValue, object incomingCollection)
     {
         ArgumentGuard.ThrowIfNull(collectionType, nameof(collectionType));
         ArgumentGuard.ThrowIfNull(existingValue, nameof(existingValue));
@@ -115,15 +112,15 @@ internal static class TomlSingleOrArrayCollectionHelper
 
     [RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
     [RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
-    private static object? ReadElement(TomlReader reader, TomlSerializerOptions options, Type elementType)
+    private static object? ReadElement(TomlReader reader, Type elementType)
     {
-        var typeInfo = TomlTypeInfoResolverPipeline.Resolve(options, elementType);
+        var typeInfo = reader.ResolveTypeInfo(elementType);
         return typeInfo.ReadAsObject(reader);
     }
 
     [RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
     [RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
-    private static CollectionHandler GetRequiredHandler(Type collectionType)
+    private CollectionHandler GetRequiredHandler(Type collectionType)
     {
         return GetHandler(collectionType)
             ?? throw new TomlException($"Type '{collectionType.FullName}' does not support [TomlSingleOrArray].");
@@ -131,55 +128,66 @@ internal static class TomlSingleOrArrayCollectionHelper
 
     [RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
     [RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
-    private static CollectionHandler? GetHandler(Type collectionType)
+    private CollectionHandler? GetHandler(Type collectionType)
     {
-        return Handlers.GetOrAdd(collectionType, static type =>
+        if (_handlers.TryGetValue(collectionType, out var handler))
         {
-            if (type.IsArray)
-            {
-                return (CollectionHandler?)Activator.CreateInstance(typeof(ArrayHandler<>).MakeGenericType(type.GetElementType()!));
-            }
+            return handler;
+        }
 
-            if (!type.IsGenericType)
-            {
-                return null;
-            }
+        handler = CreateHandler(collectionType);
+        _handlers[collectionType] = handler;
+        return handler;
+    }
 
-            var genericDefinition = type.GetGenericTypeDefinition();
-            var elementType = type.GetGenericArguments()[0];
+    [RequiresUnreferencedCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
+    [RequiresDynamicCode("Reflection-based TOML serialization is not compatible with trimming/NativeAOT. Use a source-generated TomlSerializerContext or pass a TomlTypeInfo instance.")]
+    private static CollectionHandler? CreateHandler(Type type)
+    {
+        if (type.IsArray)
+        {
+            return (CollectionHandler?)Activator.CreateInstance(typeof(ArrayHandler<>).MakeGenericType(type.GetElementType()!));
+        }
 
-            if (genericDefinition == typeof(List<>) ||
-                genericDefinition == typeof(IEnumerable<>) ||
-                genericDefinition == typeof(ICollection<>) ||
-                genericDefinition == typeof(IReadOnlyCollection<>) ||
-                genericDefinition == typeof(IList<>) ||
-                genericDefinition == typeof(IReadOnlyList<>))
-            {
-                return (CollectionHandler?)Activator.CreateInstance(typeof(ListHandler<>).MakeGenericType(elementType));
-            }
-
-            if (genericDefinition == typeof(HashSet<>) || genericDefinition == typeof(ISet<>))
-            {
-                return (CollectionHandler?)Activator.CreateInstance(typeof(HashSetHandler<>).MakeGenericType(elementType));
-            }
-
-            if (genericDefinition == typeof(ImmutableArray<>))
-            {
-                return (CollectionHandler?)Activator.CreateInstance(typeof(ImmutableArrayHandler<>).MakeGenericType(elementType));
-            }
-
-            if (genericDefinition == typeof(ImmutableList<>))
-            {
-                return (CollectionHandler?)Activator.CreateInstance(typeof(ImmutableListHandler<>).MakeGenericType(elementType));
-            }
-
-            if (genericDefinition == typeof(ImmutableHashSet<>))
-            {
-                return (CollectionHandler?)Activator.CreateInstance(typeof(ImmutableHashSetHandler<>).MakeGenericType(elementType));
-            }
-
+        if (!type.IsGenericType)
+        {
             return null;
-        });
+        }
+
+        var genericDefinition = type.GetGenericTypeDefinition();
+        var elementType = type.GetGenericArguments()[0];
+
+        if (genericDefinition == typeof(List<>) ||
+            genericDefinition == typeof(IEnumerable<>) ||
+            genericDefinition == typeof(ICollection<>) ||
+            genericDefinition == typeof(IReadOnlyCollection<>) ||
+            genericDefinition == typeof(IList<>) ||
+            genericDefinition == typeof(IReadOnlyList<>))
+        {
+            return (CollectionHandler?)Activator.CreateInstance(typeof(ListHandler<>).MakeGenericType(elementType));
+        }
+
+        if (genericDefinition == typeof(HashSet<>) || genericDefinition == typeof(ISet<>))
+        {
+            return (CollectionHandler?)Activator.CreateInstance(typeof(HashSetHandler<>).MakeGenericType(elementType));
+        }
+
+        if (genericDefinition == typeof(ImmutableArray<>))
+        {
+            return (CollectionHandler?)Activator.CreateInstance(typeof(ImmutableArrayHandler<>).MakeGenericType(elementType));
+        }
+
+        if (genericDefinition == typeof(ImmutableList<>))
+        {
+            return (CollectionHandler?)Activator.CreateInstance(typeof(ImmutableListHandler<>).MakeGenericType(elementType));
+        }
+
+        if (genericDefinition == typeof(ImmutableHashSet<>))
+        {
+            return (CollectionHandler?)Activator.CreateInstance(typeof(ImmutableHashSetHandler<>).MakeGenericType(elementType));
+        }
+
+        return null;
     }
 
     private abstract class CollectionHandler
