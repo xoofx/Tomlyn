@@ -457,7 +457,7 @@ The extension data member should be a dictionary type with string keys (e.g. `ID
 
 ## Polymorphism
 
-Tomlyn supports discriminator-based polymorphism via attributes or options.
+Tomlyn supports discriminator-based polymorphism via base-type attributes, reflection-time runtime mappings, and source-generated context mappings.
 
 ### Attribute-based
 
@@ -508,6 +508,51 @@ public abstract class Animal { /* ... */ }
 
 > [!NOTE]
 > When both Toml and Json polymorphic attributes are present on the same type, the Toml-specific attributes take precedence.
+
+### Cross-project runtime mappings
+
+Use [`TomlPolymorphismOptions.DerivedTypeMappings`](xref:Tomlyn.TomlPolymorphismOptions.DerivedTypeMappings) when the base type and derived types live in different projects and you're using the reflection resolver:
+
+```csharp
+using Tomlyn;
+
+var options = new TomlSerializerOptions
+{
+    PolymorphismOptions = new TomlPolymorphismOptions
+    {
+        TypeDiscriminatorPropertyName = "kind",
+        DerivedTypeMappings = new Dictionary<Type, IReadOnlyList<TomlDerivedType>>
+        {
+            [typeof(Animal)] =
+            [
+                new(typeof(Cat), "cat"),
+                new(typeof(Dog), "dog"),
+            ],
+        },
+    },
+};
+```
+
+This is especially useful for clean architecture and plugin-style applications where the base type cannot reference every concrete implementation.
+
+### Cross-project source generation mappings
+
+Use [`TomlDerivedTypeMappingAttribute`](xref:Tomlyn.Serialization.TomlDerivedTypeMappingAttribute) on a [`TomlSerializerContext`](xref:Tomlyn.Serialization.TomlSerializerContext) when you want the same pattern in NativeAOT / trimming-safe source-generated code:
+
+```csharp
+using Tomlyn.Serialization;
+
+[TomlSerializable(typeof(Animal))]
+[TomlDerivedTypeMapping(typeof(Animal), typeof(Cat), "cat")]
+[TomlDerivedTypeMapping(typeof(Animal), typeof(Dog), "dog")]
+internal partial class AnimalContext : TomlSerializerContext
+{
+}
+```
+
+Mapped derived types are discovered automatically by the generator, so they do not also need their own `[TomlSerializable]` roots.
+
+If the base type doesn't declare [`TomlPolymorphicAttribute`](xref:Tomlyn.Serialization.TomlPolymorphicAttribute) or a JSON equivalent, Tomlyn still supports the mapping and falls back to [`TomlPolymorphismOptions`](xref:Tomlyn.TomlPolymorphismOptions) for the discriminator property name and unknown-derived-type handling.
 
 ### Default derived type
 
@@ -592,6 +637,13 @@ The priority chain is:
 1. [`TomlPolymorphicAttribute.UnknownDerivedTypeHandling`](xref:Tomlyn.Serialization.TomlPolymorphicAttribute.UnknownDerivedTypeHandling) (if not [`Unspecified`](xref:Tomlyn.TomlUnknownDerivedTypeHandling.Unspecified))
 2. `JsonPolymorphicAttribute.UnknownDerivedTypeHandling` (mapped from `JsonUnknownDerivedTypeHandling`)
 3. [`TomlPolymorphismOptions.UnknownDerivedTypeHandling`](xref:Tomlyn.TomlPolymorphismOptions.UnknownDerivedTypeHandling) (global default)
+
+Derived type registrations are merged additively with this precedence:
+
+1. [`TomlDerivedTypeAttribute`](xref:Tomlyn.Serialization.TomlDerivedTypeAttribute) on the base type
+2. [`JsonDerivedTypeAttribute`](xref:System.Text.Json.Serialization.JsonDerivedTypeAttribute) on the base type
+3. [`TomlDerivedTypeMappingAttribute`](xref:Tomlyn.Serialization.TomlDerivedTypeMappingAttribute) on a source-generated context
+4. [`TomlPolymorphismOptions.DerivedTypeMappings`](xref:Tomlyn.TomlPolymorphismOptions.DerivedTypeMappings) at runtime
 
 > [!NOTE]
 > [`TomlUnknownDerivedTypeHandling.Unspecified`](xref:Tomlyn.TomlUnknownDerivedTypeHandling.Unspecified) is a sentinel value for attribute properties and **cannot** be used on [`TomlPolymorphismOptions`](xref:Tomlyn.TomlPolymorphismOptions) - doing so throws `ArgumentOutOfRangeException`.

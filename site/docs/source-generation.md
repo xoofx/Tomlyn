@@ -38,6 +38,24 @@ Nested types referenced by the root are discovered transitively - you only need 
 Set [`TomlSerializableAttribute.TypeInfoPropertyName`](xref:Tomlyn.Serialization.TomlSerializableAttribute.TypeInfoPropertyName) when you want to customize the generated property name exposed by the context.
 Source-generated deserialization also supports C# `init` and `required` members.
 
+## Cross-project polymorphism
+
+When a polymorphic base type cannot reference all of its derived types, register the derived types on the context instead of on the base type:
+
+```csharp
+using Tomlyn.Serialization;
+
+[TomlSerializable(typeof(Animal))]
+[TomlDerivedTypeMapping(typeof(Animal), typeof(Cat), "cat")]
+[TomlDerivedTypeMapping(typeof(Animal), typeof(Dog), "dog")]
+internal partial class AnimalContext : TomlSerializerContext
+{
+}
+```
+
+The generator automatically includes the mapped derived types, so they don't need separate `[TomlSerializable]` roots.
+If the base type already has [`TomlDerivedTypeAttribute`](xref:Tomlyn.Serialization.TomlDerivedTypeAttribute) or [`JsonDerivedTypeAttribute`](xref:System.Text.Json.Serialization.JsonDerivedTypeAttribute) registrations, those take precedence over context-level mappings.
+
 ## Use generated metadata
 
 Use the generated [`TomlTypeInfo<T>`](xref:Tomlyn.TomlTypeInfo`1) property directly (recommended):
@@ -108,6 +126,7 @@ The source generator supports these attributes at compile time:
 | [`JsonPropertyNameAttribute`](xref:System.Text.Json.Serialization.JsonPropertyNameAttribute) / [`TomlPropertyNameAttribute`](xref:Tomlyn.Serialization.TomlPropertyNameAttribute) | [`JsonConstructorAttribute`](xref:System.Text.Json.Serialization.JsonConstructorAttribute) / [`TomlConstructorAttribute`](xref:Tomlyn.Serialization.TomlConstructorAttribute) |
 | [`JsonIgnoreAttribute`](xref:System.Text.Json.Serialization.JsonIgnoreAttribute) / [`TomlIgnoreAttribute`](xref:Tomlyn.Serialization.TomlIgnoreAttribute) | [`JsonPolymorphicAttribute`](xref:System.Text.Json.Serialization.JsonPolymorphicAttribute) / [`TomlPolymorphicAttribute`](xref:Tomlyn.Serialization.TomlPolymorphicAttribute) |
 | [`JsonIncludeAttribute`](xref:System.Text.Json.Serialization.JsonIncludeAttribute) / [`TomlIncludeAttribute`](xref:Tomlyn.Serialization.TomlIncludeAttribute) | [`JsonDerivedTypeAttribute`](xref:System.Text.Json.Serialization.JsonDerivedTypeAttribute) / [`TomlDerivedTypeAttribute`](xref:Tomlyn.Serialization.TomlDerivedTypeAttribute) |
+|  | [`TomlDerivedTypeMappingAttribute`](xref:Tomlyn.Serialization.TomlDerivedTypeMappingAttribute) |
 | [`JsonObjectCreationHandlingAttribute`](xref:System.Text.Json.Serialization.JsonObjectCreationHandlingAttribute) | [`JsonObjectCreationHandlingAttribute`](xref:System.Text.Json.Serialization.JsonObjectCreationHandlingAttribute) |
 | [`JsonPropertyOrderAttribute`](xref:System.Text.Json.Serialization.JsonPropertyOrderAttribute) / [`TomlPropertyOrderAttribute`](xref:Tomlyn.Serialization.TomlPropertyOrderAttribute) | |
 | [`JsonRequiredAttribute`](xref:System.Text.Json.Serialization.JsonRequiredAttribute) / [`TomlRequiredAttribute`](xref:Tomlyn.Serialization.TomlRequiredAttribute) | |

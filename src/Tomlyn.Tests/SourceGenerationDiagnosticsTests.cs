@@ -198,6 +198,68 @@ public sealed class SourceGenerationDiagnosticsTests
         StringAssert.DoesNotContain("TomlTableHeaderExtensionHelper", generatedSource);
     }
 
+    [Test]
+    public void Generator_ReportsInvalidDerivedTypeMapping_WhenDerivedTypeIsNotAssignable()
+    {
+        var source = """
+            #nullable enable
+            using Tomlyn.Serialization;
+
+            [TomlSerializable(typeof(Animal))]
+            [TomlDerivedTypeMapping(typeof(Animal), typeof(NotAnimal), "cat")]
+            internal partial class Ctx : TomlSerializerContext { }
+
+            [TomlPolymorphic(TypeDiscriminatorPropertyName = "kind")]
+            public abstract class Animal { }
+            public sealed class NotAnimal { }
+            """;
+
+        var diagnostics = RunGenerator(source);
+
+        Assert.That(diagnostics.Any(d => d.Id == "TOMLYN009"), Is.True);
+    }
+
+    [Test]
+    public void Generator_ReportsInvalidDerivedTypeMapping_WhenDiscriminatorIsEmpty()
+    {
+        var source = """
+            #nullable enable
+            using Tomlyn.Serialization;
+
+            [TomlSerializable(typeof(Animal))]
+            [TomlDerivedTypeMapping(typeof(Animal), typeof(Cat), "")]
+            internal partial class Ctx : TomlSerializerContext { }
+
+            [TomlPolymorphic(TypeDiscriminatorPropertyName = "kind")]
+            public abstract class Animal { }
+            public sealed class Cat : Animal { }
+            """;
+
+        var diagnostics = RunGenerator(source);
+
+        Assert.That(diagnostics.Any(d => d.Id == "TOMLYN009"), Is.True);
+    }
+
+    [Test]
+    public void Generator_WarnsWhenDerivedTypeMappingBaseHasNoPolymorphicConfiguration()
+    {
+        var source = """
+            #nullable enable
+            using Tomlyn.Serialization;
+
+            [TomlSerializable(typeof(Animal))]
+            [TomlDerivedTypeMapping(typeof(Animal), typeof(Cat), "cat")]
+            internal partial class Ctx : TomlSerializerContext { }
+
+            public abstract class Animal { public string Name { get; set; } = ""; }
+            public sealed class Cat : Animal { public int Lives { get; set; } }
+            """;
+
+        var diagnostics = RunGenerator(source);
+
+        Assert.That(diagnostics.Any(d => d.Id == "TOMLYN010"), Is.True);
+    }
+
     private static ImmutableArray<Diagnostic> RunGenerator(string source)
         => RunGeneratorTest(source).Diagnostics;
 

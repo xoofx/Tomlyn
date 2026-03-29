@@ -79,8 +79,25 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
+    private static readonly DiagnosticDescriptor InvalidDerivedTypeMapping = new(
+        id: "TOMLYN009",
+        title: "Invalid derived type mapping",
+        messageFormat: "Context '{0}' derived type mapping is invalid: {1}",
+        category: "Tomlyn.SourceGeneration",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    private static readonly DiagnosticDescriptor MissingPolymorphicConfigurationOnDerivedTypeMappingBase = new(
+        id: "TOMLYN010",
+        title: "Derived type mapping base type has no polymorphic configuration",
+        messageFormat: "Context '{0}' registers a derived type mapping for base type '{1}' without [TomlPolymorphic], [TomlDerivedType], [JsonPolymorphic], or [JsonDerivedType]. Serializer options defaults will be used.",
+        category: "Tomlyn.SourceGeneration",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
     private const string TomlSerializerContextMetadataName = "Tomlyn.Serialization.TomlSerializerContext";
     private const string TomlSerializableAttributeMetadataName = "Tomlyn.Serialization.TomlSerializableAttribute";
+    private const string TomlDerivedTypeMappingAttributeMetadataName = "Tomlyn.Serialization.TomlDerivedTypeMappingAttribute";
     private const string JsonSerializableAttributeMetadataName = "System.Text.Json.Serialization.JsonSerializableAttribute";
     private const string JsonSourceGenerationOptionsAttributeMetadataName = "System.Text.Json.Serialization.JsonSourceGenerationOptionsAttribute";
     private const string JsonObjectCreationHandlingAttributeMetadataName = "System.Text.Json.Serialization.JsonObjectCreationHandlingAttribute";
@@ -104,6 +121,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             string namespaceName,
             string typeName,
             ImmutableArray<RootTypeModel> rootTypes,
+            ImmutableArray<DerivedTypeMappingModel> derivedTypeMappings,
             SourceGenOptions options,
             bool isValid,
             bool usesJsonSerializable)
@@ -112,6 +130,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             NamespaceName = namespaceName;
             TypeName = typeName;
             RootTypes = rootTypes;
+            DerivedTypeMappings = derivedTypeMappings;
             Options = options;
             IsValid = isValid;
             UsesJsonSerializable = usesJsonSerializable;
@@ -121,6 +140,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         public string NamespaceName { get; }
         public string TypeName { get; }
         public ImmutableArray<RootTypeModel> RootTypes { get; }
+        public ImmutableArray<DerivedTypeMappingModel> DerivedTypeMappings { get; }
         public SourceGenOptions Options { get; }
         public bool IsValid { get; }
         public bool UsesJsonSerializable { get; }
@@ -136,6 +156,22 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         public ITypeSymbol Type { get; }
         public string? TypeInfoPropertyName { get; }
+    }
+
+    private sealed class DerivedTypeMappingModel
+    {
+        public DerivedTypeMappingModel(ITypeSymbol baseType, ITypeSymbol derivedType, string? discriminator, Location? location)
+        {
+            BaseType = baseType;
+            DerivedType = derivedType;
+            Discriminator = discriminator;
+            Location = location;
+        }
+
+        public ITypeSymbol BaseType { get; }
+        public ITypeSymbol DerivedType { get; }
+        public string? Discriminator { get; }
+        public Location? Location { get; }
     }
 
     private sealed class SourceGenOptions
@@ -208,6 +244,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         var roots = ImmutableArray.CreateBuilder<RootTypeModel>();
+        var derivedTypeMappings = ImmutableArray.CreateBuilder<DerivedTypeMappingModel>();
         var options = new SourceGenOptions();
         var usesJsonSerializable = false;
 
@@ -227,6 +264,12 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 }
 
                 roots.Add(new RootTypeModel(typeSymbol, GetTypeInfoPropertyNameOverride(attribute)));
+                continue;
+            }
+
+            if (TryCreateDerivedTypeMappingModel(attribute, out var derivedTypeMapping))
+            {
+                derivedTypeMappings.Add(derivedTypeMapping);
                 continue;
             }
 
@@ -263,6 +306,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             namespaceName,
             typeName,
             roots.ToImmutable(),
+            derivedTypeMappings.ToImmutable(),
             options,
             isValid: isPartial,
             usesJsonSerializable: usesJsonSerializable);
@@ -293,7 +337,8 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             return;
         }
 
-        var expanded = ExpandTypeGraph(context, model);
+        var derivedTypeMappings = ValidateDerivedTypeMappings(context, model);
+        var expanded = ExpandTypeGraph(context, model, derivedTypeMappings);
         var ordered = expanded
             .OrderBy(static t => t.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), StringComparer.Ordinal)
             .ToImmutableArray();
@@ -327,7 +372,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         foreach (var type in ordered)
         {
-            EmitTypeInfoProperty(builder, context, model, type);
+            EmitTypeInfoProperty(builder, context, model, derivedTypeMappings, type);
         }
 
         builder.AppendLine();
@@ -460,7 +505,12 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.AppendLine();
     }
 
-    private static void EmitTypeInfoProperty(StringBuilder builder, SourceProductionContext context, ContextModel model, ITypeSymbol type)
+    private static void EmitTypeInfoProperty(
+        StringBuilder builder,
+        SourceProductionContext context,
+        ContextModel model,
+        ImmutableArray<DerivedTypeMappingModel> derivedTypeMappings,
+        ITypeSymbol type)
     {
         var propertyName = GetTypeInfoPropertyName(type);
         var publicPropertyName = TryGetCustomTypeInfoPropertyName(model, type, out var customPropertyName)
@@ -560,7 +610,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 .Append(dictionaryValueType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
                 .AppendLine(">(this);");
         }
-        else if (TryGetPolymorphicShape(context, model, type, out var polymorphic, reportDiagnostics: false))
+        else if (TryGetPolymorphicShape(context, model, derivedTypeMappings, type, out var polymorphic, reportDiagnostics: false))
         {
             builder.Append("        global::Tomlyn.TomlTypeInfo<").Append(typeName).AppendLine(">? __baseTypeInfo = null;");
             if (TryGetPocoShape(context, model, type, out _))
@@ -2675,11 +2725,20 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         return true;
     }
 
-    private static ImmutableArray<ITypeSymbol> ExpandTypeGraph(SourceProductionContext context, ContextModel model)
+    private static ImmutableArray<ITypeSymbol> ExpandTypeGraph(
+        SourceProductionContext context,
+        ContextModel model,
+        ImmutableArray<DerivedTypeMappingModel> derivedTypeMappings)
     {
         var queue = new Queue<ITypeSymbol>(model.RootTypes.Select(static root => root.Type));
         var seen = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
         var list = new List<ITypeSymbol>();
+
+        foreach (var mapping in derivedTypeMappings)
+        {
+            queue.Enqueue(mapping.BaseType);
+            queue.Enqueue(mapping.DerivedType);
+        }
 
         while (queue.Count != 0)
         {
@@ -2693,7 +2752,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
             if (TryGetNullableUnderlyingType(current, out var nullableUnderlyingType))
             {
-                if (IsSupportedMemberType(nullableUnderlyingType))
+                if (IsSupportedMemberType(nullableUnderlyingType, derivedTypeMappings))
                 {
                     queue.Enqueue(nullableUnderlyingType);
                 }
@@ -2703,7 +2762,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
             if (TryGetArrayElementType(current, out var arrayElementType))
             {
-                if (IsSupportedMemberType(arrayElementType))
+                if (IsSupportedMemberType(arrayElementType, derivedTypeMappings))
                 {
                     queue.Enqueue(arrayElementType);
                 }
@@ -2713,7 +2772,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
             if (TryGetSequenceElementType(current, out var enumerableElementType, out _))
             {
-                if (IsSupportedMemberType(enumerableElementType))
+                if (IsSupportedMemberType(enumerableElementType, derivedTypeMappings))
                 {
                     queue.Enqueue(enumerableElementType);
                 }
@@ -2723,7 +2782,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
             if (TryGetDictionaryValueType(current, out var dictionaryValueType))
             {
-                if (IsSupportedMemberType(dictionaryValueType))
+                if (IsSupportedMemberType(dictionaryValueType, derivedTypeMappings))
                 {
                     queue.Enqueue(dictionaryValueType);
                 }
@@ -2747,7 +2806,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                         continue;
                     }
 
-                    if (!IsSupportedMemberType(member.Type))
+                    if (!IsSupportedMemberType(member.Type, derivedTypeMappings))
                     {
                         context.ReportDiagnostic(Diagnostic.Create(
                             UnsupportedMemberType,
@@ -2765,7 +2824,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 {
                     foreach (var parameter in ctor.Parameters)
                     {
-                        if (!IsSupportedMemberType(parameter.ParameterType))
+                        if (!IsSupportedMemberType(parameter.ParameterType, derivedTypeMappings))
                         {
                             context.ReportDiagnostic(Diagnostic.Create(
                                 UnsupportedMemberType,
@@ -2782,7 +2841,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
                 if (poco.ExtensionData is { } extensionData)
                 {
-                    if (!IsSupportedMemberType(extensionData.ValueType))
+                    if (!IsSupportedMemberType(extensionData.ValueType, derivedTypeMappings))
                     {
                         context.ReportDiagnostic(Diagnostic.Create(
                             UnsupportedMemberType,
@@ -2798,11 +2857,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 }
             }
 
-            if (TryGetPolymorphicShape(context, model, current, out var polymorphic))
+            if (TryGetPolymorphicShape(context, model, derivedTypeMappings, current, out var polymorphic))
             {
                 foreach (var derived in polymorphic.DerivedTypes)
                 {
-                    if (!IsSupportedMemberType(derived.Type))
+                    if (!IsSupportedMemberType(derived.Type, derivedTypeMappings))
                     {
                         context.ReportDiagnostic(Diagnostic.Create(
                             InvalidPolymorphismConfiguration,
@@ -2850,24 +2909,13 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private static bool HasPolymorphismAttributes(INamedTypeSymbol type)
     {
-        var hasMarker = false;
-        var hasDerived = false;
-
         foreach (var attr in type.GetAttributes())
         {
             var attrName = attr.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             if (attrName == "global::Tomlyn.Serialization.TomlPolymorphicAttribute" ||
-                attrName == "global::System.Text.Json.Serialization.JsonPolymorphicAttribute")
-            {
-                hasMarker = true;
-            }
-            else if (attrName == "global::Tomlyn.Serialization.TomlDerivedTypeAttribute" ||
+                attrName == "global::System.Text.Json.Serialization.JsonPolymorphicAttribute" ||
+                attrName == "global::Tomlyn.Serialization.TomlDerivedTypeAttribute" ||
                      attrName == "global::System.Text.Json.Serialization.JsonDerivedTypeAttribute")
-            {
-                hasDerived = true;
-            }
-
-            if (hasMarker && hasDerived)
             {
                 return true;
             }
@@ -2876,11 +2924,29 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         return false;
     }
 
-    private static bool IsSupportedMemberType(ITypeSymbol type)
+    private static bool HasPolymorphismConfiguration(INamedTypeSymbol type, ImmutableArray<DerivedTypeMappingModel> derivedTypeMappings)
+    {
+        if (HasPolymorphismAttributes(type))
+        {
+            return true;
+        }
+
+        foreach (var mapping in derivedTypeMappings)
+        {
+            if (SymbolEqualityComparer.Default.Equals(mapping.BaseType, type))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsSupportedMemberType(ITypeSymbol type, ImmutableArray<DerivedTypeMappingModel> derivedTypeMappings)
     {
         if (TryGetNullableUnderlyingType(type, out var nullableUnderlyingType))
         {
-            return IsSupportedMemberType(nullableUnderlyingType);
+            return IsSupportedMemberType(nullableUnderlyingType, derivedTypeMappings);
         }
 
         // v1 generator milestone: built-in scalars/containers and POCOs.
@@ -2891,12 +2957,12 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         if (TryGetArrayElementType(type, out var arrayElementType))
         {
-            return IsSupportedMemberType(arrayElementType);
+            return IsSupportedMemberType(arrayElementType, derivedTypeMappings);
         }
 
         if (TryGetSequenceElementType(type, out var enumerableElementType, out _))
         {
-            return IsSupportedMemberType(enumerableElementType);
+            return IsSupportedMemberType(enumerableElementType, derivedTypeMappings);
         }
 
         if (TryGetDictionaryKeyValueTypes(type, out var dictKeyType, out var dictValueType))
@@ -2906,7 +2972,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 return false;
             }
 
-            return IsSupportedMemberType(dictValueType);
+            return IsSupportedMemberType(dictValueType, derivedTypeMappings);
         }
 
         if (type is INamedTypeSymbol named)
@@ -2918,12 +2984,12 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
             if (named.TypeKind == TypeKind.Class)
             {
-                return !named.IsAbstract || HasPolymorphismAttributes(named);
+                return !named.IsAbstract || HasPolymorphismConfiguration(named, derivedTypeMappings);
             }
 
             if (named.TypeKind == TypeKind.Interface)
             {
-                return HasPolymorphismAttributes(named);
+                return HasPolymorphismConfiguration(named, derivedTypeMappings);
             }
         }
 
@@ -3435,7 +3501,13 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         return true;
     }
 
-    private static bool TryGetPolymorphicShape(SourceProductionContext context, ContextModel model, ITypeSymbol type, out PolymorphicShape shape, bool reportDiagnostics = true)
+    private static bool TryGetPolymorphicShape(
+        SourceProductionContext context,
+        ContextModel model,
+        ImmutableArray<DerivedTypeMappingModel> derivedTypeMappings,
+        ITypeSymbol type,
+        out PolymorphicShape shape,
+        bool reportDiagnostics = true)
     {
         shape = null!;
 
@@ -3453,14 +3525,12 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         string? jsonDiscriminatorPropertyName = null;
         int? tomlUnknownHandling = null;
         int? jsonUnknownHandling = null;
-        var hasPolymorphicMarker = false;
 
         foreach (var attr in named.GetAttributes())
         {
             var attrName = attr.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             if (attrName == "global::Tomlyn.Serialization.TomlPolymorphicAttribute")
             {
-                hasPolymorphicMarker = true;
                 foreach (var kvp in attr.NamedArguments)
                 {
                     if (kvp.Key == "TypeDiscriminatorPropertyName" && kvp.Value.Value is string s && !string.IsNullOrEmpty(s))
@@ -3479,7 +3549,6 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             }
             else if (attrName == "global::System.Text.Json.Serialization.JsonPolymorphicAttribute")
             {
-                hasPolymorphicMarker = true;
                 foreach (var kvp in attr.NamedArguments)
                 {
                     if (kvp.Key == "TypeDiscriminatorPropertyName" && kvp.Value.Value is string s && !string.IsNullOrEmpty(s))
@@ -3493,11 +3562,6 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     }
                 }
             }
-        }
-
-        if (!hasPolymorphicMarker)
-        {
-            return false;
         }
 
         var derived = ImmutableArray.CreateBuilder<PolymorphicDerivedType>();
@@ -3528,6 +3592,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                         continue;
                     }
 
+                    if (!ValidateDerivedType(defaultType, discriminator: null))
+                    {
+                        continue;
+                    }
+
                     if (!derivedTypeSet.Add(defaultType))
                     {
                         if (reportDiagnostics)
@@ -3537,32 +3606,6 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                                 model.ContextSymbol.Locations.FirstOrDefault(),
                                 type.ToDisplayString(),
                                 $"Derived type '{defaultType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}' is registered more than once."));
-                        }
-                        continue;
-                    }
-
-                    if (!IsAssignableTo(defaultType, type))
-                    {
-                        if (reportDiagnostics)
-                        {
-                            context.ReportDiagnostic(Diagnostic.Create(
-                                InvalidPolymorphismConfiguration,
-                                model.ContextSymbol.Locations.FirstOrDefault(),
-                                type.ToDisplayString(),
-                                $"Derived type '{defaultType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}' is not assignable to base type '{type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}'."));
-                        }
-                        continue;
-                    }
-
-                    if (defaultType is INamedTypeSymbol defaultNamed && (defaultNamed.TypeKind != TypeKind.Class || defaultNamed.IsAbstract))
-                    {
-                        if (reportDiagnostics)
-                        {
-                            context.ReportDiagnostic(Diagnostic.Create(
-                                InvalidPolymorphismConfiguration,
-                                model.ContextSymbol.Locations.FirstOrDefault(),
-                                type.ToDisplayString(),
-                                $"Derived type '{defaultType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}' must be a non-abstract class."));
                         }
                         continue;
                     }
@@ -3590,12 +3633,12 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                                 InvalidPolymorphismConfiguration,
                                 model.ContextSymbol.Locations.FirstOrDefault(),
                                 type.ToDisplayString(),
-                                "TomlDerivedTypeAttribute must specify a derived type and a non-empty discriminator."));
+                            "TomlDerivedTypeAttribute must specify a derived type and a non-empty discriminator."));
                         }
                         continue;
                     }
 
-                    AddDerivedType(context, model, type, derived, discriminatorSet, derivedTypeSet, derivedType, discriminator);
+                    AddStrictDerivedType(derivedType, discriminator);
                 }
                 else
                 {
@@ -3629,6 +3672,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
                 if (attr.ConstructorArguments.Length < 2 || attr.ConstructorArguments[1].IsNull)
                 {
+                    TryAddLowerPrecedenceDefaultDerivedType(derivedType);
                     continue;
                 }
 
@@ -3645,7 +3689,24 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     continue;
                 }
 
-                AddDerivedType(context, model, type, derived, discriminatorSet, derivedTypeSet, derivedType, discriminator);
+                TryAddLowerPrecedenceDerivedType(derivedType, discriminator);
+            }
+        }
+
+        foreach (var mapping in derivedTypeMappings)
+        {
+            if (!SymbolEqualityComparer.Default.Equals(mapping.BaseType, type))
+            {
+                continue;
+            }
+
+            if (mapping.Discriminator is null)
+            {
+                TryAddLowerPrecedenceDefaultDerivedType(mapping.DerivedType);
+            }
+            else
+            {
+                TryAddLowerPrecedenceDerivedType(mapping.DerivedType, mapping.Discriminator);
             }
         }
 
@@ -3660,15 +3721,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         shape = new PolymorphicShape(discriminatorPropertyName, derived.ToImmutable(), defaultDerivedType, resolvedUnknownHandling);
         return true;
 
-        void AddDerivedType(
-            SourceProductionContext context,
-            ContextModel model,
-            ITypeSymbol baseType,
-            ImmutableArray<PolymorphicDerivedType>.Builder derived,
-            HashSet<string> discriminatorSet,
-            HashSet<ITypeSymbol> derivedTypeSet,
-            ITypeSymbol derivedType,
-            string discriminator)
+        void AddStrictDerivedType(ITypeSymbol derivedType, string discriminator)
         {
             if (!discriminatorSet.Add(discriminator))
             {
@@ -3677,7 +3730,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     context.ReportDiagnostic(Diagnostic.Create(
                         InvalidPolymorphismConfiguration,
                         model.ContextSymbol.Locations.FirstOrDefault(),
-                        baseType.ToDisplayString(),
+                        type.ToDisplayString(),
                         $"Discriminator '{discriminator}' is registered more than once."));
                 }
                 return;
@@ -3690,23 +3743,81 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     context.ReportDiagnostic(Diagnostic.Create(
                         InvalidPolymorphismConfiguration,
                         model.ContextSymbol.Locations.FirstOrDefault(),
-                        baseType.ToDisplayString(),
+                        type.ToDisplayString(),
                         $"Derived type '{derivedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}' is registered more than once."));
                 }
                 return;
             }
 
-            if (!IsAssignableTo(derivedType, baseType))
+            if (!ValidateDerivedType(derivedType, discriminator))
+            {
+                return;
+            }
+
+            derived.Add(new PolymorphicDerivedType(derivedType, discriminator));
+        }
+
+        void TryAddLowerPrecedenceDefaultDerivedType(ITypeSymbol derivedType)
+        {
+            if (!ValidateDerivedType(derivedType, discriminator: null))
+            {
+                return;
+            }
+
+            if (!CanAddLowerPrecedenceMapping(derivedType, discriminator: null, defaultDerivedType, discriminatorSet, derivedTypeSet))
+            {
+                return;
+            }
+
+            defaultDerivedType ??= derivedType;
+            derivedTypeSet.Add(derivedType);
+        }
+
+        void TryAddLowerPrecedenceDerivedType(ITypeSymbol derivedType, string discriminator)
+        {
+            if (!ValidateDerivedType(derivedType, discriminator))
+            {
+                return;
+            }
+
+            if (!CanAddLowerPrecedenceMapping(derivedType, discriminator, defaultDerivedType, discriminatorSet, derivedTypeSet))
+            {
+                return;
+            }
+
+            derivedTypeSet.Add(derivedType);
+            discriminatorSet.Add(discriminator);
+            derived.Add(new PolymorphicDerivedType(derivedType, discriminator));
+        }
+
+        bool ValidateDerivedType(ITypeSymbol derivedType, string? discriminator)
+        {
+            if (discriminator is not null && discriminator.Length == 0)
             {
                 if (reportDiagnostics)
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
                         InvalidPolymorphismConfiguration,
                         model.ContextSymbol.Locations.FirstOrDefault(),
-                        baseType.ToDisplayString(),
-                        $"Derived type '{derivedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}' is not assignable to base type '{baseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}'."));
+                        type.ToDisplayString(),
+                        "Derived type discriminators cannot be empty."));
                 }
-                return;
+
+                return false;
+            }
+
+            if (!IsAssignableTo(derivedType, type))
+            {
+                if (reportDiagnostics)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InvalidPolymorphismConfiguration,
+                        model.ContextSymbol.Locations.FirstOrDefault(),
+                        type.ToDisplayString(),
+                        $"Derived type '{derivedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}' is not assignable to base type '{type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}'."));
+                }
+
+                return false;
             }
 
             if (derivedType is INamedTypeSymbol derivedNamed && (derivedNamed.TypeKind != TypeKind.Class || derivedNamed.IsAbstract))
@@ -3716,14 +3827,35 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     context.ReportDiagnostic(Diagnostic.Create(
                         InvalidPolymorphismConfiguration,
                         model.ContextSymbol.Locations.FirstOrDefault(),
-                        baseType.ToDisplayString(),
+                        type.ToDisplayString(),
                         $"Derived type '{derivedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}' must be a non-abstract class."));
                 }
-                return;
+
+                return false;
             }
 
-            derived.Add(new PolymorphicDerivedType(derivedType, discriminator));
+            return true;
         }
+    }
+
+    private static bool CanAddLowerPrecedenceMapping(
+        ITypeSymbol derivedType,
+        string? discriminator,
+        ITypeSymbol? defaultDerivedType,
+        HashSet<string> discriminatorSet,
+        HashSet<ITypeSymbol> derivedTypeSet)
+    {
+        if (derivedTypeSet.Contains(derivedType))
+        {
+            return false;
+        }
+
+        if (discriminator is null)
+        {
+            return defaultDerivedType is null;
+        }
+
+        return !discriminatorSet.Contains(discriminator);
     }
 
     private static bool IsAssignableTo(ITypeSymbol derivedType, ITypeSymbol baseType)
@@ -4512,6 +4644,40 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
     private static bool IsTomlSerializableAttribute(AttributeData attribute)
         => attribute.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::" + TomlSerializableAttributeMetadataName;
 
+    private static bool TryCreateDerivedTypeMappingModel(AttributeData attribute, out DerivedTypeMappingModel model)
+    {
+        model = null!;
+
+        if (attribute.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) != "global::" + TomlDerivedTypeMappingAttributeMetadataName)
+        {
+            return false;
+        }
+
+        if (attribute.ConstructorArguments.Length < 2 ||
+            attribute.ConstructorArguments[0].Kind != TypedConstantKind.Type ||
+            attribute.ConstructorArguments[0].Value is not ITypeSymbol baseType ||
+            attribute.ConstructorArguments[1].Kind != TypedConstantKind.Type ||
+            attribute.ConstructorArguments[1].Value is not ITypeSymbol derivedType)
+        {
+            return false;
+        }
+
+        string? discriminator = null;
+        if (attribute.ConstructorArguments.Length >= 3)
+        {
+            discriminator = attribute.ConstructorArguments[2].Value switch
+            {
+                string s => s,
+                int i => i.ToString(CultureInfo.InvariantCulture),
+                IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
+                _ => attribute.ConstructorArguments[2].Value?.ToString(),
+            };
+        }
+
+        model = new DerivedTypeMappingModel(baseType, derivedType, discriminator, attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation());
+        return true;
+    }
+
     private static string? GetTypeInfoPropertyNameOverride(AttributeData attribute)
     {
         foreach (var namedArgument in attribute.NamedArguments)
@@ -4530,6 +4696,62 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private static bool IsTomlSourceGenerationOptionsAttribute(AttributeData attribute)
         => attribute.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::" + TomlSourceGenerationOptionsAttributeMetadataName;
+
+    private static ImmutableArray<DerivedTypeMappingModel> ValidateDerivedTypeMappings(SourceProductionContext context, ContextModel model)
+    {
+        var builder = ImmutableArray.CreateBuilder<DerivedTypeMappingModel>(model.DerivedTypeMappings.Length);
+        var warnedBaseTypes = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+
+        foreach (var mapping in model.DerivedTypeMappings)
+        {
+            if (mapping.Discriminator is { Length: 0 })
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InvalidDerivedTypeMapping,
+                    mapping.Location ?? model.ContextSymbol.Locations.FirstOrDefault(),
+                    model.ContextSymbol.ToDisplayString(),
+                    $"Derived type mapping from '{mapping.BaseType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}' to '{mapping.DerivedType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}' must use a non-empty discriminator."));
+                continue;
+            }
+
+            if (!IsAssignableTo(mapping.DerivedType, mapping.BaseType))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InvalidDerivedTypeMapping,
+                    mapping.Location ?? model.ContextSymbol.Locations.FirstOrDefault(),
+                    model.ContextSymbol.ToDisplayString(),
+                    $"Type '{mapping.DerivedType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}' is not assignable to base type '{mapping.BaseType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}'."));
+                continue;
+            }
+
+            if (mapping.DerivedType is not INamedTypeSymbol derivedType ||
+                derivedType.TypeKind != TypeKind.Class ||
+                derivedType.IsAbstract)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InvalidDerivedTypeMapping,
+                    mapping.Location ?? model.ContextSymbol.Locations.FirstOrDefault(),
+                    model.ContextSymbol.ToDisplayString(),
+                    $"Derived type '{mapping.DerivedType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}' must be a non-abstract class."));
+                continue;
+            }
+
+            if (warnedBaseTypes.Add(mapping.BaseType) &&
+                mapping.BaseType is INamedTypeSymbol baseType &&
+                !HasPolymorphismAttributes(baseType))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    MissingPolymorphicConfigurationOnDerivedTypeMappingBase,
+                    mapping.Location ?? model.ContextSymbol.Locations.FirstOrDefault(),
+                    model.ContextSymbol.ToDisplayString(),
+                    mapping.BaseType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+            }
+
+            builder.Add(mapping);
+        }
+
+        return builder.ToImmutable();
+    }
 
     private static void ApplyJsonSourceGenerationOptionsAttribute(AttributeData attribute, SourceGenOptions options)
     {

@@ -67,12 +67,18 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
             return null;
         }
 
-        var tomlPolymorphicAttribute = type.GetCustomAttribute<TomlPolymorphicAttribute>(inherit: false);
-        var jsonPolymorphicAttribute = type.GetCustomAttribute<JsonPolymorphicAttribute>(inherit: false);
-        if (tomlPolymorphicAttribute is null && jsonPolymorphicAttribute is null)
+        var tomlDerivedAttributes = type.GetCustomAttributes<TomlDerivedTypeAttribute>(inherit: false).ToArray();
+        var jsonDerivedAttributes = type.GetCustomAttributes<JsonDerivedTypeAttribute>(inherit: false).ToArray();
+        var hasRuntimeMappings = options.PolymorphismOptions.DerivedTypeMappings.TryGetValue(type, out var runtimeDerivedTypes) &&
+                                 runtimeDerivedTypes.Count > 0;
+
+        if (tomlDerivedAttributes.Length == 0 && jsonDerivedAttributes.Length == 0 && !hasRuntimeMappings)
         {
             return null;
         }
+
+        var tomlPolymorphicAttribute = type.GetCustomAttribute<TomlPolymorphicAttribute>(inherit: false);
+        var jsonPolymorphicAttribute = type.GetCustomAttribute<JsonPolymorphicAttribute>(inherit: false);
 
         var discriminatorPropertyName =
             tomlPolymorphicAttribute?.TypeDiscriminatorPropertyName ??
@@ -88,7 +94,7 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
         var discriminatorByDerived = new Dictionary<Type, string?>();
         Type? defaultDerivedType = null;
 
-        foreach (var attr in type.GetCustomAttributes<TomlDerivedTypeAttribute>(inherit: false))
+        foreach (var attr in tomlDerivedAttributes)
         {
             if (attr.Discriminator is null)
             {
@@ -100,12 +106,16 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
             }
         }
 
-        foreach (var attr in type.GetCustomAttributes<JsonDerivedTypeAttribute>(inherit: false))
+        foreach (var attr in jsonDerivedAttributes)
         {
             var discriminator = attr.TypeDiscriminator;
             if (discriminator is null)
             {
-                SetDefaultDerivedType(type, ref defaultDerivedType, discriminatorByDerived, attr.DerivedType);
+                ValidateDefaultDerivedType(type, attr.DerivedType);
+                if (ShouldAddLowerPrecedenceMapping(attr.DerivedType, discriminator: null, defaultDerivedType, derivedByDiscriminator, discriminatorByDerived))
+                {
+                    SetDefaultDerivedType(type, ref defaultDerivedType, discriminatorByDerived, attr.DerivedType);
+                }
                 continue;
             }
 
@@ -116,7 +126,34 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
                 _ => discriminator.ToString() ?? string.Empty,
             };
 
-            AddDerivedType(type, derivedByDiscriminator, discriminatorByDerived, attr.DerivedType, discriminatorText);
+            ValidateDerivedType(type, attr.DerivedType, discriminatorText);
+            if (ShouldAddLowerPrecedenceMapping(attr.DerivedType, discriminatorText, defaultDerivedType, derivedByDiscriminator, discriminatorByDerived))
+            {
+                AddDerivedType(type, derivedByDiscriminator, discriminatorByDerived, attr.DerivedType, discriminatorText);
+            }
+        }
+
+        if (hasRuntimeMappings)
+        {
+            foreach (var entry in runtimeDerivedTypes!)
+            {
+                if (entry.Discriminator is null)
+                {
+                    ValidateDefaultDerivedType(type, entry.DerivedType);
+                    if (ShouldAddLowerPrecedenceMapping(entry.DerivedType, discriminator: null, defaultDerivedType, derivedByDiscriminator, discriminatorByDerived))
+                    {
+                        SetDefaultDerivedType(type, ref defaultDerivedType, discriminatorByDerived, entry.DerivedType);
+                    }
+
+                    continue;
+                }
+
+                ValidateDerivedType(type, entry.DerivedType, entry.Discriminator);
+                if (ShouldAddLowerPrecedenceMapping(entry.DerivedType, entry.Discriminator, defaultDerivedType, derivedByDiscriminator, discriminatorByDerived))
+                {
+                    AddDerivedType(type, derivedByDiscriminator, discriminatorByDerived, entry.DerivedType, entry.Discriminator);
+                }
+            }
         }
 
         if (derivedByDiscriminator.Count == 0 && defaultDerivedType is null)
@@ -157,18 +194,7 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
         Type derivedType,
         string discriminator)
     {
-        ArgumentGuard.ThrowIfNull(derivedType, nameof(derivedType));
-        ArgumentGuard.ThrowIfNull(discriminator, nameof(discriminator));
-
-        if (discriminator.Length == 0)
-        {
-            throw new TomlException($"Derived type discriminator for base '{baseType.FullName}' cannot be empty.");
-        }
-
-        if (!baseType.IsAssignableFrom(derivedType))
-        {
-            throw new TomlException($"Derived type '{derivedType.FullName}' is not assignable to base type '{baseType.FullName}'.");
-        }
+        ValidateDerivedType(baseType, derivedType, discriminator);
 
         if (derivedTypeByDiscriminator.ContainsKey(discriminator))
         {
@@ -190,12 +216,7 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
         Dictionary<Type, string?> discriminatorByDerivedType,
         Type derivedType)
     {
-        ArgumentGuard.ThrowIfNull(derivedType, nameof(derivedType));
-
-        if (!baseType.IsAssignableFrom(derivedType))
-        {
-            throw new TomlException($"Derived type '{derivedType.FullName}' is not assignable to base type '{baseType.FullName}'.");
-        }
+        ValidateDefaultDerivedType(baseType, derivedType);
 
         if (defaultDerivedType is not null)
         {
@@ -209,6 +230,47 @@ internal sealed class TomlPolymorphicTypeInfo : TomlTypeInfo
 
         defaultDerivedType = derivedType;
         discriminatorByDerivedType.Add(derivedType, null);
+    }
+
+    private static void ValidateDefaultDerivedType(Type baseType, Type derivedType)
+    {
+        ArgumentGuard.ThrowIfNull(derivedType, nameof(derivedType));
+
+        if (!baseType.IsAssignableFrom(derivedType))
+        {
+            throw new TomlException($"Derived type '{derivedType.FullName}' is not assignable to base type '{baseType.FullName}'.");
+        }
+    }
+
+    private static void ValidateDerivedType(Type baseType, Type derivedType, string discriminator)
+    {
+        ValidateDefaultDerivedType(baseType, derivedType);
+        ArgumentGuard.ThrowIfNull(discriminator, nameof(discriminator));
+
+        if (discriminator.Length == 0)
+        {
+            throw new TomlException($"Derived type discriminator for base '{baseType.FullName}' cannot be empty.");
+        }
+    }
+
+    private static bool ShouldAddLowerPrecedenceMapping(
+        Type derivedType,
+        string? discriminator,
+        Type? defaultDerivedType,
+        Dictionary<string, Type> derivedTypeByDiscriminator,
+        Dictionary<Type, string?> discriminatorByDerivedType)
+    {
+        if (discriminatorByDerivedType.ContainsKey(derivedType))
+        {
+            return false;
+        }
+
+        if (discriminator is null)
+        {
+            return defaultDerivedType is null;
+        }
+
+        return !derivedTypeByDiscriminator.ContainsKey(discriminator);
     }
 
     public override void Write(TomlWriter writer, object? value)
