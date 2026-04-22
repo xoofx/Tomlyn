@@ -63,6 +63,18 @@ public class NewApiReflectionPocoTests
         public long Age { get; set; }
     }
 
+    private abstract class JsonNamedBaseOptions
+    {
+        [JsonPropertyName("baseValue")]
+        public string? Base { get; init; }
+    }
+
+    private sealed class JsonNamedDerivedOptions : JsonNamedBaseOptions
+    {
+        [JsonPropertyName("derivedValue")]
+        public string? Derived { get; init; }
+    }
+
     private sealed class PrivateSetterModel
     {
         [JsonInclude]
@@ -183,6 +195,25 @@ public class NewApiReflectionPocoTests
         Assert.That(person, Is.Not.Null);
         Assert.That(person!.Name, Is.EqualTo("Ada"));
         Assert.That(person.Age, Is.EqualTo(37));
+    }
+
+    [Test]
+    public void SerializeDeserialize_InheritedProperties_RespectJsonPropertyName()
+    {
+        var original = new JsonNamedDerivedOptions
+        {
+            Base = "shared",
+            Derived = "leaf",
+        };
+
+        var toml = TomlSerializer.Serialize(original);
+        var roundtrip = TomlSerializer.Deserialize<JsonNamedDerivedOptions>(toml);
+
+        Assert.That(toml, Does.Contain("baseValue = \"shared\""));
+        Assert.That(toml, Does.Contain("derivedValue = \"leaf\""));
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.Base, Is.EqualTo("shared"));
+        Assert.That(roundtrip.Derived, Is.EqualTo("leaf"));
     }
 
     [Test]

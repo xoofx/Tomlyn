@@ -24,6 +24,18 @@ public sealed class GeneratedSnakePerson
     public string FirstName { get; set; } = "";
 }
 
+public abstract class GeneratedBaseOptions
+{
+    [JsonPropertyName("baseValue")]
+    public string? Base { get; init; }
+}
+
+public sealed class GeneratedDerivedOptions : GeneratedBaseOptions
+{
+    [JsonPropertyName("derivedValue")]
+    public string? Derived { get; init; }
+}
+
 public sealed class GeneratedOptionsPerson
 {
     public string Name { get; set; } = "";
@@ -243,6 +255,12 @@ internal partial class TestTomlSerializerContextInt : TomlSerializerContext
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
 [TomlSerializable(typeof(GeneratedSnakePerson))]
 internal partial class TestTomlSerializerContextSnakeCase : TomlSerializerContext
+{
+}
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[TomlSerializable(typeof(GeneratedDerivedOptions))]
+internal partial class TestTomlSerializerContextInheritedMembers : TomlSerializerContext
 {
 }
 
@@ -773,6 +791,26 @@ public class NewApiSourceGenerationTests
 
         Assert.That(person, Is.Not.Null);
         Assert.That(person!.FirstName, Is.EqualTo("Ada"));
+    }
+
+    [Test]
+    public void GeneratedContext_CanSerializeAndDeserializeInheritedProperties()
+    {
+        var context = TestTomlSerializerContextInheritedMembers.Default;
+        var original = new GeneratedDerivedOptions
+        {
+            Base = "shared",
+            Derived = "leaf",
+        };
+
+        var toml = TomlSerializer.Serialize(original, context);
+        var roundtrip = TomlSerializer.Deserialize<GeneratedDerivedOptions>(toml, context);
+
+        Assert.That(toml, Does.Contain("baseValue = \"shared\""));
+        Assert.That(toml, Does.Contain("derivedValue = \"leaf\""));
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.Base, Is.EqualTo("shared"));
+        Assert.That(roundtrip.Derived, Is.EqualTo("leaf"));
     }
 
     [Test]

@@ -3275,14 +3275,9 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         var members = ImmutableArray.CreateBuilder<PocoMember>();
         PocoExtensionData? extensionData = null;
-        foreach (var member in named.GetMembers().OfType<IPropertySymbol>())
+        foreach (var member in EnumeratePublicInstanceProperties(named))
         {
             if (member.IsIndexer)
-            {
-                continue;
-            }
-
-            if (member.DeclaredAccessibility != Accessibility.Public)
             {
                 continue;
             }
@@ -3355,14 +3350,9 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore, objectCreationHandling, hasExplicitObjectCreationHandling, hasSingleOrArray, required, isCompilerRequired, canSet, isInitOnly));
         }
 
-        foreach (var member in named.GetMembers().OfType<IFieldSymbol>())
+        foreach (var member in EnumeratePublicInstanceFields(named))
         {
             if (member.IsImplicitlyDeclared || member.IsConst || member.IsStatic || member.IsReadOnly)
-            {
-                continue;
-            }
-
-            if (member.DeclaredAccessibility != Accessibility.Public)
             {
                 continue;
             }
@@ -3499,6 +3489,45 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             constructorModel,
             RequiresGeneratedObjectInitializer(finalMembers, extensionData, constructorModel, parameterlessConstructorSetsRequiredMembers));
         return true;
+    }
+
+    private static IEnumerable<IPropertySymbol> EnumeratePublicInstanceProperties(INamedTypeSymbol type)
+    {
+        var hiddenPropertyNames = new HashSet<string>(StringComparer.Ordinal);
+
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            foreach (var member in current.GetMembers().OfType<IPropertySymbol>())
+            {
+                if (member.DeclaredAccessibility != Accessibility.Public || member.IsStatic)
+                {
+                    continue;
+                }
+
+                if (!hiddenPropertyNames.Add(member.Name))
+                {
+                    continue;
+                }
+
+                yield return member;
+            }
+        }
+    }
+
+    private static IEnumerable<IFieldSymbol> EnumeratePublicInstanceFields(INamedTypeSymbol type)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            foreach (var member in current.GetMembers().OfType<IFieldSymbol>())
+            {
+                if (member.DeclaredAccessibility != Accessibility.Public || member.IsStatic)
+                {
+                    continue;
+                }
+
+                yield return member;
+            }
+        }
     }
 
     private static bool TryGetPolymorphicShape(
