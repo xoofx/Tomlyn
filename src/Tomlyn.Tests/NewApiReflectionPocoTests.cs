@@ -75,6 +75,20 @@ public class NewApiReflectionPocoTests
         public string? Derived { get; init; }
     }
 
+    private abstract class JsonNamedOverriddenBaseOptions
+    {
+        [JsonPropertyName("baseValue")]
+        public virtual string? Base { get; init; }
+    }
+
+    private sealed class JsonNamedOverriddenDerivedOptions : JsonNamedOverriddenBaseOptions
+    {
+        [JsonPropertyName("derivedValue")]
+        public string? Derived { get; init; }
+
+        public override string? Base { get; init; }
+    }
+
     private sealed class PrivateSetterModel
     {
         [JsonInclude]
@@ -208,6 +222,25 @@ public class NewApiReflectionPocoTests
 
         var toml = TomlSerializer.Serialize(original);
         var roundtrip = TomlSerializer.Deserialize<JsonNamedDerivedOptions>(toml);
+
+        Assert.That(toml, Does.Contain("baseValue = \"shared\""));
+        Assert.That(toml, Does.Contain("derivedValue = \"leaf\""));
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.Base, Is.EqualTo("shared"));
+        Assert.That(roundtrip.Derived, Is.EqualTo("leaf"));
+    }
+
+    [Test]
+    public void SerializeDeserialize_OverriddenProperties_RespectInheritedJsonPropertyName()
+    {
+        var original = new JsonNamedOverriddenDerivedOptions
+        {
+            Base = "shared",
+            Derived = "leaf",
+        };
+
+        var toml = TomlSerializer.Serialize(original);
+        var roundtrip = TomlSerializer.Deserialize<JsonNamedOverriddenDerivedOptions>(toml);
 
         Assert.That(toml, Does.Contain("baseValue = \"shared\""));
         Assert.That(toml, Does.Contain("derivedValue = \"leaf\""));

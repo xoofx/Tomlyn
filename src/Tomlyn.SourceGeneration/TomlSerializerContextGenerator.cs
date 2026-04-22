@@ -4309,16 +4309,44 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
     }
 
     private static bool HasAttribute(ISymbol symbol, string attributeMetadataName)
+        => TryGetAttribute(symbol, attributeMetadataName, out _);
+
+    private static bool TryGetAttribute(ISymbol symbol, string attributeMetadataName, out AttributeData attribute)
     {
-        foreach (var attr in symbol.GetAttributes())
+        foreach (var current in EnumerateSelfAndBaseSymbols(symbol))
         {
-            if (attr.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::" + attributeMetadataName)
+            foreach (var attr in current.GetAttributes())
             {
-                return true;
+                if (attr.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::" + attributeMetadataName)
+                {
+                    attribute = attr;
+                    return true;
+                }
             }
         }
 
+        attribute = null!;
         return false;
+    }
+
+    private static IEnumerable<ISymbol> EnumerateSelfAndBaseSymbols(ISymbol symbol)
+    {
+        for (var current = symbol; current is not null; current = GetBaseSymbol(current))
+        {
+            yield return current;
+        }
+    }
+
+    private static ISymbol? GetBaseSymbol(ISymbol symbol)
+    {
+        return symbol switch
+        {
+            IPropertySymbol property => property.OverriddenProperty,
+            IMethodSymbol method => method.OverriddenMethod,
+            IEventSymbol @event => @event.OverriddenEvent,
+            INamedTypeSymbol named => named.BaseType,
+            _ => null,
+        };
     }
 
     private static bool ImplementsInterface(ITypeSymbol type, string interfaceMetadataName)
@@ -4341,22 +4369,18 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private static string GetSerializedName(ISymbol member, string memberName, string? namingPolicyExpression)
     {
-        foreach (var attr in member.GetAttributes())
+        if (TryGetAttribute(member, "Tomlyn.Serialization.TomlPropertyNameAttribute", out var tomlAttr) &&
+            tomlAttr.ConstructorArguments.Length == 1 &&
+            tomlAttr.ConstructorArguments[0].Value is string tomlName)
         {
-            var attrName = attr.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            if (attrName == "global::Tomlyn.Serialization.TomlPropertyNameAttribute" &&
-                attr.ConstructorArguments.Length == 1 &&
-                attr.ConstructorArguments[0].Value is string tomlName)
-            {
-                return tomlName;
-            }
+            return tomlName;
+        }
 
-            if (attrName == "global::System.Text.Json.Serialization.JsonPropertyNameAttribute" &&
-                attr.ConstructorArguments.Length == 1 &&
-                attr.ConstructorArguments[0].Value is string jsonName)
-            {
-                return jsonName;
-            }
+        if (TryGetAttribute(member, "System.Text.Json.Serialization.JsonPropertyNameAttribute", out var jsonAttr) &&
+            jsonAttr.ConstructorArguments.Length == 1 &&
+            jsonAttr.ConstructorArguments[0].Value is string jsonName)
+        {
+            return jsonName;
         }
 
         if (namingPolicyExpression is not null && TryConvertKnownName(memberName, namingPolicyExpression, out var converted))
@@ -4369,13 +4393,8 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private static ObjectCreationHandlingKind GetObjectCreationHandling(ISymbol symbol)
     {
-        foreach (var attr in symbol.GetAttributes())
+        if (TryGetAttribute(symbol, JsonObjectCreationHandlingAttributeMetadataName, out var attr))
         {
-            if (attr.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) != "global::" + JsonObjectCreationHandlingAttributeMetadataName)
-            {
-                continue;
-            }
-
             if (attr.ConstructorArguments.Length == 1 && attr.ConstructorArguments[0].Value is int constructorValue)
             {
                 return constructorValue switch
@@ -4405,27 +4424,21 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private static int GetOrder(ISymbol member)
     {
-        int? tomlOrder = null;
-        int? jsonOrder = null;
-
-        foreach (var attr in member.GetAttributes())
+        if (TryGetAttribute(member, "Tomlyn.Serialization.TomlPropertyOrderAttribute", out var tomlAttr) &&
+            tomlAttr.ConstructorArguments.Length == 1 &&
+            tomlAttr.ConstructorArguments[0].Value is int tomlOrder)
         {
-            var attrName = attr.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            if (attrName == "global::Tomlyn.Serialization.TomlPropertyOrderAttribute" &&
-                attr.ConstructorArguments.Length == 1 &&
-                attr.ConstructorArguments[0].Value is int toml)
-            {
-                tomlOrder = toml;
-            }
-            else if (attrName == "global::System.Text.Json.Serialization.JsonPropertyOrderAttribute" &&
-                     attr.ConstructorArguments.Length == 1 &&
-                     attr.ConstructorArguments[0].Value is int json)
-            {
-                jsonOrder = json;
-            }
+            return tomlOrder;
         }
 
-        return tomlOrder ?? jsonOrder ?? 0;
+        if (TryGetAttribute(member, "System.Text.Json.Serialization.JsonPropertyOrderAttribute", out var jsonAttr) &&
+            jsonAttr.ConstructorArguments.Length == 1 &&
+            jsonAttr.ConstructorArguments[0].Value is int jsonOrder)
+        {
+            return jsonOrder;
+        }
+
+        return 0;
     }
 
     private static bool TryConvertKnownName(string name, string namingPolicyExpression, out string converted)
@@ -4452,26 +4465,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private static IgnoreBehavior GetIgnoreBehavior(ISymbol symbol)
     {
-        TomlIgnoreAttributeModel? toml = null;
-        JsonIgnoreAttributeModel? json = null;
-
-        foreach (var attr in symbol.GetAttributes())
+        if (TryGetAttribute(symbol, "Tomlyn.Serialization.TomlIgnoreAttribute", out var tomlAttr))
         {
-            var attrName = attr.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            if (attrName == "global::Tomlyn.Serialization.TomlIgnoreAttribute")
-            {
-                toml = TomlIgnoreAttributeModel.From(attr);
-            }
-            else if (attrName == "global::System.Text.Json.Serialization.JsonIgnoreAttribute")
-            {
-                json = JsonIgnoreAttributeModel.From(attr);
-            }
-        }
-
-        if (toml is not null)
-        {
+            var toml = TomlIgnoreAttributeModel.From(tomlAttr);
             // Interpret [TomlIgnore] with default Condition as "ignore always".
-            return toml.Value.Condition switch
+            return toml.Condition switch
             {
                 1 => new IgnoreBehavior(ignoreAlways: false, writeIgnore: WriteIgnoreKind.WhenWritingNull),
                 2 => new IgnoreBehavior(ignoreAlways: false, writeIgnore: WriteIgnoreKind.WhenWritingDefault),
@@ -4479,9 +4477,9 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             };
         }
 
-        if (json is not null)
+        if (TryGetAttribute(symbol, "System.Text.Json.Serialization.JsonIgnoreAttribute", out var jsonAttr))
         {
-            var condition = json.Value.Condition ?? JsonIgnoreCondition.Always;
+            var condition = JsonIgnoreAttributeModel.From(jsonAttr).Condition ?? JsonIgnoreCondition.Always;
             return condition switch
             {
                 JsonIgnoreCondition.Never => new IgnoreBehavior(ignoreAlways: false, writeIgnore: WriteIgnoreKind.None),

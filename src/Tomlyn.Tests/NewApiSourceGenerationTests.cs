@@ -36,6 +36,20 @@ public sealed class GeneratedDerivedOptions : GeneratedBaseOptions
     public string? Derived { get; init; }
 }
 
+public abstract class GeneratedOverriddenBaseOptions
+{
+    [JsonPropertyName("baseValue")]
+    public virtual required string? Base { get; init; }
+}
+
+public sealed class GeneratedOverriddenDerivedOptions : GeneratedOverriddenBaseOptions
+{
+    [JsonPropertyName("derivedValue")]
+    public string? Derived { get; init; }
+
+    public override required string? Base { get; init; }
+}
+
 public sealed class GeneratedOptionsPerson
 {
     public string Name { get; set; } = "";
@@ -261,6 +275,12 @@ internal partial class TestTomlSerializerContextSnakeCase : TomlSerializerContex
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [TomlSerializable(typeof(GeneratedDerivedOptions))]
 internal partial class TestTomlSerializerContextInheritedMembers : TomlSerializerContext
+{
+}
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[TomlSerializable(typeof(GeneratedOverriddenDerivedOptions))]
+internal partial class TestTomlSerializerContextOverriddenMembers : TomlSerializerContext
 {
 }
 
@@ -811,6 +831,38 @@ public class NewApiSourceGenerationTests
         Assert.That(roundtrip, Is.Not.Null);
         Assert.That(roundtrip!.Base, Is.EqualTo("shared"));
         Assert.That(roundtrip.Derived, Is.EqualTo("leaf"));
+    }
+
+    [Test]
+    public void GeneratedContext_CanDeserializeOverriddenProperties_WithInheritedJsonPropertyName()
+    {
+        var context = TestTomlSerializerContextOverriddenMembers.Default;
+        var toml = """
+            baseValue = "shared"
+            derivedValue = "leaf"
+            """;
+
+        var roundtrip = TomlSerializer.Deserialize<GeneratedOverriddenDerivedOptions>(toml, context);
+
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.Base, Is.EqualTo("shared"));
+        Assert.That(roundtrip.Derived, Is.EqualTo("leaf"));
+    }
+
+    [Test]
+    public void GeneratedContext_CanSerializeOverriddenProperties_WithInheritedJsonPropertyName()
+    {
+        var context = TestTomlSerializerContextOverriddenMembers.Default;
+        var original = new GeneratedOverriddenDerivedOptions
+        {
+            Base = "shared",
+            Derived = "leaf",
+        };
+
+        var toml = TomlSerializer.Serialize(original, context);
+
+        Assert.That(toml, Does.Contain("baseValue = \"shared\""));
+        Assert.That(toml, Does.Contain("derivedValue = \"leaf\""));
     }
 
     [Test]
