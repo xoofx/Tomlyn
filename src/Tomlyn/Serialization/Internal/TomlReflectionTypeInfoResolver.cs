@@ -129,7 +129,7 @@ internal static class TomlReflectionTypeInfoResolver
 
     private static List<MemberModel> CollectMembers(Type type, TomlSerializerOptions options)
     {
-        var properties = type.GetProperties(BindingFlags.Instance | BindingFlags.Public);
+        var properties = type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         var members = new List<MemberModel>(properties.Length);
         var typeObjectCreationHandling = GetObjectCreationHandling(type, options);
 
@@ -145,7 +145,7 @@ internal static class TomlReflectionTypeInfoResolver
                 continue;
             }
 
-            if (!property.GetMethod.IsPublic)
+            if (!property.GetMethod.IsPublic && !HasIncludeAttribute(property))
             {
                 continue;
             }
@@ -185,7 +185,7 @@ internal static class TomlReflectionTypeInfoResolver
                 TryCreateMemberConverter(property, property.PropertyType, options)));
         }
 
-        var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public);
+        var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         foreach (var field in fields)
         {
             if (!HasIncludeAttribute(field))

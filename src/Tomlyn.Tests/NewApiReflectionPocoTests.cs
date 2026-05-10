@@ -101,6 +101,14 @@ public class NewApiReflectionPocoTests
         public int Value;
     }
 
+    private sealed class IncludedNonPublicPropertyModel
+    {
+        [TomlInclude]
+        private bool MyProperty { get; set; } = true;
+
+        public bool GetMyProperty() => MyProperty;
+    }
+
     private sealed class ReadOnlyPropertyModel
     {
         public int Value { get; } = 42;
@@ -265,6 +273,17 @@ public class NewApiReflectionPocoTests
         var roundtrip = TomlSerializer.Deserialize<IncludedFieldModel>(toml);
         Assert.That(roundtrip, Is.Not.Null);
         Assert.That(roundtrip!.Value, Is.EqualTo(7));
+    }
+
+    [Test]
+    public void SerializeDeserialize_NonPublicProperty_WithTomlInclude_Works()
+    {
+        var toml = TomlSerializer.Serialize(new IncludedNonPublicPropertyModel());
+        var roundtrip = TomlSerializer.Deserialize<IncludedNonPublicPropertyModel>("MyProperty = false\n");
+
+        Assert.That(toml, Does.Contain("MyProperty = true"));
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.GetMyProperty(), Is.False);
     }
 
     [Test]

@@ -679,6 +679,8 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.AppendLine("        }");
         builder.AppendLine();
 
+        EmitNonPublicGetterAccessors(builder, poco);
+
         builder.Append("        public override void Write(TomlWriter writer, ").Append(typeName).AppendLine(" value)");
         builder.AppendLine("        {");
         if (!type.IsValueType)
@@ -704,7 +706,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         for (var i = 0; i < poco.Members.Length; i++)
         {
             var member = poco.Members[i];
-            builder.Append("            var __member").Append(i.ToString(CultureInfo.InvariantCulture)).Append(" = value.").Append(member.MemberName).AppendLine(";");
+            builder.Append("            var __member").Append(i.ToString(CultureInfo.InvariantCulture)).Append(" = ").Append(GetMemberReadExpression(member, "value")).AppendLine(";");
         }
 
         var declarationOrder = Enumerable.Range(0, poco.Members.Length).ToArray();
@@ -931,6 +933,40 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         builder.AppendLine("    }");
+    }
+
+    private static void EmitNonPublicGetterAccessors(StringBuilder builder, PocoShape poco)
+    {
+        foreach (var member in poco.Members)
+        {
+            if (member.GetterAccessorName is null)
+            {
+                continue;
+            }
+
+            var declaringTypeName = member.DeclaringType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var memberTypeName = member.Type.ToDisplayString(FullyQualifiedNullableFormat);
+            var bindingFlags = "global::System.Reflection.BindingFlags.Instance | global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.NonPublic";
+            builder.Append("        private static ").Append(memberTypeName).Append(' ').Append(member.GetterAccessorName).Append('(').Append(declaringTypeName).AppendLine(" __instance)");
+            builder.AppendLine("        {");
+            if (member.IsField)
+            {
+                builder.Append("            return (").Append(memberTypeName).Append(")typeof(").Append(declaringTypeName).Append(").GetField(\"").Append(EscapeStringLiteral(member.MemberName)).Append("\", ").Append(bindingFlags).AppendLine(")!.GetValue(__instance)!;");
+            }
+            else
+            {
+                builder.Append("            return (").Append(memberTypeName).Append(")typeof(").Append(declaringTypeName).Append(").GetProperty(\"").Append(EscapeStringLiteral(member.MemberName)).Append("\", ").Append(bindingFlags).AppendLine(")!.GetValue(__instance)!;");
+            }
+            builder.AppendLine("        }");
+            builder.AppendLine();
+        }
+    }
+
+    private static string GetMemberReadExpression(PocoMember member, string instanceExpression)
+    {
+        return member.GetterAccessorName is null
+            ? instanceExpression + "." + member.MemberName
+            : member.GetterAccessorName + "(" + instanceExpression + ")";
     }
 
     private static void EmitPocoReadWithConstructor(
@@ -2998,11 +3034,12 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private sealed class PocoMember
     {
-        public PocoMember(string memberName, string serializedName, ITypeSymbol type, int order, WriteIgnoreKind writeIgnore, ObjectCreationHandlingKind objectCreationHandling, bool hasExplicitObjectCreationHandling, bool hasSingleOrArray, bool isRequired, bool isCompilerRequired, bool canSet, bool isInitOnly)
+        public PocoMember(string memberName, string serializedName, ITypeSymbol type, ITypeSymbol declaringType, int order, WriteIgnoreKind writeIgnore, ObjectCreationHandlingKind objectCreationHandling, bool hasExplicitObjectCreationHandling, bool hasSingleOrArray, bool isRequired, bool isCompilerRequired, bool canSet, bool isInitOnly, bool isField, string? getterAccessorName)
         {
             MemberName = memberName;
             SerializedName = serializedName;
             Type = type;
+            DeclaringType = declaringType;
             Order = order;
             WriteIgnore = writeIgnore;
             ObjectCreationHandling = objectCreationHandling;
@@ -3012,11 +3049,14 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             IsCompilerRequired = isCompilerRequired;
             CanSet = canSet;
             IsInitOnly = isInitOnly;
+            IsField = isField;
+            GetterAccessorName = getterAccessorName;
         }
 
         public string MemberName { get; }
         public string SerializedName { get; }
         public ITypeSymbol Type { get; }
+        public ITypeSymbol DeclaringType { get; }
         public int Order { get; }
         public WriteIgnoreKind WriteIgnore { get; }
         public ObjectCreationHandlingKind ObjectCreationHandling { get; }
@@ -3026,6 +3066,8 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         public bool IsCompilerRequired { get; }
         public bool CanSet { get; }
         public bool IsInitOnly { get; }
+        public bool IsField { get; }
+        public string? GetterAccessorName { get; }
     }
 
     private sealed class PocoExtensionData
@@ -3275,7 +3317,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         var members = ImmutableArray.CreateBuilder<PocoMember>();
         PocoExtensionData? extensionData = null;
-        foreach (var member in EnumeratePublicInstanceProperties(named))
+        foreach (var member in EnumerateSerializableInstanceProperties(named))
         {
             if (member.IsIndexer)
             {
@@ -3287,7 +3329,17 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 continue;
             }
 
-            var canSet = member.SetMethod is not null && member.SetMethod.DeclaredAccessibility == Accessibility.Public;
+            var hasInclude = HasAttribute(member, "Tomlyn.Serialization.TomlIncludeAttribute") ||
+                HasAttribute(member, "System.Text.Json.Serialization.JsonIncludeAttribute");
+            if (member.GetMethod.DeclaredAccessibility != Accessibility.Public && !hasInclude)
+            {
+                continue;
+            }
+
+            var getterAccessible = IsAccessibleFromGeneratedContext(member.GetMethod.DeclaredAccessibility);
+            var getterAccessorName = getterAccessible ? null : "__Get" + members.Count.ToString(CultureInfo.InvariantCulture);
+            var canSet = member.SetMethod is not null &&
+                IsAccessibleFromGeneratedContext(member.SetMethod.DeclaredAccessibility);
             var isInitOnly = member.SetMethod?.IsInitOnly == true;
             var isCompilerRequired = member.IsRequired;
             var hasSingleOrArray = HasAttribute(member, TomlSingleOrArrayAttributeMetadataName);
@@ -3347,10 +3399,10 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             var serializedName = GetSerializedName(member, member.Name, namingPolicy);
             var order = GetOrder(member);
             var required = IsRequired(member);
-            members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore, objectCreationHandling, hasExplicitObjectCreationHandling, hasSingleOrArray, required, isCompilerRequired, canSet, isInitOnly));
+            members.Add(new PocoMember(member.Name, serializedName, member.Type, member.ContainingType, order, ignore.WriteIgnore, objectCreationHandling, hasExplicitObjectCreationHandling, hasSingleOrArray, required, isCompilerRequired, canSet, isInitOnly, isField: false, getterAccessorName));
         }
 
-        foreach (var member in EnumeratePublicInstanceFields(named))
+        foreach (var member in EnumerateSerializableInstanceFields(named))
         {
             if (member.IsImplicitlyDeclared || member.IsConst || member.IsStatic || member.IsReadOnly)
             {
@@ -3396,8 +3448,9 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 continue;
             }
 
-            if (!HasAttribute(member, "Tomlyn.Serialization.TomlIncludeAttribute") &&
-                !HasAttribute(member, "System.Text.Json.Serialization.JsonIncludeAttribute"))
+            var hasInclude = HasAttribute(member, "Tomlyn.Serialization.TomlIncludeAttribute") ||
+                HasAttribute(member, "System.Text.Json.Serialization.JsonIncludeAttribute");
+            if (!hasInclude)
             {
                 continue;
             }
@@ -3420,7 +3473,9 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             var serializedName = GetSerializedName(member, member.Name, namingPolicy);
             var order = GetOrder(member);
             var required = IsRequired(member);
-            members.Add(new PocoMember(member.Name, serializedName, member.Type, order, ignore.WriteIgnore, objectCreationHandling, hasExplicitObjectCreationHandling, hasSingleOrArray, required, member.IsRequired, canSet: true, isInitOnly: false));
+            var getterAccessorName = IsAccessibleFromGeneratedContext(member.DeclaredAccessibility) ? null : "__Get" + members.Count.ToString(CultureInfo.InvariantCulture);
+            var canSet = IsAccessibleFromGeneratedContext(member.DeclaredAccessibility);
+            members.Add(new PocoMember(member.Name, serializedName, member.Type, member.ContainingType, order, ignore.WriteIgnore, objectCreationHandling, hasExplicitObjectCreationHandling, hasSingleOrArray, required, member.IsRequired, canSet, isInitOnly: false, isField: true, getterAccessorName));
         }
 
         PocoConstructor? constructorModel = null;
@@ -3491,7 +3546,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         return true;
     }
 
-    private static IEnumerable<IPropertySymbol> EnumeratePublicInstanceProperties(INamedTypeSymbol type)
+    private static IEnumerable<IPropertySymbol> EnumerateSerializableInstanceProperties(INamedTypeSymbol type)
     {
         var hiddenPropertyNames = new HashSet<string>(StringComparer.Ordinal);
 
@@ -3499,7 +3554,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         {
             foreach (var member in current.GetMembers().OfType<IPropertySymbol>())
             {
-                if (member.DeclaredAccessibility != Accessibility.Public || member.IsStatic)
+                if (member.IsStatic)
                 {
                     continue;
                 }
@@ -3514,13 +3569,13 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
     }
 
-    private static IEnumerable<IFieldSymbol> EnumeratePublicInstanceFields(INamedTypeSymbol type)
+    private static IEnumerable<IFieldSymbol> EnumerateSerializableInstanceFields(INamedTypeSymbol type)
     {
         for (var current = type; current is not null; current = current.BaseType)
         {
             foreach (var member in current.GetMembers().OfType<IFieldSymbol>())
             {
-                if (member.DeclaredAccessibility != Accessibility.Public || member.IsStatic)
+                if (member.IsStatic)
                 {
                     continue;
                 }
@@ -3528,6 +3583,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 yield return member;
             }
         }
+    }
+
+    private static bool IsAccessibleFromGeneratedContext(Accessibility accessibility)
+    {
+        return accessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal;
     }
 
     private static bool TryGetPolymorphicShape(

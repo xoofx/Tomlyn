@@ -228,6 +228,18 @@ public sealed class GeneratedNullableReferencePayload
     public string NonNullableMock { get; init; } = string.Empty;
 }
 
+public sealed class GeneratedIncludedInternalPropertyPayload
+{
+    [TomlInclude]
+    internal bool MyProperty { get; set; } = true;
+}
+
+public sealed class GeneratedIncludedPrivatePropertyPayload
+{
+    [TomlInclude]
+    private bool MyProperty { get; set; } = true;
+}
+
 public enum GeneratedEnumKind
 {
     A = 0,
@@ -329,6 +341,18 @@ internal partial class TestTomlSerializerContextNullables : TomlSerializerContex
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [TomlSerializable(typeof(GeneratedNullableReferencePayload))]
 internal partial class TestTomlSerializerContextNullableReferences : TomlSerializerContext
+{
+}
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[TomlSerializable(typeof(GeneratedIncludedInternalPropertyPayload))]
+internal partial class TestTomlSerializerContextIncludedInternalProperty : TomlSerializerContext
+{
+}
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[TomlSerializable(typeof(GeneratedIncludedPrivatePropertyPayload))]
+internal partial class TestTomlSerializerContextIncludedPrivateProperty : TomlSerializerContext
 {
 }
 
@@ -972,6 +996,29 @@ public class NewApiSourceGenerationTests
         Assert.That(payload, Is.Not.Null);
         Assert.That(payload!.NullableMock, Is.EqualTo("hello"));
         Assert.That(payload.NonNullableMock, Is.EqualTo("world"));
+    }
+
+    [Test]
+    public void GeneratedContext_IncludesInternalProperty_WithTomlInclude()
+    {
+        var context = TestTomlSerializerContextIncludedInternalProperty.Default;
+
+        var toml = TomlSerializer.Serialize(new GeneratedIncludedInternalPropertyPayload(), context.GeneratedIncludedInternalPropertyPayload);
+        var roundtrip = TomlSerializer.Deserialize("myProperty = false\n", context.GeneratedIncludedInternalPropertyPayload);
+
+        Assert.That(toml, Does.Contain("myProperty = true"));
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.MyProperty, Is.False);
+    }
+
+    [Test]
+    public void GeneratedContext_IncludesPrivateProperty_WithTomlInclude_WhenWriting()
+    {
+        var context = TestTomlSerializerContextIncludedPrivateProperty.Default;
+
+        var toml = TomlSerializer.Serialize(new GeneratedIncludedPrivatePropertyPayload(), context.GeneratedIncludedPrivatePropertyPayload);
+
+        Assert.That(toml, Does.Contain("myProperty = true"));
     }
 
     [Test]
