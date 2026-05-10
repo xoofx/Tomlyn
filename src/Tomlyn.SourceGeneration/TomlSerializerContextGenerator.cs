@@ -1951,16 +1951,16 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         if (isArray)
         {
-            return "global::Tomlyn.Serialization.Internal.TomlSingleOrArrayCollectionHelper.CreateSingleElementArray<" + elementTypeName + ">(" + readElementExpression + ")";
+            return "CreateSingleElementArray<" + elementTypeName + ">(" + readElementExpression + ")";
         }
 
         return kind switch
         {
-            SequenceKind.List or SequenceKind.ListBackedEnumerable => "global::Tomlyn.Serialization.Internal.TomlSingleOrArrayCollectionHelper.CreateSingleElementList<" + elementTypeName + ">(" + readElementExpression + ")",
-            SequenceKind.HashSet or SequenceKind.HashSetBackedEnumerable => "global::Tomlyn.Serialization.Internal.TomlSingleOrArrayCollectionHelper.CreateSingleElementHashSet<" + elementTypeName + ">(" + readElementExpression + ")",
-            SequenceKind.ImmutableArray => "global::Tomlyn.Serialization.Internal.TomlSingleOrArrayCollectionHelper.CreateSingleElementImmutableArray<" + elementTypeName + ">(" + readElementExpression + ")",
-            SequenceKind.ImmutableList => "global::Tomlyn.Serialization.Internal.TomlSingleOrArrayCollectionHelper.CreateSingleElementImmutableList<" + elementTypeName + ">(" + readElementExpression + ")",
-            SequenceKind.ImmutableHashSet => "global::Tomlyn.Serialization.Internal.TomlSingleOrArrayCollectionHelper.CreateSingleElementImmutableHashSet<" + elementTypeName + ">(" + readElementExpression + ")",
+            SequenceKind.List or SequenceKind.ListBackedEnumerable => "CreateSingleElementList<" + elementTypeName + ">(" + readElementExpression + ")",
+            SequenceKind.HashSet or SequenceKind.HashSetBackedEnumerable => "CreateSingleElementHashSet<" + elementTypeName + ">(" + readElementExpression + ")",
+            SequenceKind.ImmutableArray => "CreateSingleElementImmutableArray<" + elementTypeName + ">(" + readElementExpression + ")",
+            SequenceKind.ImmutableList => "CreateSingleElementImmutableList<" + elementTypeName + ">(" + readElementExpression + ")",
+            SequenceKind.ImmutableHashSet => "CreateSingleElementImmutableHashSet<" + elementTypeName + ">(" + readElementExpression + ")",
             _ => null,
         };
     }
@@ -1973,7 +1973,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         var elementTypeName = elementType.ToDisplayString(FullyQualifiedNullableFormat);
-        return "global::Tomlyn.Serialization.Internal.TomlSingleOrArrayCollectionHelper.CanPopulateCollection<" + elementTypeName + ">(" + existingExpression + ")";
+        return "CanPopulateSingleOrArrayCollection<" + elementTypeName + ">(" + existingExpression + ")";
     }
 
     private static string? GetSingleOrArrayAddSingleExpression(ITypeSymbol collectionType, string existingExpression)
@@ -1985,7 +1985,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         var elementTypeName = elementType.ToDisplayString(FullyQualifiedNullableFormat);
         var readElementExpression = "_context." + GetTypeInfoPropertyName(elementType) + ".Read(reader)!";
-        return "global::Tomlyn.Serialization.Internal.TomlSingleOrArrayCollectionHelper.AddSingleElementToCollection<" + elementTypeName + ">(" + existingExpression + ", " + readElementExpression + ")";
+        return "AddSingleElementToSingleOrArrayCollection<" + elementTypeName + ">(" + existingExpression + ", " + readElementExpression + ")";
     }
 
     private static string? GetSingleOrArrayAddCollectionExpression(ITypeSymbol collectionType, string existingExpression, string incomingExpression)
@@ -1996,7 +1996,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         var elementTypeName = elementType.ToDisplayString(FullyQualifiedNullableFormat);
-        return "global::Tomlyn.Serialization.Internal.TomlSingleOrArrayCollectionHelper.AddCollectionToExisting<" + elementTypeName + ">(" + existingExpression + ", (global::System.Collections.Generic.IEnumerable<" + elementTypeName + ">)" + incomingExpression + ")";
+        return "AddCollectionToSingleOrArrayCollection<" + elementTypeName + ">(" + existingExpression + ", (global::System.Collections.Generic.IEnumerable<" + elementTypeName + ">)" + incomingExpression + ")";
     }
 
     private static void EmitSingleOrArrayReadAssignment(StringBuilder builder, ITypeSymbol collectionType, string targetExpression, string indent, string errorPrefix)
@@ -5267,3 +5267,4 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         return hash & mask;
     }
 }
+

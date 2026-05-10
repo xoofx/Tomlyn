@@ -136,6 +136,83 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     }
 
     /// <summary>
+    /// Determines whether an existing collection can be populated for source-generated <see cref="TomlSingleOrArrayAttribute"/> handling.
+    /// </summary>
+    /// <typeparam name="T">The collection element type.</typeparam>
+    /// <param name="existingValue">The existing collection instance.</param>
+    /// <returns><c>true</c> when the collection can be populated in place.</returns>
+    protected static bool CanPopulateSingleOrArrayCollection<T>(object existingValue)
+        => TomlSingleOrArrayCollectionHelper.CanPopulateCollection<T>(existingValue);
+
+    /// <summary>
+    /// Adds a single element to an existing collection for source-generated <see cref="TomlSingleOrArrayAttribute"/> handling.
+    /// </summary>
+    /// <typeparam name="T">The collection element type.</typeparam>
+    /// <param name="existingValue">The existing collection instance.</param>
+    /// <param name="element">The element to add.</param>
+    /// <returns>The populated collection instance.</returns>
+    protected static object AddSingleElementToSingleOrArrayCollection<T>(object existingValue, T element)
+        => TomlSingleOrArrayCollectionHelper.AddSingleElementToCollection(existingValue, element);
+
+    /// <summary>
+    /// Adds incoming values to an existing collection for source-generated <see cref="TomlSingleOrArrayAttribute"/> handling.
+    /// </summary>
+    /// <typeparam name="T">The collection element type.</typeparam>
+    /// <param name="existingValue">The existing collection instance.</param>
+    /// <param name="incomingCollection">The values to add.</param>
+    /// <returns>The populated collection instance.</returns>
+    protected static object AddCollectionToSingleOrArrayCollection<T>(object existingValue, IEnumerable<T> incomingCollection)
+        => TomlSingleOrArrayCollectionHelper.AddCollectionToExisting(existingValue, incomingCollection);
+
+    /// <summary>
+    /// Creates an array with a single element for source-generated <see cref="TomlSingleOrArrayAttribute"/> handling.
+    /// </summary>
+    /// <typeparam name="T">The collection element type.</typeparam>
+    /// <param name="element">The element to place in the collection.</param>
+    /// <returns>An array containing <paramref name="element"/>.</returns>
+    protected static T[] CreateSingleElementArray<T>(T element) => TomlSingleOrArrayCollectionHelper.CreateSingleElementArray(element);
+
+    /// <summary>
+    /// Creates a list with a single element for source-generated <see cref="TomlSingleOrArrayAttribute"/> handling.
+    /// </summary>
+    /// <typeparam name="T">The collection element type.</typeparam>
+    /// <param name="element">The element to place in the collection.</param>
+    /// <returns>A list containing <paramref name="element"/>.</returns>
+    protected static List<T> CreateSingleElementList<T>(T element) => TomlSingleOrArrayCollectionHelper.CreateSingleElementList(element);
+
+    /// <summary>
+    /// Creates a hash set with a single element for source-generated <see cref="TomlSingleOrArrayAttribute"/> handling.
+    /// </summary>
+    /// <typeparam name="T">The collection element type.</typeparam>
+    /// <param name="element">The element to place in the collection.</param>
+    /// <returns>A hash set containing <paramref name="element"/>.</returns>
+    protected static HashSet<T> CreateSingleElementHashSet<T>(T element) => TomlSingleOrArrayCollectionHelper.CreateSingleElementHashSet(element);
+
+    /// <summary>
+    /// Creates an immutable array with a single element for source-generated <see cref="TomlSingleOrArrayAttribute"/> handling.
+    /// </summary>
+    /// <typeparam name="T">The collection element type.</typeparam>
+    /// <param name="element">The element to place in the collection.</param>
+    /// <returns>An immutable array containing <paramref name="element"/>.</returns>
+    protected static ImmutableArray<T> CreateSingleElementImmutableArray<T>(T element) => TomlSingleOrArrayCollectionHelper.CreateSingleElementImmutableArray(element);
+
+    /// <summary>
+    /// Creates an immutable list with a single element for source-generated <see cref="TomlSingleOrArrayAttribute"/> handling.
+    /// </summary>
+    /// <typeparam name="T">The collection element type.</typeparam>
+    /// <param name="element">The element to place in the collection.</param>
+    /// <returns>An immutable list containing <paramref name="element"/>.</returns>
+    protected static ImmutableList<T> CreateSingleElementImmutableList<T>(T element) => TomlSingleOrArrayCollectionHelper.CreateSingleElementImmutableList(element);
+
+    /// <summary>
+    /// Creates an immutable hash set with a single element for source-generated <see cref="TomlSingleOrArrayAttribute"/> handling.
+    /// </summary>
+    /// <typeparam name="T">The collection element type.</typeparam>
+    /// <param name="element">The element to place in the collection.</param>
+    /// <returns>An immutable hash set containing <paramref name="element"/>.</returns>
+    protected static ImmutableHashSet<T> CreateSingleElementImmutableHashSet<T>(T element) => TomlSingleOrArrayCollectionHelper.CreateSingleElementImmutableHashSet(element);
+
+    /// <summary>
     /// Creates metadata for a nullable value type (<see cref="Nullable{T}"/>) using source-generated resolution for the underlying value type.
     /// </summary>
     /// <remarks>

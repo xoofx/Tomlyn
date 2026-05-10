@@ -199,6 +199,31 @@ public sealed class SourceGenerationDiagnosticsTests
     }
 
     [Test]
+    public void Generator_DoesNotReferenceInternalSingleOrArrayHelper_FromConsumerAssembly()
+    {
+        var source = """
+            #nullable enable
+            using System.Collections.Generic;
+            using Tomlyn.Serialization;
+
+            public sealed class ProviderConfig
+            {
+                [TomlSingleOrArray]
+                public required IReadOnlyList<string> ApiKey { get; init; }
+            }
+
+            [TomlSerializable(typeof(ProviderConfig))]
+            internal partial class Ctx : TomlSerializerContext { }
+            """;
+
+        var result = RunGeneratorTest(source);
+        var generatedSource = string.Join(Environment.NewLine, result.GeneratedSources);
+
+        Assert.That(result.Diagnostics.Any(d => d.Id == "CS0122"), Is.False);
+        StringAssert.DoesNotContain("TomlSingleOrArrayCollectionHelper", generatedSource);
+    }
+
+    [Test]
     public void Generator_ReportsInvalidDerivedTypeMapping_WhenDerivedTypeIsNotAssignable()
     {
         var source = """
