@@ -246,11 +246,29 @@ public enum GeneratedEnumKind
     B = 1,
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum GeneratedStringEnumKind
+{
+    LogLevel,
+    Time,
+    Component,
+}
+
 public sealed class GeneratedEnumAndObjectPayload
 {
     public GeneratedEnumKind Kind { get; set; }
 
     public object? Value { get; set; }
+}
+
+public sealed class GeneratedStringEnumPayload
+{
+    public List<GeneratedStringEnumKind> Order { get; set; } =
+    [
+        GeneratedStringEnumKind.LogLevel,
+        GeneratedStringEnumKind.Time,
+        GeneratedStringEnumKind.Component,
+    ];
 }
 
 public sealed class GeneratedOptionsConverter : TomlConverter<string>
@@ -359,6 +377,12 @@ internal partial class TestTomlSerializerContextIncludedPrivateProperty : TomlSe
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [TomlSerializable(typeof(GeneratedEnumAndObjectPayload))]
 internal partial class TestTomlSerializerContextEnumsAndObjects : TomlSerializerContext
+{
+}
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[TomlSerializable(typeof(GeneratedStringEnumPayload))]
+internal partial class TestTomlSerializerContextStringEnums : TomlSerializerContext
 {
 }
 
@@ -1043,6 +1067,24 @@ public class NewApiSourceGenerationTests
         Assert.That(roundtrip, Is.Not.Null);
         Assert.That(roundtrip!.Kind, Is.EqualTo(payload.Kind));
         Assert.That(roundtrip.Value, Is.EqualTo(payload.Value));
+    }
+
+    [Test]
+    public void GeneratedContext_EnumWithJsonStringEnumConverter_UsesStrings()
+    {
+        var context = TestTomlSerializerContextStringEnums.Default;
+
+        var toml = TomlSerializer.Serialize(new GeneratedStringEnumPayload(), context.GeneratedStringEnumPayload);
+        var roundtrip = TomlSerializer.Deserialize(toml, context.GeneratedStringEnumPayload);
+
+        Assert.That(toml, Does.Contain("order = [\"LogLevel\", \"Time\", \"Component\"]"));
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.Order, Is.EqualTo(new[]
+        {
+            GeneratedStringEnumKind.LogLevel,
+            GeneratedStringEnumKind.Time,
+            GeneratedStringEnumKind.Component,
+        }));
     }
 
     // --- Feature 1: Default Derived Type (source-gen) ---

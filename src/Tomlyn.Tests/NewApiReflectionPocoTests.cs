@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using NUnit.Framework;
 using Tomlyn.Serialization;
@@ -107,6 +108,18 @@ public class NewApiReflectionPocoTests
         private bool MyProperty { get; set; } = true;
 
         public bool GetMyProperty() => MyProperty;
+    }
+
+    private sealed class StringEnumModel
+    {
+        public List<StringEnumValue> Values { get; set; } = new();
+    }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    private enum StringEnumValue
+    {
+        First,
+        Second,
     }
 
     private sealed class ReadOnlyPropertyModel
@@ -292,6 +305,18 @@ public class NewApiReflectionPocoTests
         var toml = TomlSerializer.Serialize(new ReadOnlyPropertyModel());
         Assert.That(toml, Does.Contain("Value"));
         Assert.That(toml, Does.Contain("42"));
+    }
+
+    [Test]
+    public void SerializeDeserialize_EnumWithJsonStringEnumConverter_UsesStrings()
+    {
+        var original = new StringEnumModel { Values = [StringEnumValue.First, StringEnumValue.Second] };
+        var toml = TomlSerializer.Serialize(original);
+        var roundtrip = TomlSerializer.Deserialize<StringEnumModel>(toml);
+
+        Assert.That(toml, Does.Contain("Values = [\"First\", \"Second\"]"));
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.Values, Is.EqualTo(original.Values));
     }
 
     [Test]

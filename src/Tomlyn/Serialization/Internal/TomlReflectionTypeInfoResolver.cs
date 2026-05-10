@@ -287,10 +287,26 @@ internal static class TomlReflectionTypeInfoResolver
         var jsonConverter = member.GetCustomAttribute<JsonConverterAttribute>(inherit: true);
         if (jsonConverter is not null && jsonConverter.ConverterType is not null)
         {
+            if (memberType.IsEnum && IsJsonStringEnumConverter(jsonConverter.ConverterType))
+            {
+                return TomlStringEnumConverter.Instance;
+            }
+
             return CreateConverterFromAttribute(jsonConverter.ConverterType, memberType, options);
         }
 
         return null;
+    }
+
+    private static bool IsJsonStringEnumConverter(Type converterType)
+    {
+        if (converterType.FullName == "System.Text.Json.Serialization.JsonStringEnumConverter")
+        {
+            return true;
+        }
+
+        return converterType.IsGenericType &&
+            converterType.GetGenericTypeDefinition().FullName == "System.Text.Json.Serialization.JsonStringEnumConverter`1";
     }
 
     private static TomlConverter CreateConverterFromAttribute(Type converterType, Type typeToConvert, TomlSerializerOptions options)

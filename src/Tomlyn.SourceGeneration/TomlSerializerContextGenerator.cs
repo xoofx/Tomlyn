@@ -535,7 +535,14 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         if (IsBuiltInType(type))
         {
-            builder.Append("        return GetBuiltInTypeInfo<").Append(typeName).AppendLine(">(Options);");
+            if (type.TypeKind == TypeKind.Enum && HasJsonStringEnumConverterAttribute(type))
+            {
+                builder.Append("        return CreateStringEnumTypeInfo<").Append(typeName).AppendLine(">(Options);");
+            }
+            else
+            {
+                builder.Append("        return GetBuiltInTypeInfo<").Append(typeName).AppendLine(">(Options);");
+            }
         }
         else if (TryGetNullableUnderlyingType(type, out var nullableUnderlyingType))
         {
@@ -4366,6 +4373,42 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         valueType = innerValueType;
         return true;
+    }
+
+    private static bool HasJsonStringEnumConverterAttribute(ITypeSymbol type)
+    {
+        foreach (var attr in type.GetAttributes())
+        {
+            if (attr.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) != "global::System.Text.Json.Serialization.JsonConverterAttribute" ||
+                attr.ConstructorArguments.Length == 0 ||
+                attr.ConstructorArguments[0].Kind != TypedConstantKind.Type ||
+                attr.ConstructorArguments[0].Value is not ITypeSymbol converterType)
+            {
+                continue;
+            }
+
+            if (IsJsonStringEnumConverter(converterType))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsJsonStringEnumConverter(ITypeSymbol converterType)
+    {
+        if (converterType is not INamedTypeSymbol named)
+        {
+            return false;
+        }
+
+        var constructedFrom = named.IsGenericType
+            ? named.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+            : named.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        return constructedFrom is
+            "global::System.Text.Json.Serialization.JsonStringEnumConverter" or
+            "global::System.Text.Json.Serialization.JsonStringEnumConverter<TEnum>";
     }
 
     private static bool HasAttribute(ISymbol symbol, string attributeMetadataName)
