@@ -68,6 +68,8 @@ Console.WriteLine(global);
 Console.WriteLine(TomlSerializer.Serialize(model));
 ```
 
+POCO properties can also use `TomlObject` when a member should accept any TOML model container (`TomlTable`, `TomlArray`, or `TomlTableArray`). This works with both reflection-based serialization and source-generated `TomlSerializerContext` metadata.
+
 ### Options
 
 ```csharp

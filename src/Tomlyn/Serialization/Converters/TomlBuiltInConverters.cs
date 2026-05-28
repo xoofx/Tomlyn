@@ -18,6 +18,7 @@ internal static class TomlBuiltInConverters
         if (type == typeof(TomlDateTime)) return TomlTomlDateTimeConverter.Instance;
         if (type == typeof(object)) return TomlUntypedObjectConverter.Instance;
 
+        if (type == typeof(TomlObject)) return TomlTomlObjectConverter.Instance;
         if (type == typeof(TomlTable)) return TomlTomlTableConverter.Instance;
         if (type == typeof(TomlArray)) return TomlTomlArrayConverter.Instance;
         if (type == typeof(TomlTableArray)) return TomlTomlTableArrayConverter.Instance;

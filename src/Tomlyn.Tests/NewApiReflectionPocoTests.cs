@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using NUnit.Framework;
+using Tomlyn.Model;
 using Tomlyn.Serialization;
 
 namespace Tomlyn.Tests;
@@ -171,6 +172,11 @@ public class NewApiReflectionPocoTests
 
     private sealed class EmptyModel
     {
+    }
+
+    private sealed class TomlObjectModel
+    {
+        public TomlObject? Value { get; set; }
     }
 
     private sealed class MultipleAnnotatedConstructorsModel
@@ -355,6 +361,29 @@ public class NewApiReflectionPocoTests
         var toml = TomlSerializer.Serialize(new EmptyModel());
         var model = TomlSerializer.Deserialize<EmptyModel>(toml);
         Assert.That(model, Is.Not.Null);
+    }
+
+    [Test]
+    public void SerializeDeserialize_TomlObjectProperty_UsesRuntimeModelNode()
+    {
+        var arrayModel = TomlSerializer.Deserialize<TomlObjectModel>("Value = [1, 2]\n");
+
+        Assert.That(arrayModel, Is.Not.Null);
+        Assert.That(arrayModel!.Value, Is.InstanceOf<TomlArray>());
+        Assert.That((TomlArray)arrayModel.Value!, Is.EqualTo(new TomlArray { 1L, 2L }));
+
+        var tableModel = new TomlObjectModel
+        {
+            Value = new TomlTable { ["Answer"] = 42L },
+        };
+
+        var toml = TomlSerializer.Serialize(tableModel);
+        var roundtrip = TomlSerializer.Deserialize<TomlObjectModel>(toml);
+
+        Assert.That(toml, Does.Contain("[Value]"));
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.Value, Is.InstanceOf<TomlTable>());
+        Assert.That(((TomlTable)roundtrip.Value!)["Answer"], Is.EqualTo(42L));
     }
 
     [Test]

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Text.Json.Serialization;
 using NUnit.Framework;
+using Tomlyn.Model;
 using Tomlyn.Serialization;
 
 namespace Tomlyn.Tests;
@@ -261,6 +262,11 @@ public sealed class GeneratedEnumAndObjectPayload
     public object? Value { get; set; }
 }
 
+public sealed class GeneratedTomlObjectPayload
+{
+    public TomlObject? Node { get; set; }
+}
+
 public sealed class GeneratedStringEnumPayload
 {
     public List<GeneratedStringEnumKind> Order { get; set; } =
@@ -377,6 +383,12 @@ internal partial class TestTomlSerializerContextIncludedPrivateProperty : TomlSe
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [TomlSerializable(typeof(GeneratedEnumAndObjectPayload))]
 internal partial class TestTomlSerializerContextEnumsAndObjects : TomlSerializerContext
+{
+}
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[TomlSerializable(typeof(GeneratedTomlObjectPayload))]
+internal partial class TestTomlSerializerContextTomlObject : TomlSerializerContext
 {
 }
 
@@ -1067,6 +1079,31 @@ public class NewApiSourceGenerationTests
         Assert.That(roundtrip, Is.Not.Null);
         Assert.That(roundtrip!.Kind, Is.EqualTo(payload.Kind));
         Assert.That(roundtrip.Value, Is.EqualTo(payload.Value));
+    }
+
+    [Test]
+    public void GeneratedContext_CanHandleTomlObjectProperties()
+    {
+        var context = TestTomlSerializerContextTomlObject.Default;
+        var toml = """
+            [node]
+            answer = 42
+            """;
+
+        var payload = TomlSerializer.Deserialize(toml, context.GeneratedTomlObjectPayload);
+
+        Assert.That(payload, Is.Not.Null);
+        Assert.That(payload!.Node, Is.InstanceOf<TomlTable>());
+        Assert.That(((TomlTable)payload.Node!)["answer"], Is.EqualTo(42L));
+
+        payload.Node = new TomlArray { "x", 2L };
+        var roundtripToml = TomlSerializer.Serialize(payload, context.GeneratedTomlObjectPayload);
+        var roundtrip = TomlSerializer.Deserialize(roundtripToml, context.GeneratedTomlObjectPayload);
+
+        Assert.That(roundtripToml, Does.Contain("node = [\"x\", 2]"));
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.Node, Is.InstanceOf<TomlArray>());
+        Assert.That((TomlArray)roundtrip.Node!, Is.EqualTo(new TomlArray { "x", 2L }));
     }
 
     [Test]

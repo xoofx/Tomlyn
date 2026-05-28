@@ -4689,6 +4689,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             "global::Tomlyn.TomlDateTime" or
             "global::System.DateOnly" or
             "global::System.TimeOnly" or
+            "global::Tomlyn.Model.TomlObject" or
             "global::Tomlyn.Model.TomlTable" or
             "global::Tomlyn.Model.TomlArray" or
             "global::Tomlyn.Model.TomlTableArray";

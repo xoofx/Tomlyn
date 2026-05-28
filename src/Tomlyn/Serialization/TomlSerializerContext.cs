@@ -112,6 +112,7 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
         if (type == typeof(Uri)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<Uri>(options, TomlUriConverter.Instance);
         if (type == typeof(Version)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<Version>(options, TomlVersionConverter.Instance);
 
+        if (type == typeof(TomlObject)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<TomlObject>(options, TomlTomlObjectConverter.Instance);
         if (type == typeof(TomlTable)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<TomlTable>(options, TomlTomlTableConverter.Instance);
         if (type == typeof(TomlArray)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<TomlArray>(options, TomlTomlArrayConverter.Instance);
         if (type == typeof(TomlTableArray)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<TomlTableArray>(options, TomlTomlTableArrayConverter.Instance);

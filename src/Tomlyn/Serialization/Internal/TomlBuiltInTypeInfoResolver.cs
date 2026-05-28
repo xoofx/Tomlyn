@@ -65,6 +65,7 @@ internal static class TomlBuiltInTypeInfoResolver
         if (type == typeof(Uri)) return new BuiltInTomlTypeInfo<Uri>(options, TomlUriConverter.Instance);
         if (type == typeof(Version)) return new BuiltInTomlTypeInfo<Version>(options, TomlVersionConverter.Instance);
 
+        if (type == typeof(TomlObject)) return new BuiltInTomlTypeInfo<TomlObject>(options, TomlTomlObjectConverter.Instance);
         if (type == typeof(TomlTable)) return new BuiltInTomlTypeInfo<TomlTable>(options, TomlTomlTableConverter.Instance);
         if (type == typeof(TomlArray)) return new BuiltInTomlTypeInfo<TomlArray>(options, TomlTomlArrayConverter.Instance);
         if (type == typeof(TomlTableArray)) return new BuiltInTomlTypeInfo<TomlTableArray>(options, TomlTomlTableArrayConverter.Instance);
