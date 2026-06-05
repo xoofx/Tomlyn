@@ -646,7 +646,7 @@ public sealed class TomlReader
     {
         if (_buffer is not null)
         {
-            throw new InvalidOperationException("Cannot capture a buffered reader.");
+            return CaptureCurrentBufferedValueToBuffer();
         }
 
         var tokens = new List<TomlReaderToken>();
@@ -688,11 +688,60 @@ public sealed class TomlReader
         return new TomlReaderBuffer(tokens.ToArray(), _options, _operationState);
     }
 
+    private TomlReaderBuffer CaptureCurrentBufferedValueToBuffer()
+    {
+        if (_buffer is null)
+        {
+            throw new InvalidOperationException("Cannot capture a non-buffered reader with the buffered path.");
+        }
+
+        var currentIndex = _bufferIndex - 1;
+        if (currentIndex < 0 || currentIndex >= _buffer.Length)
+        {
+            throw new InvalidOperationException("Cannot capture before the buffered reader is positioned on a value.");
+        }
+
+        var endExclusive = currentIndex + 1;
+        var currentToken = _buffer[currentIndex];
+        if (currentToken.TokenType is TomlTokenType.StartTable or TomlTokenType.StartArray)
+        {
+            var depth = 1;
+            while (endExclusive < _buffer.Length && depth > 0)
+            {
+                var next = _buffer[endExclusive++];
+                if (next.TokenType is TomlTokenType.StartTable or TomlTokenType.StartArray)
+                {
+                    depth++;
+                }
+                else if (next.TokenType is TomlTokenType.EndTable or TomlTokenType.EndArray)
+                {
+                    depth--;
+                }
+            }
+
+            // The current StartTable/StartArray token has already increased the live reader depth.
+            // The copied EndTable/EndArray token is not applied through Read(), so restore the parent depth.
+            _bufferDepth--;
+        }
+
+        var tokens = new TomlReaderToken[endExclusive - currentIndex + 2];
+        tokens[0] = new TomlReaderToken(TomlTokenType.StartDocument, span: null, rawText: null, leadingTrivia: null, trailingTrivia: null, propertyName: null, stringValue: null, data: 0, stringTokenKind: default, dateTime: default, hasDateTime: false);
+        Array.Copy(_buffer, currentIndex, tokens, 1, endExclusive - currentIndex);
+        tokens[^1] = new TomlReaderToken(TomlTokenType.EndDocument, span: null, rawText: null, leadingTrivia: null, trailingTrivia: null, propertyName: null, stringValue: null, data: 0, stringTokenKind: default, dateTime: default, hasDateTime: false);
+
+        _bufferIndex = endExclusive;
+        Read(); // advance past the captured value
+
+        return new TomlReaderBuffer(tokens, _options, _operationState);
+    }
+
     private void AddCurrentToken(List<TomlReaderToken> tokens)
     {
-        var rawText = _currentSpan is { } span && _parser is not null
-            ? _parser.GetText(span) ?? string.Empty
-            : null;
+        var rawText = _buffer is not null
+            ? _currentRawText
+            : _currentSpan is { } span && _parser is not null
+                ? _parser.GetText(span) ?? string.Empty
+                : null;
 
         var stringValue = _tokenType == TomlTokenType.String ? GetString() : null;
         var propertyName = _tokenType == TomlTokenType.PropertyName ? PropertyName : _currentPropertyName;

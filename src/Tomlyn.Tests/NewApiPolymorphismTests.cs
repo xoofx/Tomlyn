@@ -25,6 +25,35 @@ public class NewApiPolymorphismTests
         public bool GoodBoy { get; set; }
     }
 
+    private sealed class TwoLevelPolymorphicConfig
+    {
+        public required DepartLevel Depart { get; set; }
+    }
+
+    [TomlDerivedType(typeof(Depart1), "dd1")]
+    private abstract class DepartLevel
+    {
+        public required string Name { get; set; }
+
+        public required GroupLevel Group { get; set; }
+    }
+
+    private sealed class Depart1 : DepartLevel
+    {
+        public required string Field1 { get; set; }
+    }
+
+    [TomlDerivedType(typeof(Group2), "gg2")]
+    private abstract class GroupLevel
+    {
+        public required string Name { get; set; }
+    }
+
+    private sealed class Group2 : GroupLevel
+    {
+        public required string Field2 { get; set; }
+    }
+
     [Test]
     public void Serialize_Polymorphic_WritesDiscriminator()
     {
@@ -55,6 +84,35 @@ public class NewApiPolymorphismTests
         var cat = (Cat)result!;
         Assert.That(cat.Name, Is.EqualTo("Nyan"));
         Assert.That(cat.Lives, Is.EqualTo(9));
+    }
+
+    [Test]
+    public void Deserialize_Polymorphic_CanReadNestedPolymorphicTables()
+    {
+        var toml =
+            """
+            [Depart]
+            "$type" = "dd1"
+            Name = "this is depart1"
+            Field1 = "depart 1 field"
+
+            [Depart.Group]
+            "$type" = "gg2"
+            Name = "this is group 2"
+            Field2 = "group 2 field"
+            """;
+
+        var result = TomlSerializer.Deserialize<TwoLevelPolymorphicConfig>(toml);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Depart, Is.InstanceOf<Depart1>());
+        var depart = (Depart1)result.Depart;
+        Assert.That(depart.Name, Is.EqualTo("this is depart1"));
+        Assert.That(depart.Field1, Is.EqualTo("depart 1 field"));
+        Assert.That(depart.Group, Is.InstanceOf<Group2>());
+        var group = (Group2)depart.Group;
+        Assert.That(group.Name, Is.EqualTo("this is group 2"));
+        Assert.That(group.Field2, Is.EqualTo("group 2 field"));
     }
 
     [Test]

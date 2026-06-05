@@ -162,6 +162,35 @@ public sealed class GeneratedDog : IGeneratedAnimal
     public bool GoodBoy { get; set; }
 }
 
+public sealed class GeneratedTwoLevelPolymorphicConfig
+{
+    public required GeneratedDepartLevel Depart { get; set; }
+}
+
+[TomlPolymorphic]
+public abstract class GeneratedDepartLevel
+{
+    public required string Name { get; set; }
+
+    public required GeneratedGroupLevel Group { get; set; }
+}
+
+public sealed class GeneratedDepart1 : GeneratedDepartLevel
+{
+    public required string Field1 { get; set; }
+}
+
+[TomlPolymorphic]
+public abstract class GeneratedGroupLevel
+{
+    public required string Name { get; set; }
+}
+
+public sealed class GeneratedGroup2 : GeneratedGroupLevel
+{
+    public required string Field2 { get; set; }
+}
+
 public sealed class GeneratedCallbackPerson : ITomlOnSerializing, ITomlOnSerialized, ITomlOnDeserializing, ITomlOnDeserialized
 {
     public string Name { get; set; } = "";
@@ -451,6 +480,14 @@ internal partial class TestTomlSerializerContextConstructorSelection : TomlSeria
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [TomlSerializable(typeof(IGeneratedAnimal))]
 internal partial class TestTomlSerializerContextPolymorphism : TomlSerializerContext
+{
+}
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+[TomlDerivedTypeMapping(typeof(GeneratedDepartLevel), typeof(GeneratedDepart1), "dd1")]
+[TomlDerivedTypeMapping(typeof(GeneratedGroupLevel), typeof(GeneratedGroup2), "gg2")]
+[TomlSerializable(typeof(GeneratedTwoLevelPolymorphicConfig))]
+internal partial class TestTomlSerializerContextTwoLevelPolymorphism : TomlSerializerContext
 {
 }
 
@@ -809,6 +846,35 @@ public class NewApiSourceGenerationTests
         Assert.That(toml, Does.Contain("kind = \"dog\""));
         Assert.That(toml, Does.Contain("name = \"Rex\""));
         Assert.That(toml, Does.Contain("goodBoy = true"));
+    }
+
+    [Test]
+    public void GeneratedContext_CanDeserializeNestedPolymorphicTables()
+    {
+        var context = TestTomlSerializerContextTwoLevelPolymorphism.Default;
+        var toml = """
+            [depart]
+            "$type" = "dd1"
+            name = "this is depart1"
+            field1 = "depart 1 field"
+
+            [depart.group]
+            "$type" = "gg2"
+            name = "this is group 2"
+            field2 = "group 2 field"
+            """;
+
+        var model = TomlSerializer.Deserialize(toml, context.GeneratedTwoLevelPolymorphicConfig);
+
+        Assert.That(model, Is.Not.Null);
+        Assert.That(model!.Depart, Is.InstanceOf<GeneratedDepart1>());
+        var depart = (GeneratedDepart1)model.Depart;
+        Assert.That(depart.Name, Is.EqualTo("this is depart1"));
+        Assert.That(depart.Field1, Is.EqualTo("depart 1 field"));
+        Assert.That(depart.Group, Is.InstanceOf<GeneratedGroup2>());
+        var group = (GeneratedGroup2)depart.Group;
+        Assert.That(group.Name, Is.EqualTo("this is group 2"));
+        Assert.That(group.Field2, Is.EqualTo("group 2 field"));
     }
 
     [Test]
