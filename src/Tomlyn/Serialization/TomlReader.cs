@@ -178,6 +178,8 @@ public sealed class TomlReader
 
     internal TomlSerializationOperationState OperationState => _operationState;
 
+    internal TomlReaderState CurrentState => new(_tokenType, _currentSpan, _bufferIndex);
+
     /// <summary>
     /// Gets the current line number (1-based).
     /// </summary>
@@ -635,6 +637,16 @@ public sealed class TomlReader
         return new TomlException(message);
     }
 
+    internal void SkipIfStateUnchanged(TomlReaderState state)
+    {
+        if (_tokenType == state.TokenType &&
+            Nullable.Equals(_currentSpan, state.Span) &&
+            _bufferIndex == state.BufferIndex)
+        {
+            Skip();
+        }
+    }
+
     [RequiresUnreferencedCode(TomlTypeInfoResolverPipeline.ReflectionBasedSerializationMessage)]
     [RequiresDynamicCode(TomlTypeInfoResolverPipeline.ReflectionBasedSerializationMessage)]
     internal TomlTypeInfo ResolveTypeInfo(Type type)
@@ -800,6 +812,22 @@ internal readonly struct TomlReaderToken
     public TokenKind StringTokenKind { get; }
     public TomlDateTime DateTime { get; }
     public bool HasDateTime { get; }
+}
+
+internal readonly struct TomlReaderState
+{
+    public TomlReaderState(TomlTokenType tokenType, TomlSourceSpan? span, int bufferIndex)
+    {
+        TokenType = tokenType;
+        Span = span;
+        BufferIndex = bufferIndex;
+    }
+
+    public TomlTokenType TokenType { get; }
+
+    public TomlSourceSpan? Span { get; }
+
+    public int BufferIndex { get; }
 }
 
 internal sealed class TomlReaderBuffer

@@ -26,7 +26,10 @@ internal sealed class TomlConverterTypeInfo<T> : TomlTypeInfo<T>
     public override T? Read(TomlReader reader)
     {
         ArgumentGuard.ThrowIfNull(reader, nameof(reader));
-        return _converter.Read(reader);
+        var state = reader.CurrentState;
+        var value = _converter.Read(reader);
+        reader.SkipIfStateUnchanged(state);
+        return value;
     }
 }
 
@@ -51,7 +54,10 @@ internal sealed class TomlUntypedConverterTypeInfo<T> : TomlTypeInfo<T>
     public override T? Read(TomlReader reader)
     {
         ArgumentGuard.ThrowIfNull(reader, nameof(reader));
-        return (T)_converter.Read(reader, _typeToConvert)!;
+        var state = reader.CurrentState;
+        var value = (T)_converter.Read(reader, _typeToConvert)!;
+        reader.SkipIfStateUnchanged(state);
+        return value;
     }
 }
 

@@ -361,6 +361,14 @@ internal static class TomlReflectionTypeInfoResolver
         return converter;
     }
 
+    private static object? ReadWithConverter(TomlReader reader, TomlConverter converter, Type typeToConvert)
+    {
+        var state = reader.CurrentState;
+        var value = converter.Read(reader, typeToConvert);
+        reader.SkipIfStateUnchanged(state);
+        return value;
+    }
+
     private static bool TryGetExtensionDataValueType(Type dictionaryType, out Type valueType)
     {
         valueType = typeof(object);
@@ -932,7 +940,7 @@ internal static class TomlReflectionTypeInfoResolver
         {
             if (member.Converter is { } converter)
             {
-                return converter.Read(reader, member.MemberType);
+                return ReadWithConverter(reader, converter, member.MemberType);
             }
 
             var typeInfo = reader.ResolveTypeInfo(member.MemberType);
@@ -967,7 +975,7 @@ internal static class TomlReflectionTypeInfoResolver
             object? populatedValue;
             if (member.Converter is { } converter)
             {
-                populatedValue = converter.Read(reader, member.MemberType);
+                populatedValue = ReadWithConverter(reader, converter, member.MemberType);
             }
             else
             {
@@ -1019,7 +1027,7 @@ internal static class TomlReflectionTypeInfoResolver
 
                 if (member.Converter is { } converter)
                 {
-                    return converter.Read(reader, member.MemberType);
+                    return ReadWithConverter(reader, converter, member.MemberType);
                 }
 
                 var typeInfo = reader.ResolveTypeInfo(member.MemberType);
@@ -1203,7 +1211,7 @@ internal static class TomlReflectionTypeInfoResolver
 
                     if (converter is not null)
                     {
-                        value = converter.Read(reader, binding.ParameterType);
+                        value = ReadWithConverter(reader, converter, binding.ParameterType);
                     }
                     else
                     {
@@ -1250,7 +1258,7 @@ internal static class TomlReflectionTypeInfoResolver
                     }
                     else if (member.Converter is { } converter)
                     {
-                        value = converter.Read(reader, member.MemberType);
+                        value = ReadWithConverter(reader, converter, member.MemberType);
                     }
                     else
                     {
