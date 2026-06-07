@@ -342,10 +342,7 @@ internal static class TomlTypeInfoResolverPipeline
         public override object? ReadAsObject(TomlReader reader)
         {
             ArgumentGuard.ThrowIfNull(reader, nameof(reader));
-            var state = reader.CurrentState;
-            var value = _converter.Read(reader, Type);
-            reader.SkipIfStateUnchanged(state);
-            return value;
+            return TomlConverterHelper.Read(reader, _converter, Type);
         }
     }
 }

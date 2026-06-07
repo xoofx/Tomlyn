@@ -91,6 +91,26 @@ public sealed class NewApiConverterAttributeTests
         }
     }
 
+    private sealed class ThrowingValue
+    {
+        public ThrowingValue(string value) => Value = value;
+
+        public string Value { get; }
+    }
+
+    private sealed class ThrowingValueConverter : TomlConverter<ThrowingValue>
+    {
+        public override ThrowingValue? Read(TomlReader reader)
+        {
+            throw new FormatException($"Invalid value '{reader.GetString()}'.");
+        }
+
+        public override void Write(TomlWriter writer, ThrowingValue value)
+        {
+            writer.WriteStringValue(value.Value);
+        }
+    }
+
     private sealed class TypeLevelConverterModel
     {
         public SpecialType Item { get; set; } = new SpecialType("x");
@@ -101,6 +121,13 @@ public sealed class NewApiConverterAttributeTests
         public SpecialTypeWithoutAdvance Item { get; set; } = new SpecialTypeWithoutAdvance("x");
 
         public string Title { get; set; } = "";
+    }
+
+    private sealed class ThrowingValueModel
+    {
+        public ThrowingValue First { get; set; } = new ThrowingValue("first");
+
+        public ThrowingValue Second { get; set; } = new ThrowingValue("second");
     }
 
     [Test]
@@ -143,6 +170,30 @@ public sealed class NewApiConverterAttributeTests
         Assert.That(roundtrip, Is.Not.Null);
         Assert.That(roundtrip!.Item.Value, Is.EqualTo("hello"));
         Assert.That(roundtrip.Title, Is.EqualTo("Sir"));
+    }
+
+    [Test]
+    public void OptionsConverter_ExceptionsAreAggregatedWithLocations()
+    {
+        var options = new TomlSerializerOptions
+        {
+            SourceName = "config.toml",
+            Converters = [new ThrowingValueConverter()],
+        };
+
+        var ex = Assert.Throws<TomlException>(() => TomlSerializer.Deserialize<ThrowingValueModel>("First = 'bad1'\nSecond = 'bad2'\n", options));
+
+        Assert.That(ex, Is.Not.Null);
+        Assert.That(ex!.Diagnostics.Count, Is.EqualTo(2));
+        Assert.That(ex.Diagnostics[0].Span.Start.Line, Is.EqualTo(0));
+        Assert.That(ex.Diagnostics[0].Span.Start.Column, Is.EqualTo(8));
+        Assert.That(ex.Diagnostics[0].Message, Does.Contain("Exception while trying to convert TOML value"));
+        Assert.That(ex.Diagnostics[0].Message, Does.Contain("Invalid value 'bad1'."));
+        Assert.That(ex.Diagnostics[1].Span.Start.Line, Is.EqualTo(1));
+        Assert.That(ex.Diagnostics[1].Span.Start.Column, Is.EqualTo(9));
+        Assert.That(ex.Diagnostics[1].Message, Does.Contain("Invalid value 'bad2'."));
+        Assert.That(ex.Message, Does.Contain("config.toml(1,9)"));
+        Assert.That(ex.Message, Does.Contain("config.toml(2,10)"));
     }
 }
 

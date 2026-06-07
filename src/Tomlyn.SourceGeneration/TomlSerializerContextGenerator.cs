@@ -871,6 +871,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             builder.AppendLine("            }");
             builder.AppendLine("            var endTableSpan = reader.CurrentSpan;");
             builder.AppendLine("            reader.Read();");
+            builder.AppendLine("            ThrowIfDeserializationDiagnostics(reader);");
             if (hasRequiredMembers)
             {
                 if (poco.Members.Length <= 64)
@@ -2300,6 +2301,20 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.Append(indent).AppendLine("}");
     }
 
+    private static void EmitRecoverableMemberRead(StringBuilder builder, PocoMember member, int index, string indent)
+    {
+        builder.Append(indent).AppendLine("var __readTokenType = reader.TokenType;");
+        builder.Append(indent).AppendLine("var __readSpan = reader.CurrentSpan;");
+        builder.Append(indent).AppendLine("try");
+        builder.Append(indent).AppendLine("{");
+        EmitMemberRead(builder, member, index, indent + "    ");
+        builder.Append(indent).AppendLine("}");
+        builder.Append(indent).AppendLine("catch (TomlException __ex) when (TryAddDeserializationDiagnostic(reader, __readTokenType, __readSpan, __ex))");
+        builder.Append(indent).AppendLine("{");
+        builder.Append(indent).AppendLine("    continue;");
+        builder.Append(indent).AppendLine("}");
+    }
+
     private static void EmitMemberDispatch(StringBuilder builder, PocoShape poco, bool ignoreCase)
     {
         var useSeenMask = poco.Members.Length <= 64;
@@ -2427,7 +2442,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     }
                     builder.AppendLine("                        }");
                 }
-                EmitMemberRead(builder, member, i, "                        ");
+                EmitRecoverableMemberRead(builder, member, i, "                        ");
                 if (!alwaysThrowsOnRead)
                 {
                     builder.AppendLine("                        continue;");
@@ -2602,7 +2617,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     builder.AppendLine("                                    }");
                 }
                 builder.AppendLine("                                    reader.Read();");
-                EmitMemberRead(builder, member, index, "                                    ");
+                EmitRecoverableMemberRead(builder, member, index, "                                    ");
                 if (!alwaysThrowsOnRead)
                 {
                     builder.AppendLine("                                    continue;");

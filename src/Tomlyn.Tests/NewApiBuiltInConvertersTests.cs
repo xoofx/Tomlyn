@@ -1,7 +1,20 @@
 using System;
 using NUnit.Framework;
+using Tomlyn.Serialization;
 
 namespace Tomlyn.Tests;
+
+internal sealed class GeneratedBytePairModel
+{
+    public byte First { get; set; }
+
+    public byte Second { get; set; }
+}
+
+[TomlSerializable(typeof(GeneratedBytePairModel))]
+internal partial class TestBuiltInConvertersContext : TomlSerializerContext
+{
+}
 
 public sealed class NewApiBuiltInConvertersTests
 {
@@ -25,6 +38,13 @@ public sealed class NewApiBuiltInConvertersTests
     private sealed class ByteModel
     {
         public byte B { get; set; }
+    }
+
+    private sealed class BytePairModel
+    {
+        public byte First { get; set; }
+
+        public byte Second { get; set; }
     }
 
     private sealed class DateTimeOffsetModel
@@ -67,6 +87,38 @@ public sealed class NewApiBuiltInConvertersTests
         Assert.That(ex, Is.Not.Null);
         Assert.That(ex!.Line, Is.EqualTo(1));
         Assert.That(ex.Column, Is.EqualTo(5));
+    }
+
+    [Test]
+    public void Byte_Overflow_AggregatesMultipleLocations()
+    {
+        var ex = Assert.Throws<TomlException>(() => TomlSerializer.Deserialize<BytePairModel>("First = 256\nSecond = 300\n"));
+
+        Assert.That(ex, Is.Not.Null);
+        Assert.That(ex!.Diagnostics.Count, Is.EqualTo(2));
+        Assert.That(ex.Diagnostics[0].Span.Start.Line, Is.EqualTo(0));
+        Assert.That(ex.Diagnostics[0].Span.Start.Column, Is.EqualTo(8));
+        Assert.That(ex.Diagnostics[0].Message, Does.Contain("TOML integer value 256 is out of range."));
+        Assert.That(ex.Diagnostics[1].Span.Start.Line, Is.EqualTo(1));
+        Assert.That(ex.Diagnostics[1].Span.Start.Column, Is.EqualTo(9));
+        Assert.That(ex.Diagnostics[1].Message, Does.Contain("TOML integer value 300 is out of range."));
+    }
+
+    [Test]
+    public void Byte_Overflow_GeneratedContextAggregatesMultipleLocations()
+    {
+        var context = TestBuiltInConvertersContext.Default;
+
+        var ex = Assert.Throws<TomlException>(() => TomlSerializer.Deserialize("First = 256\nSecond = 300\n", context.GeneratedBytePairModel));
+
+        Assert.That(ex, Is.Not.Null);
+        Assert.That(ex!.Diagnostics.Count, Is.EqualTo(2));
+        Assert.That(ex.Diagnostics[0].Span.Start.Line, Is.EqualTo(0));
+        Assert.That(ex.Diagnostics[0].Span.Start.Column, Is.EqualTo(8));
+        Assert.That(ex.Diagnostics[0].Message, Does.Contain("TOML integer value 256 is out of range."));
+        Assert.That(ex.Diagnostics[1].Span.Start.Line, Is.EqualTo(1));
+        Assert.That(ex.Diagnostics[1].Span.Start.Column, Is.EqualTo(9));
+        Assert.That(ex.Diagnostics[1].Message, Does.Contain("TOML integer value 300 is out of range."));
     }
 
     [Test]

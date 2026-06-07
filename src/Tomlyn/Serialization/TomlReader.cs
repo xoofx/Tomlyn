@@ -637,15 +637,21 @@ public sealed class TomlReader
         return new TomlException(message);
     }
 
-    internal void SkipIfStateUnchanged(TomlReaderState state)
+    internal bool SkipIfStateUnchanged(TomlReaderState state)
     {
-        if (_tokenType == state.TokenType &&
-            Nullable.Equals(_currentSpan, state.Span) &&
-            _bufferIndex == state.BufferIndex)
+        if (!IsStateUnchanged(state))
         {
-            Skip();
+            return false;
         }
+
+        Skip();
+        return true;
     }
+
+    internal bool IsStateUnchanged(TomlReaderState state)
+        => _tokenType == state.TokenType &&
+            Nullable.Equals(_currentSpan, state.Span) &&
+            _bufferIndex == state.BufferIndex;
 
     [RequiresUnreferencedCode(TomlTypeInfoResolverPipeline.ReflectionBasedSerializationMessage)]
     [RequiresDynamicCode(TomlTypeInfoResolverPipeline.ReflectionBasedSerializationMessage)]

@@ -11,6 +11,7 @@ using Tomlyn.Helpers;
 using Tomlyn.Model;
 using Tomlyn.Serialization.Converters;
 using Tomlyn.Serialization.Internal;
+using Tomlyn.Text;
 
 namespace Tomlyn.Serialization;
 
@@ -121,6 +122,44 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
         if (type.IsEnum) return new TomlUntypedConverterTypeInfo<T>(options, TomlEnumConverter.Instance);
 
         throw new TomlException($"No built-in TOML metadata is available for type '{type.FullName}'.");
+    }
+
+    /// <summary>
+    /// Records a recoverable deserialization diagnostic and skips the current TOML value when the reader is still
+    /// positioned on the same token that failed.
+    /// </summary>
+    /// <param name="reader">The TOML reader.</param>
+    /// <param name="tokenType">The token type before the read attempt.</param>
+    /// <param name="span">The source span before the read attempt.</param>
+    /// <param name="exception">The exception raised by the read attempt.</param>
+    /// <returns><c>true</c> when the diagnostic was recorded and the current value was skipped.</returns>
+    protected static bool TryAddDeserializationDiagnostic(TomlReader reader, TomlTokenType tokenType, TomlSourceSpan? span, TomlException exception)
+    {
+        ArgumentGuard.ThrowIfNull(reader, nameof(reader));
+        ArgumentGuard.ThrowIfNull(exception, nameof(exception));
+
+        if (reader.TokenType != tokenType || !Nullable.Equals(reader.CurrentSpan, span) || !reader.OperationState.CanAddDiagnostics(exception))
+        {
+            return false;
+        }
+
+        reader.OperationState.AddDiagnostics(exception);
+        reader.Skip();
+        return true;
+    }
+
+    /// <summary>
+    /// Throws a <see cref="TomlException"/> when recoverable deserialization diagnostics were recorded for the reader.
+    /// </summary>
+    /// <param name="reader">The TOML reader.</param>
+    protected static void ThrowIfDeserializationDiagnostics(TomlReader reader)
+    {
+        ArgumentGuard.ThrowIfNull(reader, nameof(reader));
+
+        if (reader.OperationState.Diagnostics is { Count: > 0 } diagnostics)
+        {
+            throw new TomlException(diagnostics);
+        }
     }
 
     /// <summary>

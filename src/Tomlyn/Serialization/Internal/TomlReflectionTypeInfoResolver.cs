@@ -363,10 +363,7 @@ internal static class TomlReflectionTypeInfoResolver
 
     private static object? ReadWithConverter(TomlReader reader, TomlConverter converter, Type typeToConvert)
     {
-        var state = reader.CurrentState;
-        var value = converter.Read(reader, typeToConvert);
-        reader.SkipIfStateUnchanged(state);
-        return value;
+        return TomlConverterHelper.Read(reader, converter, typeToConvert);
     }
 
     private static bool TryGetExtensionDataValueType(Type dictionaryType, out Type valueType)
@@ -879,7 +876,19 @@ internal static class TomlReflectionTypeInfoResolver
                         continue;
                     }
 
-                    var memberValue = ReadMemberValue(reader, instance, member);
+                    var memberValueStartState = reader.CurrentState;
+                    object? memberValue;
+                    try
+                    {
+                        memberValue = ReadMemberValue(reader, instance, member);
+                    }
+                    catch (TomlException ex) when (reader.OperationState.CanAddDiagnostics(ex) && reader.IsStateUnchanged(memberValueStartState))
+                    {
+                        reader.OperationState.AddDiagnostics(ex);
+                        reader.Skip();
+                        continue;
+                    }
+
                     if (member.Setter is not null)
                     {
                         member.Setter(instance, memberValue);
@@ -1202,22 +1211,33 @@ internal static class TomlReflectionTypeInfoResolver
                     ctorSeen[parameterIndex] = true;
                     var binding = _parameters[parameterIndex];
 
+                    var valueStartState = reader.CurrentState;
                     object? value;
-                    TomlConverter? converter = null;
-                    if (binding.MemberIndex is { } linkedIndex && linkedIndex >= 0 && linkedIndex < _members.Count)
+                    try
                     {
-                        converter = _members[linkedIndex].Converter;
+                        TomlConverter? converter = null;
+                        if (binding.MemberIndex is { } linkedIndex && linkedIndex >= 0 && linkedIndex < _members.Count)
+                        {
+                            converter = _members[linkedIndex].Converter;
+                        }
+
+                        if (converter is not null)
+                        {
+                            value = ReadWithConverter(reader, converter, binding.ParameterType);
+                        }
+                        else
+                        {
+                            var typeInfo = reader.ResolveTypeInfo(binding.ParameterType);
+                            value = typeInfo.ReadAsObject(reader);
+                        }
+                    }
+                    catch (TomlException ex) when (reader.OperationState.CanAddDiagnostics(ex) && reader.IsStateUnchanged(valueStartState))
+                    {
+                        reader.OperationState.AddDiagnostics(ex);
+                        reader.Skip();
+                        continue;
                     }
 
-                    if (converter is not null)
-                    {
-                        value = ReadWithConverter(reader, converter, binding.ParameterType);
-                    }
-                    else
-                    {
-                        var typeInfo = reader.ResolveTypeInfo(binding.ParameterType);
-                        value = typeInfo.ReadAsObject(reader);
-                    }
                     ctorArgs[parameterIndex] = value;
 
                     if (binding.MemberIndex is { } linkedMemberIndex && linkedMemberIndex >= 0 && linkedMemberIndex < _members.Count)
@@ -1251,20 +1271,31 @@ internal static class TomlReflectionTypeInfoResolver
                         continue;
                     }
 
+                    var valueStartState = reader.CurrentState;
                     object? value;
-                    if (member.HasSingleOrArray && reader.TokenType != TomlTokenType.StartArray)
+                    try
                     {
-                        value = reader.OperationState.SingleOrArrayCollections.ReadSingleElementAsCollection(reader, member.MemberType);
+                        if (member.HasSingleOrArray && reader.TokenType != TomlTokenType.StartArray)
+                        {
+                            value = reader.OperationState.SingleOrArrayCollections.ReadSingleElementAsCollection(reader, member.MemberType);
+                        }
+                        else if (member.Converter is { } converter)
+                        {
+                            value = ReadWithConverter(reader, converter, member.MemberType);
+                        }
+                        else
+                        {
+                            var typeInfo = reader.ResolveTypeInfo(member.MemberType);
+                            value = typeInfo.ReadAsObject(reader);
+                        }
                     }
-                    else if (member.Converter is { } converter)
+                    catch (TomlException ex) when (reader.OperationState.CanAddDiagnostics(ex) && reader.IsStateUnchanged(valueStartState))
                     {
-                        value = ReadWithConverter(reader, converter, member.MemberType);
+                        reader.OperationState.AddDiagnostics(ex);
+                        reader.Skip();
+                        continue;
                     }
-                    else
-                    {
-                        var typeInfo = reader.ResolveTypeInfo(member.MemberType);
-                        value = typeInfo.ReadAsObject(reader);
-                    }
+
                     memberValues[memberIndex] = value;
                     continue;
                 }
@@ -1274,6 +1305,11 @@ internal static class TomlReflectionTypeInfoResolver
 
             var endTableSpan = reader.CurrentSpan;
             reader.Read(); // consume EndTable
+
+            if (reader.OperationState.Diagnostics is { Count: > 0 } diagnostics)
+            {
+                throw new TomlException(diagnostics);
+            }
 
             for (var i = 0; i < _parameters.Length; i++)
             {

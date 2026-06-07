@@ -6,6 +6,8 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using Tomlyn.Helpers;
+using Tomlyn.Syntax;
+using Tomlyn.Text;
 
 namespace Tomlyn.Serialization.Internal;
 
@@ -24,6 +26,40 @@ internal sealed class TomlSerializationOperationState
     public TomlSerializerOptions Options { get; }
 
     public TomlSingleOrArrayCollectionHelper SingleOrArrayCollections { get; }
+
+    public DiagnosticsBag? Diagnostics { get; private set; }
+
+    public bool HasDiagnostics => Diagnostics is { Count: > 0 };
+
+    public bool CanAddDiagnostics(TomlException exception)
+    {
+        ArgumentGuard.ThrowIfNull(exception, nameof(exception));
+
+        return !ReferenceEquals(exception.Diagnostics, Diagnostics) &&
+            (exception.Diagnostics.Count > 0 || exception.Span.HasValue);
+    }
+
+    public void AddDiagnostics(TomlException exception)
+    {
+        ArgumentGuard.ThrowIfNull(exception, nameof(exception));
+
+        if (ReferenceEquals(exception.Diagnostics, Diagnostics))
+        {
+            return;
+        }
+
+        var diagnostics = Diagnostics ??= new DiagnosticsBag();
+        if (exception.Diagnostics.Count > 0)
+        {
+            diagnostics.AddRange(exception.Diagnostics);
+            return;
+        }
+
+        if (exception.Span is { } span)
+        {
+            diagnostics.Error(ToLegacySpan(span), exception.Message);
+        }
+    }
 
     [RequiresUnreferencedCode(TomlTypeInfoResolverPipeline.ReflectionBasedSerializationMessage)]
     [RequiresDynamicCode(TomlTypeInfoResolverPipeline.ReflectionBasedSerializationMessage)]
@@ -46,4 +82,7 @@ internal sealed class TomlSerializationOperationState
         ArgumentGuard.ThrowIfNull(typeInfo, nameof(typeInfo));
         _typeInfoCache[type] = typeInfo;
     }
+
+    private static SourceSpan ToLegacySpan(TomlSourceSpan span)
+        => new(span.SourceName, new TextPosition(span.Start.Offset, span.Start.Line, span.Start.Column), new TextPosition(span.End.Offset, span.End.Line, span.End.Column));
 }

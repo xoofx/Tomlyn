@@ -725,39 +725,62 @@ public static class TomlSerializer
 
     private static object? DeserializeCore(TomlReader reader, TomlTypeInfo typeInfo)
     {
-        reader.Read(); // StartDocument
-        reader.Read(); // value start
-
-        var options = typeInfo.Options;
-        if (options.RootValueHandling == TomlRootValueHandling.WrapInRootKey)
+        object? value;
+        try
         {
-            if (reader.TokenType != TomlTokenType.StartTable)
-            {
-                throw reader.CreateException($"Expected a TOML table at the document root but was {reader.TokenType}.");
-            }
+            reader.Read(); // StartDocument
+            reader.Read(); // value start
 
-            reader.Read();
-            while (reader.TokenType != TomlTokenType.EndTable)
+            var options = typeInfo.Options;
+            if (options.RootValueHandling == TomlRootValueHandling.WrapInRootKey)
             {
-                if (reader.TokenType != TomlTokenType.PropertyName)
+                if (reader.TokenType != TomlTokenType.StartTable)
                 {
-                    throw reader.CreateException($"Expected {TomlTokenType.PropertyName} token but was {reader.TokenType}.");
+                    throw reader.CreateException($"Expected a TOML table at the document root but was {reader.TokenType}.");
                 }
 
-                var name = reader.PropertyName!;
                 reader.Read();
-                if (string.Equals(name, options.RootValueKeyName, StringComparison.Ordinal))
+                while (reader.TokenType != TomlTokenType.EndTable)
                 {
-                    return typeInfo.ReadAsObject(reader);
+                    if (reader.TokenType != TomlTokenType.PropertyName)
+                    {
+                        throw reader.CreateException($"Expected {TomlTokenType.PropertyName} token but was {reader.TokenType}.");
+                    }
+
+                    var name = reader.PropertyName!;
+                    reader.Read();
+                    if (string.Equals(name, options.RootValueKeyName, StringComparison.Ordinal))
+                    {
+                        value = typeInfo.ReadAsObject(reader);
+                        ThrowIfDiagnostics(reader.OperationState);
+                        return value;
+                    }
+
+                    reader.Skip();
                 }
 
-                reader.Skip();
+                throw reader.CreateException($"The root value key '{options.RootValueKeyName}' was not found.");
             }
 
-            throw reader.CreateException($"The root value key '{options.RootValueKeyName}' was not found.");
+            value = typeInfo.ReadAsObject(reader);
+        }
+        catch (TomlException ex) when (reader.OperationState.HasDiagnostics)
+        {
+            reader.OperationState.AddDiagnostics(ex);
+            ThrowIfDiagnostics(reader.OperationState);
+            throw;
         }
 
-        return typeInfo.ReadAsObject(reader);
+        ThrowIfDiagnostics(reader.OperationState);
+        return value;
+    }
+
+    private static void ThrowIfDiagnostics(TomlSerializationOperationState operationState)
+    {
+        if (operationState.Diagnostics is { Count: > 0 } diagnostics)
+        {
+            throw new TomlException(diagnostics);
+        }
     }
 
     /// <summary>
