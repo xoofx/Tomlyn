@@ -37,15 +37,16 @@ public sealed class TomlPropertyNameAttribute : TomlAttribute
 }
 
 /// <summary>
-/// Instructs the <see cref="Tomlyn.TomlSerializer"/> not to serialize the field or property value.
+/// Instructs the <see cref="Tomlyn.TomlSerializer"/> when to ignore the field or property value.
 /// </summary>
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false)]
 public sealed class TomlIgnoreAttribute : TomlAttribute
 {
     /// <summary>
-    /// Gets or sets an optional ignore condition.
+    /// Gets or sets the condition that must be met before the member is ignored.
     /// </summary>
-    public TomlIgnoreCondition Condition { get; set; } = TomlIgnoreCondition.Never;
+    /// <remarks>The default value is <see cref="TomlIgnoreCondition.Always"/>.</remarks>
+    public TomlIgnoreCondition Condition { get; set; } = TomlIgnoreCondition.Always;
 }
 
 /// <summary>

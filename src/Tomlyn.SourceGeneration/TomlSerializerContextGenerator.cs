@@ -713,6 +713,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         for (var i = 0; i < poco.Members.Length; i++)
         {
             var member = poco.Members[i];
+            if (member.WriteIgnore == WriteIgnoreKind.WhenWriting)
+            {
+                continue;
+            }
+
             builder.Append("            var __member").Append(i.ToString(CultureInfo.InvariantCulture)).Append(" = ").Append(GetMemberReadExpression(member, "value")).AppendLine(";");
         }
 
@@ -1088,6 +1093,24 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         var comparison = "StringComparison.OrdinalIgnoreCase";
         var wroteAnyCondition = false;
 
+        // Read-ignored members are matched before constructor parameters so they are skipped, not bound.
+        for (var i = 0; i < poco.Members.Length; i++)
+        {
+            var member = poco.Members[i];
+            if (!member.IsIgnoredOnRead)
+            {
+                continue;
+            }
+
+            var prefix = wroteAnyCondition ? "else if" : "if";
+            wroteAnyCondition = true;
+            builder.Append("                    ").Append(prefix).Append("(string.Equals(name, \"").Append(EscapeStringLiteral(member.SerializedName)).Append("\", ").Append(comparison).AppendLine("))");
+            builder.AppendLine("                    {");
+            builder.AppendLine("                        reader.Skip();");
+            builder.AppendLine("                        continue;");
+            builder.AppendLine("                    }");
+        }
+
         // Parameters first.
         for (var i = 0; i < ctor.Parameters.Length; i++)
         {
@@ -1145,6 +1168,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         for (var i = 0; i < poco.Members.Length; i++)
         {
             var member = poco.Members[i];
+            if (member.IsIgnoredOnRead)
+            {
+                continue;
+            }
+
             var prefix = wroteAnyCondition ? "else if" : "if";
             wroteAnyCondition = true;
             builder.Append("                    ").Append(prefix).Append("(string.Equals(name, \"").Append(EscapeStringLiteral(member.SerializedName)).Append("\", ").Append(comparison).AppendLine("))");
@@ -1233,6 +1261,24 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         // Case-sensitive: hash dispatch for parameters + members.
         var actionsByHash = new Dictionary<ulong, List<(bool IsParameter, int Index, string KeyName)>>();
+        for (var i = 0; i < poco.Members.Length; i++)
+        {
+            var member = poco.Members[i];
+            if (!member.IsIgnoredOnRead)
+            {
+                continue;
+            }
+
+            var hash = ComputePropertyNameHash56(member.SerializedName);
+            if (!actionsByHash.TryGetValue(hash, out var bucket))
+            {
+                bucket = new List<(bool, int, string)>(capacity: 1);
+                actionsByHash.Add(hash, bucket);
+            }
+
+            bucket.Add((false, i, member.SerializedName));
+        }
+
         for (var i = 0; i < ctor.Parameters.Length; i++)
         {
             var keyName = ctor.Parameters[i].KeyName;
@@ -1248,6 +1294,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         for (var i = 0; i < poco.Members.Length; i++)
         {
+            if (poco.Members[i].IsIgnoredOnRead)
+            {
+                continue;
+            }
+
             var keyName = poco.Members[i].SerializedName;
             var hash = ComputePropertyNameHash56(keyName);
             if (!actionsByHash.TryGetValue(hash, out var bucket))
@@ -1326,6 +1377,15 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 else
                 {
                     var member = poco.Members[action.Index];
+                    if (member.IsIgnoredOnRead)
+                    {
+                        builder.AppendLine("                                    reader.Read();");
+                        builder.AppendLine("                                    reader.Skip();");
+                        builder.AppendLine("                                    continue;");
+                        builder.AppendLine("                                }");
+                        continue;
+                    }
+
                     if (useSeenMask)
                     {
                         builder.Append("                                    const ulong bit = 1UL << ").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
@@ -2331,6 +2391,14 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     member.ObjectCreationHandling == ObjectCreationHandlingKind.Populate;
                 builder.Append("                    ").Append(i == 0 ? "if" : "else if").Append("(string.Equals(name, \"").Append(EscapeStringLiteral(member.SerializedName)).Append("\", ").Append(comparison).AppendLine("))");
                 builder.AppendLine("                    {");
+                if (member.IsIgnoredOnRead)
+                {
+                    builder.AppendLine("                        reader.Skip();");
+                    builder.AppendLine("                        continue;");
+                    builder.AppendLine("                    }");
+                    continue;
+                }
+
                 if (useSeenMask)
                 {
                     if (member.IsRequired)
@@ -2501,6 +2569,15 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     member.ObjectCreationHandling == ObjectCreationHandlingKind.Populate;
                 builder.Append("                                if (reader.PropertyNameEquals(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\"))");
                 builder.AppendLine("                                {");
+                if (member.IsIgnoredOnRead)
+                {
+                    builder.AppendLine("                                    reader.Read();");
+                    builder.AppendLine("                                    reader.Skip();");
+                    builder.AppendLine("                                    continue;");
+                    builder.AppendLine("                                }");
+                    continue;
+                }
+
                 if (useSeenMask)
                 {
                     if (member.IsRequired)
@@ -2661,6 +2738,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         var defaultLiteral = GetDefaultLiteral(member.Type);
         var defaultIsNull = member.Type.IsReferenceType || TryGetNullableUnderlyingType(member.Type, out _);
 
+        if (member.WriteIgnore == WriteIgnoreKind.WhenWriting)
+        {
+            return;
+        }
+
         if (member.WriteIgnore == WriteIgnoreKind.WhenWritingNull)
         {
             if (canBeNull)
@@ -2714,14 +2796,14 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             return;
         }
 
-        builder.Append(openIndent).Append("if (!(");
-        var hasPrevious = false;
+        builder.Append(openIndent).Append("if (!(Options.DefaultIgnoreCondition is global::Tomlyn.TomlIgnoreCondition.Always or global::Tomlyn.TomlIgnoreCondition.WhenWriting");
+        var hasPrevious = true;
         if (canBeNull)
         {
+            builder.Append(") && !(");
             builder.Append("Options.DefaultIgnoreCondition == global::Tomlyn.TomlIgnoreCondition.WhenWritingNull && ")
                 .Append(localName)
                 .Append(" is null");
-            hasPrevious = true;
         }
 
         builder.Append(hasPrevious ? ") && !(" : string.Empty);
@@ -3056,7 +3138,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private sealed class PocoMember
     {
-        public PocoMember(string memberName, string serializedName, ITypeSymbol type, ITypeSymbol declaringType, int order, WriteIgnoreKind writeIgnore, ObjectCreationHandlingKind objectCreationHandling, bool hasExplicitObjectCreationHandling, bool hasSingleOrArray, bool isRequired, bool isCompilerRequired, bool canSet, bool isInitOnly, bool isField, string? getterAccessorName)
+        public PocoMember(string memberName, string serializedName, ITypeSymbol type, ITypeSymbol declaringType, int order, WriteIgnoreKind writeIgnore, bool isIgnoredOnRead, ObjectCreationHandlingKind objectCreationHandling, bool hasExplicitObjectCreationHandling, bool hasSingleOrArray, bool isRequired, bool isCompilerRequired, bool canSet, bool isInitOnly, bool isField, string? getterAccessorName)
         {
             MemberName = memberName;
             SerializedName = serializedName;
@@ -3064,6 +3146,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             DeclaringType = declaringType;
             Order = order;
             WriteIgnore = writeIgnore;
+            IsIgnoredOnRead = isIgnoredOnRead;
             ObjectCreationHandling = objectCreationHandling;
             HasExplicitObjectCreationHandling = hasExplicitObjectCreationHandling;
             HasSingleOrArray = hasSingleOrArray;
@@ -3081,6 +3164,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         public ITypeSymbol DeclaringType { get; }
         public int Order { get; }
         public WriteIgnoreKind WriteIgnore { get; }
+        public bool IsIgnoredOnRead { get; }
         public ObjectCreationHandlingKind ObjectCreationHandling { get; }
         public bool HasExplicitObjectCreationHandling { get; }
         public bool HasSingleOrArray { get; }
@@ -3230,6 +3314,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         None = 0,
         WhenWritingNull = 1,
         WhenWritingDefault = 2,
+        WhenWriting = 4,
     }
 
     private enum ObjectCreationHandlingKind
@@ -3241,13 +3326,15 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private readonly struct IgnoreBehavior
     {
-        public IgnoreBehavior(bool ignoreAlways, WriteIgnoreKind writeIgnore)
+        public IgnoreBehavior(bool ignoreAlways, bool ignoreOnRead, WriteIgnoreKind writeIgnore)
         {
             IgnoreAlways = ignoreAlways;
+            IgnoreOnRead = ignoreOnRead;
             WriteIgnore = writeIgnore;
         }
 
         public bool IgnoreAlways { get; }
+        public bool IgnoreOnRead { get; }
         public WriteIgnoreKind WriteIgnore { get; }
     }
 
@@ -3420,8 +3507,8 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
             var serializedName = GetSerializedName(member, member.Name, namingPolicy);
             var order = GetOrder(member);
-            var required = IsRequired(member);
-            members.Add(new PocoMember(member.Name, serializedName, member.Type, member.ContainingType, order, ignore.WriteIgnore, objectCreationHandling, hasExplicitObjectCreationHandling, hasSingleOrArray, required, isCompilerRequired, canSet, isInitOnly, isField: false, getterAccessorName));
+            var required = IsRequired(member) && !ignore.IgnoreOnRead;
+            members.Add(new PocoMember(member.Name, serializedName, member.Type, member.ContainingType, order, ignore.WriteIgnore, ignore.IgnoreOnRead, objectCreationHandling, hasExplicitObjectCreationHandling, hasSingleOrArray, required, isCompilerRequired, canSet, isInitOnly, isField: false, getterAccessorName));
         }
 
         foreach (var member in EnumerateSerializableInstanceFields(named))
@@ -3494,10 +3581,10 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
             var serializedName = GetSerializedName(member, member.Name, namingPolicy);
             var order = GetOrder(member);
-            var required = IsRequired(member);
+            var required = IsRequired(member) && !ignore.IgnoreOnRead;
             var getterAccessorName = IsAccessibleFromGeneratedContext(member.DeclaredAccessibility) ? null : "__Get" + members.Count.ToString(CultureInfo.InvariantCulture);
             var canSet = IsAccessibleFromGeneratedContext(member.DeclaredAccessibility);
-            members.Add(new PocoMember(member.Name, serializedName, member.Type, member.ContainingType, order, ignore.WriteIgnore, objectCreationHandling, hasExplicitObjectCreationHandling, hasSingleOrArray, required, member.IsRequired, canSet, isInitOnly: false, isField: true, getterAccessorName));
+            members.Add(new PocoMember(member.Name, serializedName, member.Type, member.ContainingType, order, ignore.WriteIgnore, ignore.IgnoreOnRead, objectCreationHandling, hasExplicitObjectCreationHandling, hasSingleOrArray, required, member.IsRequired, canSet, isInitOnly: false, isField: true, getterAccessorName));
         }
 
         PocoConstructor? constructorModel = null;
@@ -4586,28 +4673,33 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         if (TryGetAttribute(symbol, "Tomlyn.Serialization.TomlIgnoreAttribute", out var tomlAttr))
         {
             var toml = TomlIgnoreAttributeModel.From(tomlAttr);
-            // Interpret [TomlIgnore] with default Condition as "ignore always".
             return toml.Condition switch
             {
-                1 => new IgnoreBehavior(ignoreAlways: false, writeIgnore: WriteIgnoreKind.WhenWritingNull),
-                2 => new IgnoreBehavior(ignoreAlways: false, writeIgnore: WriteIgnoreKind.WhenWritingDefault),
-                _ => new IgnoreBehavior(ignoreAlways: true, writeIgnore: WriteIgnoreKind.None),
+                0 => new IgnoreBehavior(ignoreAlways: false, ignoreOnRead: false, writeIgnore: WriteIgnoreKind.None),
+                1 => new IgnoreBehavior(ignoreAlways: false, ignoreOnRead: false, writeIgnore: WriteIgnoreKind.WhenWritingNull),
+                2 => new IgnoreBehavior(ignoreAlways: false, ignoreOnRead: false, writeIgnore: WriteIgnoreKind.WhenWritingDefault),
+                4 => new IgnoreBehavior(ignoreAlways: false, ignoreOnRead: false, writeIgnore: WriteIgnoreKind.WhenWriting),
+                5 => new IgnoreBehavior(ignoreAlways: false, ignoreOnRead: true, writeIgnore: WriteIgnoreKind.None),
+                _ => new IgnoreBehavior(ignoreAlways: true, ignoreOnRead: false, writeIgnore: WriteIgnoreKind.None),
             };
         }
 
         if (TryGetAttribute(symbol, "System.Text.Json.Serialization.JsonIgnoreAttribute", out var jsonAttr))
         {
-            var condition = JsonIgnoreAttributeModel.From(jsonAttr).Condition ?? JsonIgnoreCondition.Always;
+            var condition = JsonIgnoreAttributeModel.From(jsonAttr).Condition ?? 1;
             return condition switch
             {
-                JsonIgnoreCondition.Never => new IgnoreBehavior(ignoreAlways: false, writeIgnore: WriteIgnoreKind.None),
-                JsonIgnoreCondition.WhenWritingNull => new IgnoreBehavior(ignoreAlways: false, writeIgnore: WriteIgnoreKind.WhenWritingNull),
-                JsonIgnoreCondition.WhenWritingDefault => new IgnoreBehavior(ignoreAlways: false, writeIgnore: WriteIgnoreKind.WhenWritingDefault),
-                _ => new IgnoreBehavior(ignoreAlways: true, writeIgnore: WriteIgnoreKind.None),
+                0 => new IgnoreBehavior(ignoreAlways: false, ignoreOnRead: false, writeIgnore: WriteIgnoreKind.None),
+                1 => new IgnoreBehavior(ignoreAlways: true, ignoreOnRead: false, writeIgnore: WriteIgnoreKind.None),
+                2 => new IgnoreBehavior(ignoreAlways: false, ignoreOnRead: false, writeIgnore: WriteIgnoreKind.WhenWritingDefault),
+                3 => new IgnoreBehavior(ignoreAlways: false, ignoreOnRead: false, writeIgnore: WriteIgnoreKind.WhenWritingNull),
+                4 => new IgnoreBehavior(ignoreAlways: false, ignoreOnRead: false, writeIgnore: WriteIgnoreKind.WhenWriting),
+                5 => new IgnoreBehavior(ignoreAlways: false, ignoreOnRead: true, writeIgnore: WriteIgnoreKind.None),
+                _ => new IgnoreBehavior(ignoreAlways: false, ignoreOnRead: false, writeIgnore: WriteIgnoreKind.None),
             };
         }
 
-        return new IgnoreBehavior(ignoreAlways: false, writeIgnore: WriteIgnoreKind.None);
+        return new IgnoreBehavior(ignoreAlways: false, ignoreOnRead: false, writeIgnore: WriteIgnoreKind.None);
     }
 
     private readonly struct TomlIgnoreAttributeModel
@@ -4629,19 +4721,19 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 }
             }
 
-            // Default: Never (treated as "ignore always" at generation time).
-            return new TomlIgnoreAttributeModel(0);
+            // Default: Always.
+            return new TomlIgnoreAttributeModel(3);
         }
     }
 
     private readonly struct JsonIgnoreAttributeModel
     {
-        public JsonIgnoreAttributeModel(JsonIgnoreCondition? condition)
+        public JsonIgnoreAttributeModel(int? condition)
         {
             Condition = condition;
         }
 
-        public JsonIgnoreCondition? Condition { get; }
+        public int? Condition { get; }
 
         public static JsonIgnoreAttributeModel From(AttributeData attribute)
         {
@@ -4649,7 +4741,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             {
                 if (namedArg.Key == "Condition" && namedArg.Value.Value is int value)
                 {
-                    return new JsonIgnoreAttributeModel((JsonIgnoreCondition)value);
+                    return new JsonIgnoreAttributeModel(value);
                 }
             }
 
@@ -5147,6 +5239,9 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             0 => "global::Tomlyn.TomlIgnoreCondition.Never",
             1 => "global::Tomlyn.TomlIgnoreCondition.WhenWritingNull",
             2 => "global::Tomlyn.TomlIgnoreCondition.WhenWritingDefault",
+            3 => "global::Tomlyn.TomlIgnoreCondition.Always",
+            4 => "global::Tomlyn.TomlIgnoreCondition.WhenWriting",
+            5 => "global::Tomlyn.TomlIgnoreCondition.WhenReading",
             _ => null!,
         };
 

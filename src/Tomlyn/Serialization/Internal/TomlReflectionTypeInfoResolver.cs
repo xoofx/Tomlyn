@@ -176,6 +176,7 @@ internal static class TomlReflectionTypeInfoResolver
                 setter,
                 GetOrder(property),
                 ignore.WriteIgnoreCondition,
+                ignore.IgnoreOnRead,
                 GetDefaultValue(property.PropertyType),
                 GetObjectCreationHandling(property, typeObjectCreationHandling),
                 HasExplicitObjectCreationHandling(property),
@@ -219,6 +220,7 @@ internal static class TomlReflectionTypeInfoResolver
                 setter,
                 GetOrder(field),
                 ignore.WriteIgnoreCondition,
+                ignore.IgnoreOnRead,
                 GetDefaultValue(field.FieldType),
                 GetObjectCreationHandling(field, typeObjectCreationHandling),
                 HasExplicitObjectCreationHandling(field),
@@ -398,32 +400,40 @@ internal static class TomlReflectionTypeInfoResolver
         return false;
     }
 
-    private readonly record struct IgnoreBehavior(bool IgnoreAlways, TomlIgnoreCondition? WriteIgnoreCondition);
+    private readonly record struct IgnoreBehavior(bool IgnoreAlways, bool IgnoreOnRead, TomlIgnoreCondition? WriteIgnoreCondition);
 
     private static IgnoreBehavior GetIgnoreBehavior(MemberInfo member)
     {
         var tomlIgnore = member.GetCustomAttribute<TomlIgnoreAttribute>(inherit: true);
         if (tomlIgnore is not null)
         {
-            // Interpret the presence of [TomlIgnore] with default Condition as "ignore always" (JsonIgnoreCondition.Always parity).
-            return tomlIgnore.Condition == TomlIgnoreCondition.Never
-                ? new IgnoreBehavior(IgnoreAlways: true, WriteIgnoreCondition: null)
-                : new IgnoreBehavior(IgnoreAlways: false, WriteIgnoreCondition: tomlIgnore.Condition);
+            return tomlIgnore.Condition switch
+            {
+                TomlIgnoreCondition.Never => new IgnoreBehavior(IgnoreAlways: false, IgnoreOnRead: false, WriteIgnoreCondition: null),
+                TomlIgnoreCondition.WhenWritingNull => new IgnoreBehavior(IgnoreAlways: false, IgnoreOnRead: false, WriteIgnoreCondition: TomlIgnoreCondition.WhenWritingNull),
+                TomlIgnoreCondition.WhenWritingDefault => new IgnoreBehavior(IgnoreAlways: false, IgnoreOnRead: false, WriteIgnoreCondition: TomlIgnoreCondition.WhenWritingDefault),
+                TomlIgnoreCondition.WhenWriting => new IgnoreBehavior(IgnoreAlways: false, IgnoreOnRead: false, WriteIgnoreCondition: TomlIgnoreCondition.WhenWriting),
+                TomlIgnoreCondition.WhenReading => new IgnoreBehavior(IgnoreAlways: false, IgnoreOnRead: true, WriteIgnoreCondition: null),
+                _ => new IgnoreBehavior(IgnoreAlways: true, IgnoreOnRead: false, WriteIgnoreCondition: null),
+            };
         }
 
         var jsonIgnore = member.GetCustomAttribute<JsonIgnoreAttribute>(inherit: true);
         if (jsonIgnore is not null)
         {
-            return jsonIgnore.Condition switch
+            return (int)jsonIgnore.Condition switch
             {
-                JsonIgnoreCondition.Never => new IgnoreBehavior(IgnoreAlways: false, WriteIgnoreCondition: null),
-                JsonIgnoreCondition.WhenWritingNull => new IgnoreBehavior(IgnoreAlways: false, WriteIgnoreCondition: TomlIgnoreCondition.WhenWritingNull),
-                JsonIgnoreCondition.WhenWritingDefault => new IgnoreBehavior(IgnoreAlways: false, WriteIgnoreCondition: TomlIgnoreCondition.WhenWritingDefault),
-                _ => new IgnoreBehavior(IgnoreAlways: true, WriteIgnoreCondition: null),
+                0 => new IgnoreBehavior(IgnoreAlways: false, IgnoreOnRead: false, WriteIgnoreCondition: null),
+                1 => new IgnoreBehavior(IgnoreAlways: true, IgnoreOnRead: false, WriteIgnoreCondition: null),
+                2 => new IgnoreBehavior(IgnoreAlways: false, IgnoreOnRead: false, WriteIgnoreCondition: TomlIgnoreCondition.WhenWritingDefault),
+                3 => new IgnoreBehavior(IgnoreAlways: false, IgnoreOnRead: false, WriteIgnoreCondition: TomlIgnoreCondition.WhenWritingNull),
+                4 => new IgnoreBehavior(IgnoreAlways: false, IgnoreOnRead: false, WriteIgnoreCondition: TomlIgnoreCondition.WhenWriting),
+                5 => new IgnoreBehavior(IgnoreAlways: false, IgnoreOnRead: true, WriteIgnoreCondition: null),
+                _ => new IgnoreBehavior(IgnoreAlways: false, IgnoreOnRead: false, WriteIgnoreCondition: null),
             };
         }
 
-        return new IgnoreBehavior(IgnoreAlways: false, WriteIgnoreCondition: null);
+        return new IgnoreBehavior(IgnoreAlways: false, IgnoreOnRead: false, WriteIgnoreCondition: null);
     }
 
     private static object? GetDefaultValue(Type type)
@@ -545,6 +555,7 @@ internal static class TomlReflectionTypeInfoResolver
         Action<object, object?>? Setter,
         int Order,
         TomlIgnoreCondition? WriteIgnoreCondition,
+        bool IgnoreOnRead,
         object? DefaultValue,
         JsonObjectCreationHandling ObjectCreationHandling,
         bool HasExplicitObjectCreationHandling,
@@ -559,6 +570,7 @@ internal static class TomlReflectionTypeInfoResolver
         {
             TomlIgnoreCondition.WhenWritingNull => memberValue is null,
             TomlIgnoreCondition.WhenWritingDefault => memberValue is null || (defaultValue is not null && Equals(memberValue, defaultValue)),
+            TomlIgnoreCondition.WhenWriting => true,
             _ => false,
         };
     }
@@ -635,7 +647,7 @@ internal static class TomlReflectionTypeInfoResolver
             _hasRequiredMembers = false;
             for (var i = 0; i < _members.Count; i++)
             {
-                if (_members[i].IsRequired)
+                if (_members[i].IsRequired && !_members[i].IgnoreOnRead)
                 {
                     _hasRequiredMembers = true;
                     break;
@@ -855,6 +867,12 @@ internal static class TomlReflectionTypeInfoResolver
                 if (_indexByName.TryGetValue(name, out var memberIndex))
                 {
                     var member = _members[memberIndex];
+                    if (member.IgnoreOnRead)
+                    {
+                        reader.Skip();
+                        continue;
+                    }
+
                     if (seen is not null && seen[memberIndex])
                     {
                         if (TryReadTableHeaderExtension(reader, instance, member))
@@ -1187,6 +1205,12 @@ internal static class TomlReflectionTypeInfoResolver
                 var name = reader.PropertyName!;
                 reader.Read(); // value
                 CapturePropertyMetadata(propertiesMetadata, name, nameSpan, leadingTrivia, reader.CurrentTrailingTrivia, GetDisplayKind(reader));
+
+                if (_indexByName.TryGetValue(name, out var ignoredMemberIndex) && _members[ignoredMemberIndex].IgnoreOnRead)
+                {
+                    reader.Skip();
+                    continue;
+                }
 
                 if (_parameterIndexByName is not null && _parameterIndexByName.TryGetValue(name, out var parameterIndex))
                 {
@@ -1562,7 +1586,7 @@ internal static class TomlReflectionTypeInfoResolver
             for (var i = 0; i < _members.Count; i++)
             {
                 var member = _members[i];
-                if (!member.IsRequired)
+                if (!member.IsRequired || member.IgnoreOnRead)
                 {
                     continue;
                 }
