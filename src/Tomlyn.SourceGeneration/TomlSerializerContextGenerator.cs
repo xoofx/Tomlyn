@@ -195,6 +195,27 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         public ImmutableArray<ITypeSymbol> ConverterTypes { get; set; } = ImmutableArray<ITypeSymbol>.Empty;
     }
 
+    private const int DefaultPreferredObjectCreationHandling = 0;
+    private const bool DefaultPropertyNameCaseInsensitive = false;
+    private const int DefaultDefaultIgnoreCondition = 1;
+    private const int DefaultDuplicateKeyHandling = 0;
+    private const int DefaultMappingOrder = 0;
+
+    private static bool GetEffectivePropertyNameCaseInsensitive(SourceGenOptions options) => options.PropertyNameCaseInsensitive ?? DefaultPropertyNameCaseInsensitive;
+
+    private static int GetEffectiveMappingOrder(SourceGenOptions options) => options.MappingOrder ?? DefaultMappingOrder;
+
+    private static bool ShouldThrowOnDuplicate(SourceGenOptions options) => (options.DuplicateKeyHandling ?? DefaultDuplicateKeyHandling) == 0;
+
+    private static ObjectCreationHandlingKind GetEffectiveObjectCreationHandling(SourceGenOptions options)
+    {
+        return (options.PreferredObjectCreationHandling ?? DefaultPreferredObjectCreationHandling) switch
+        {
+            1 => ObjectCreationHandlingKind.Populate,
+            _ => ObjectCreationHandlingKind.Replace,
+        };
+    }
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var candidateContexts = context.SyntaxProvider
@@ -702,18 +723,22 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         string? usedKeysVariable = null;
         if (poco.ExtensionData is { } extensionData)
         {
+            var usedKeysComparer = GetEffectivePropertyNameCaseInsensitive(model.Options)
+                ? "global::System.StringComparer.OrdinalIgnoreCase"
+                : "global::System.StringComparer.Ordinal";
             usedKeysVariable = "__usedKeys";
             builder.Append("            var __extensionData = value.").Append(extensionData.MemberName).AppendLine(";");
             builder.AppendLine("            global::System.Collections.Generic.HashSet<string>? __usedKeys = null;");
             builder.AppendLine("            if (__extensionData is not null)");
             builder.AppendLine("            {");
-            builder.AppendLine("                __usedKeys = new global::System.Collections.Generic.HashSet<string>(Options.PropertyNameCaseInsensitive ? global::System.StringComparer.OrdinalIgnoreCase : global::System.StringComparer.Ordinal);");
+            builder.Append("                __usedKeys = new global::System.Collections.Generic.HashSet<string>(").Append(usedKeysComparer).AppendLine(");");
             builder.AppendLine("            }");
         }
         for (var i = 0; i < poco.Members.Length; i++)
         {
             var member = poco.Members[i];
-            if (member.WriteIgnore == WriteIgnoreKind.WhenWriting)
+            var writeIgnore = GetEffectiveWriteIgnore(member, model.Options);
+            if (writeIgnore == WriteIgnoreKind.WhenWriting)
             {
                 continue;
             }
@@ -734,7 +759,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             .ThenBy(i => poco.Members[i].SerializedName, StringComparer.Ordinal)
             .ToArray();
 
-        static void EmitWriteSequence(StringBuilder builder, PocoShape poco, int[] indices, string? usedKeysVariable)
+        static void EmitWriteSequence(StringBuilder builder, PocoShape poco, int[] indices, string? usedKeysVariable, SourceGenOptions options)
         {
             for (var sequenceIndex = 0; sequenceIndex < indices.Length; sequenceIndex++)
             {
@@ -742,42 +767,34 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 var member = poco.Members[i];
                 var memberTypeName = member.Type.ToDisplayString(FullyQualifiedNullableFormat);
                 var canBeNull = CanBeNull(member.Type);
-                EmitWriteMember(builder, member, i, memberTypeName, canBeNull, usedKeysVariable);
+                EmitWriteMember(builder, member, i, memberTypeName, canBeNull, usedKeysVariable, options);
             }
         }
 
-        builder.AppendLine("            switch (Options.MappingOrder)");
-        builder.AppendLine("            {");
-        builder.AppendLine("                case TomlMappingOrderPolicy.Declaration:");
-        EmitWriteSequence(builder, poco, declarationOrder, usedKeysVariable);
-        builder.AppendLine("                    break;");
-        builder.AppendLine("                case TomlMappingOrderPolicy.Alphabetical:");
-        EmitWriteSequence(builder, poco, alphabeticalOrder, usedKeysVariable);
-        builder.AppendLine("                    break;");
-        builder.AppendLine("                case TomlMappingOrderPolicy.OrderThenDeclaration:");
-        EmitWriteSequence(builder, poco, orderThenDeclaration, usedKeysVariable);
-        builder.AppendLine("                    break;");
-        builder.AppendLine("                case TomlMappingOrderPolicy.OrderThenAlphabetical:");
-        EmitWriteSequence(builder, poco, orderThenAlphabetical, usedKeysVariable);
-        builder.AppendLine("                    break;");
-        builder.AppendLine("                default:");
-        EmitWriteSequence(builder, poco, declarationOrder, usedKeysVariable);
-        builder.AppendLine("                    break;");
-        builder.AppendLine("            }");
+        var mappingOrder = GetEffectiveMappingOrder(model.Options);
+        var selectedOrder = mappingOrder switch
+        {
+            1 => alphabeticalOrder,
+            2 => orderThenDeclaration,
+            3 => orderThenAlphabetical,
+            _ => declarationOrder,
+        };
+        EmitWriteSequence(builder, poco, selectedOrder, usedKeysVariable, model.Options);
         if (poco.ExtensionData is { } extensionDataWrite)
         {
             var extensionValueTypeInfo = GetTypeInfoPropertyName(extensionDataWrite.ValueType);
             var writeValueArgument = CanBeNull(extensionDataWrite.ValueType) ? "__pair.Value!" : "__pair.Value";
+            var dictionaryKeyPolicyExpression = model.Options.DictionaryKeyPolicyExpression;
 
             builder.AppendLine("            if (__extensionData is not null)");
             builder.AppendLine("            {");
             builder.AppendLine("                foreach (var __pair in __extensionData)");
             builder.AppendLine("                {");
             builder.AppendLine("                    var __key = __pair.Key;");
-            builder.AppendLine("                    if (Options.DictionaryKeyPolicy is { } __keyPolicy)");
-            builder.AppendLine("                    {");
-            builder.AppendLine("                        __key = __keyPolicy.ConvertName(__key);");
-            builder.AppendLine("                    }");
+            if (!string.IsNullOrEmpty(dictionaryKeyPolicyExpression))
+            {
+                builder.Append("                    __key = ").Append(dictionaryKeyPolicyExpression).AppendLine(".ConvertName(__key);");
+            }
             builder.AppendLine("                    if (__usedKeys is not null && __usedKeys.Contains(__key)) throw new TomlException($\"Extension data key '{__key}' conflicts with an existing member key.\");");
             builder.AppendLine("                    writer.WritePropertyName(__key);");
             builder.Append("                    _context.").Append(extensionValueTypeInfo).Append(".Write(writer, ").Append(writeValueArgument).AppendLine(");");
@@ -807,7 +824,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             EmitPocoReadWithConstructor(builder, model, type, poco, bufferedConstructor, readReturnType, callsOnDeserializing, callsOnDeserialized, useObjectInitializerConstruction: true);
             if (!poco.Members.Any(static member => member.IsInitOnly))
             {
-                EmitPocoReadIntoExisting(builder, typeName, poco, callsOnDeserializing, callsOnDeserialized);
+                EmitPocoReadIntoExisting(builder, typeName, poco, callsOnDeserializing, callsOnDeserialized, model.Options);
             }
         }
         else if (constructor is { IsValid: true } ctor && !ctor.Parameters.IsDefaultOrEmpty)
@@ -815,7 +832,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             EmitPocoReadWithConstructor(builder, model, type, poco, ctor, readReturnType, callsOnDeserializing, callsOnDeserialized, useObjectInitializerConstruction: false);
             if (!poco.Members.Any(static member => member.IsInitOnly))
             {
-                EmitPocoReadIntoExisting(builder, typeName, poco, callsOnDeserializing, callsOnDeserialized);
+                EmitPocoReadIntoExisting(builder, typeName, poco, callsOnDeserializing, callsOnDeserialized, model.Options);
             }
         }
         else
@@ -830,9 +847,10 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 builder.AppendLine("            ((global::Tomlyn.Serialization.ITomlOnDeserializing)value).OnTomlDeserializing();");
             }
             var hasRequiredMembers = poco.Members.Any(static m => m.IsRequired);
+            var throwOnDuplicate = ShouldThrowOnDuplicate(model.Options);
             if (poco.Members.Length <= 64)
             {
-                if (poco.Members.Length > 0)
+                if (poco.Members.Length > 0 && (throwOnDuplicate || hasRequiredMembers))
                 {
                     builder.AppendLine("            ulong seenMask = 0;");
                 }
@@ -852,27 +870,25 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             }
             else
             {
-                builder.Append("            var seen = (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error");
-                if (hasRequiredMembers)
+                if (throwOnDuplicate || hasRequiredMembers)
                 {
-                    builder.Append(" || true");
+                    builder.Append("            var seen = new bool[").Append(poco.Members.Length.ToString(CultureInfo.InvariantCulture)).AppendLine("];");
                 }
-                builder.Append(") ? new bool[").Append(poco.Members.Length.ToString(CultureInfo.InvariantCulture)).AppendLine("] : null;");
             }
             builder.AppendLine("            reader.Read();");
             builder.AppendLine("            while (reader.TokenType != TomlTokenType.EndTable)");
             builder.AppendLine("            {");
             builder.AppendLine("                if (reader.TokenType != TomlTokenType.PropertyName) throw reader.CreateException($\"Expected {TomlTokenType.PropertyName} token but was {reader.TokenType}.\");");
-            builder.AppendLine("                if (Options.PropertyNameCaseInsensitive)");
-            builder.AppendLine("                {");
-            builder.AppendLine("                    var name = reader.PropertyName!;");
-            builder.AppendLine("                    reader.Read();");
-            EmitMemberDispatch(builder, poco, ignoreCase: true);
-            builder.AppendLine("                }");
-            builder.AppendLine("                else");
-            builder.AppendLine("                {");
-            EmitMemberDispatch(builder, poco, ignoreCase: false);
-            builder.AppendLine("                }");
+            if (GetEffectivePropertyNameCaseInsensitive(model.Options))
+            {
+                builder.AppendLine("                var name = reader.PropertyName!;");
+                builder.AppendLine("                reader.Read();");
+                EmitMemberDispatch(builder, poco, ignoreCase: true, model.Options);
+            }
+            else
+            {
+                EmitMemberDispatch(builder, poco, ignoreCase: false, model.Options);
+            }
             builder.AppendLine("            }");
             builder.AppendLine("            var endTableSpan = reader.CurrentSpan;");
             builder.AppendLine("            reader.Read();");
@@ -942,7 +958,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             }
             builder.AppendLine("            return value;");
             builder.AppendLine("        }");
-            EmitPocoReadIntoExisting(builder, typeName, poco, callsOnDeserializing, callsOnDeserialized);
+            EmitPocoReadIntoExisting(builder, typeName, poco, callsOnDeserializing, callsOnDeserialized, model.Options);
         }
 
         builder.AppendLine("    }");
@@ -997,6 +1013,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         var readNonNullableTypeName = typeName;
         var hasRequiredMembers = poco.Members.Any(static m => m.IsRequired);
         var useSeenMask = poco.Members.Length <= 64;
+        var throwOnDuplicate = ShouldThrowOnDuplicate(model.Options);
         var wrapConstructionErrors = !ctor.Parameters.IsDefaultOrEmpty;
 
         string? GetLinkedParameterExpression(int memberIndex)
@@ -1052,7 +1069,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         // Required/duplicate tracking for members.
         if (useSeenMask)
         {
-            if (poco.Members.Length > 0)
+            if (poco.Members.Length > 0 && (throwOnDuplicate || hasRequiredMembers))
             {
                 builder.AppendLine("            ulong seenMask = 0;");
             }
@@ -1073,22 +1090,21 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
         else
         {
-            builder.Append("            var seen = (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error");
-            if (hasRequiredMembers)
+            if (throwOnDuplicate || hasRequiredMembers)
             {
-                builder.Append(" || true");
+                builder.Append("            var seen = new bool[").Append(poco.Members.Length.ToString(CultureInfo.InvariantCulture)).AppendLine("];");
             }
-            builder.Append(") ? new bool[").Append(poco.Members.Length.ToString(CultureInfo.InvariantCulture)).AppendLine("] : null;");
         }
 
         builder.AppendLine("            reader.Read();");
         builder.AppendLine("            while (reader.TokenType != TomlTokenType.EndTable)");
         builder.AppendLine("            {");
         builder.AppendLine("                if (reader.TokenType != TomlTokenType.PropertyName) throw reader.CreateException($\"Expected {TomlTokenType.PropertyName} token but was {reader.TokenType}.\");");
-        builder.AppendLine("                if (Options.PropertyNameCaseInsensitive)");
-        builder.AppendLine("                {");
-        builder.AppendLine("                    var name = reader.PropertyName!;");
-        builder.AppendLine("                    reader.Read();");
+        if (GetEffectivePropertyNameCaseInsensitive(model.Options))
+        {
+            builder.AppendLine("                {");
+            builder.AppendLine("                    var name = reader.PropertyName!;");
+            builder.AppendLine("                    reader.Read();");
 
         var comparison = "StringComparison.OrdinalIgnoreCase";
         var wroteAnyCondition = false;
@@ -1119,14 +1135,17 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             wroteAnyCondition = true;
             builder.Append("                    ").Append(prefix).Append("(string.Equals(name, \"").Append(EscapeStringLiteral(parameter.KeyName)).Append("\", ").Append(comparison).AppendLine("))");
             builder.AppendLine("                    {");
-            builder.AppendLine("                        if (__argSeen" + i.ToString(CultureInfo.InvariantCulture) + " && Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
-            builder.AppendLine("                        {");
-            if (CanEmitTableHeaderExtension(parameter.ParameterType))
+            if (throwOnDuplicate)
             {
-                EmitRepeatedTableExtensionIntoTarget(builder, parameter.ParameterType, "__arg" + i.ToString(CultureInfo.InvariantCulture), "__arg" + i.ToString(CultureInfo.InvariantCulture), "                            ");
+                builder.AppendLine("                        if (__argSeen" + i.ToString(CultureInfo.InvariantCulture) + ")");
+                builder.AppendLine("                        {");
+                if (CanEmitTableHeaderExtension(parameter.ParameterType))
+                {
+                    EmitRepeatedTableExtensionIntoTarget(builder, parameter.ParameterType, "__arg" + i.ToString(CultureInfo.InvariantCulture), "__arg" + i.ToString(CultureInfo.InvariantCulture), "                            ");
+                }
+                builder.AppendLine("                            throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
+                builder.AppendLine("                        }");
             }
-            builder.AppendLine("                            throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
-            builder.AppendLine("                        }");
             builder.Append("                        __argSeen").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(" = true;");
             if (parameter.LinkedMemberIndex >= 0 && parameter.LinkedMemberIndex < poco.Members.Length && poco.Members[parameter.LinkedMemberIndex].HasSingleOrArray)
             {
@@ -1178,52 +1197,48 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             builder.Append("                    ").Append(prefix).Append("(string.Equals(name, \"").Append(EscapeStringLiteral(member.SerializedName)).Append("\", ").Append(comparison).AppendLine("))");
             builder.AppendLine("                    {");
 
-                if (useSeenMask)
+            var existingExpression = member.CanSet
+                ? "__memberValue" + i.ToString(CultureInfo.InvariantCulture)
+                : GetLinkedParameterExpression(i);
+            if (useSeenMask)
+            {
+                if (throwOnDuplicate)
                 {
                     builder.Append("                        const ulong bit = 1UL << ").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
-                    builder.AppendLine("                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
+                    builder.AppendLine("                        if ((seenMask & bit) != 0)");
                     builder.AppendLine("                        {");
-                    builder.AppendLine("                            if ((seenMask & bit) != 0)");
-                    builder.AppendLine("                            {");
-                    var existingExpression = member.CanSet
-                        ? "__memberValue" + i.ToString(CultureInfo.InvariantCulture)
-                        : GetLinkedParameterExpression(i);
                     if (existingExpression is not null && CanEmitTableHeaderExtension(member.Type))
                     {
-                        EmitRepeatedTableExtensionIntoTarget(builder, member.Type, existingExpression, existingExpression, "                                ");
+                        EmitRepeatedTableExtensionIntoTarget(builder, member.Type, existingExpression, existingExpression, "                            ");
                     }
-                    builder.AppendLine("                                throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
-                    builder.AppendLine("                            }");
+                    builder.AppendLine("                            throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
                     builder.AppendLine("                        }");
-                    if (member.IsRequired)
-                    {
-                        builder.AppendLine("                        seenMask |= bit;");
-                    }
-                else
+                    builder.AppendLine("                        seenMask |= bit;");
+                }
+                else if (member.IsRequired)
                 {
-                    builder.AppendLine("                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error) seenMask |= bit;");
+                    builder.Append("                        const ulong bit = 1UL << ").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
+                    builder.AppendLine("                        seenMask |= bit;");
                 }
             }
             else
             {
-                builder.AppendLine("                        if (seen is not null)");
-                builder.AppendLine("                        {");
-                builder.AppendLine("                            if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
-                builder.AppendLine("                            {");
-                builder.Append("                                if (seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("])");
-                builder.AppendLine("                                {");
-                var existingExpression = member.CanSet
-                    ? "__memberValue" + i.ToString(CultureInfo.InvariantCulture)
-                    : GetLinkedParameterExpression(i);
-                if (existingExpression is not null && CanEmitTableHeaderExtension(member.Type))
+                if (throwOnDuplicate)
                 {
-                    EmitRepeatedTableExtensionIntoTarget(builder, member.Type, existingExpression, existingExpression, "                                    ");
+                    builder.Append("                        if (seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("])");
+                    builder.AppendLine("                        {");
+                    if (existingExpression is not null && CanEmitTableHeaderExtension(member.Type))
+                    {
+                        EmitRepeatedTableExtensionIntoTarget(builder, member.Type, existingExpression, existingExpression, "                            ");
+                    }
+                    builder.AppendLine("                            throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
+                    builder.AppendLine("                        }");
+                    builder.Append("                        seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
                 }
-                builder.AppendLine("                                    throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
-                builder.AppendLine("                                }");
-                builder.AppendLine("                            }");
-                builder.Append("                            seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
-                builder.AppendLine("                        }");
+                else if (member.IsRequired)
+                {
+                    builder.Append("                        seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
+                }
             }
 
             if (!member.CanSet && !member.HasSingleOrArray)
@@ -1255,12 +1270,14 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         builder.AppendLine("                    reader.Skip();");
-        builder.AppendLine("                }");
-        builder.AppendLine("                else");
-        builder.AppendLine("                {");
+            builder.AppendLine("                }");
+        }
+        else
+        {
+            builder.AppendLine("                {");
 
-        // Case-sensitive: hash dispatch for parameters + members.
-        var actionsByHash = new Dictionary<ulong, List<(bool IsParameter, int Index, string KeyName)>>();
+            // Case-sensitive: hash dispatch for parameters + members.
+            var actionsByHash = new Dictionary<ulong, List<(bool IsParameter, int Index, string KeyName)>>();
         for (var i = 0; i < poco.Members.Length; i++)
         {
             var member = poco.Members[i];
@@ -1328,16 +1345,19 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 if (action.IsParameter)
                 {
                     var parameter = ctor.Parameters[action.Index];
-                    builder.Append("                                    if (__argSeen").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine(" && Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
-                    builder.AppendLine("                                    {");
-                    builder.AppendLine("                                        var __duplicateName = reader.PropertyName!;");
-                    builder.AppendLine("                                        reader.Read();");
-                    if (CanEmitTableHeaderExtension(parameter.ParameterType))
+                    if (throwOnDuplicate)
                     {
-                        EmitRepeatedTableExtensionIntoTarget(builder, parameter.ParameterType, "__arg" + action.Index.ToString(CultureInfo.InvariantCulture), "__arg" + action.Index.ToString(CultureInfo.InvariantCulture), "                                        ");
+                        builder.Append("                                    if (__argSeen").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine(")");
+                        builder.AppendLine("                                    {");
+                        builder.AppendLine("                                        var __duplicateName = reader.PropertyName!;");
+                        builder.AppendLine("                                        reader.Read();");
+                        if (CanEmitTableHeaderExtension(parameter.ParameterType))
+                        {
+                            EmitRepeatedTableExtensionIntoTarget(builder, parameter.ParameterType, "__arg" + action.Index.ToString(CultureInfo.InvariantCulture), "__arg" + action.Index.ToString(CultureInfo.InvariantCulture), "                                        ");
+                        }
+                        builder.AppendLine("                                        throw reader.CreateException($\"Duplicate key '{__duplicateName}' was encountered.\");");
+                        builder.AppendLine("                                    }");
                     }
-                    builder.AppendLine("                                        throw reader.CreateException($\"Duplicate key '{__duplicateName}' was encountered.\");");
-                    builder.AppendLine("                                    }");
                     builder.Append("                                    __argSeen").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine(" = true;");
                     builder.AppendLine("                                    reader.Read();");
                     if (parameter.LinkedMemberIndex >= 0 && parameter.LinkedMemberIndex < poco.Members.Length && poco.Members[parameter.LinkedMemberIndex].HasSingleOrArray)
@@ -1386,56 +1406,52 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                         continue;
                     }
 
+                    var existingExpression = member.CanSet
+                        ? "__memberValue" + action.Index.ToString(CultureInfo.InvariantCulture)
+                        : GetLinkedParameterExpression(action.Index);
                     if (useSeenMask)
                     {
-                        builder.Append("                                    const ulong bit = 1UL << ").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
-                        builder.AppendLine("                                    if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
-                        builder.AppendLine("                                    {");
-                        builder.AppendLine("                                        if ((seenMask & bit) != 0)");
-                        builder.AppendLine("                                        {");
-                        builder.AppendLine("                                            var __duplicateName = reader.PropertyName!;");
-                        builder.AppendLine("                                            reader.Read();");
-                        var existingExpression = member.CanSet
-                            ? "__memberValue" + action.Index.ToString(CultureInfo.InvariantCulture)
-                            : GetLinkedParameterExpression(action.Index);
-                        if (existingExpression is not null && CanEmitTableHeaderExtension(member.Type))
+                        if (throwOnDuplicate)
                         {
-                            EmitRepeatedTableExtensionIntoTarget(builder, member.Type, existingExpression, existingExpression, "                                            ");
-                        }
-                        builder.AppendLine("                                            throw reader.CreateException($\"Duplicate key '{__duplicateName}' was encountered.\");");
-                        builder.AppendLine("                                        }");
-                        builder.AppendLine("                                    }");
-                        if (member.IsRequired)
-                        {
+                            builder.Append("                                    const ulong bit = 1UL << ").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
+                            builder.AppendLine("                                    if ((seenMask & bit) != 0)");
+                            builder.AppendLine("                                    {");
+                            builder.AppendLine("                                        var __duplicateName = reader.PropertyName!;");
+                            builder.AppendLine("                                        reader.Read();");
+                            if (existingExpression is not null && CanEmitTableHeaderExtension(member.Type))
+                            {
+                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, existingExpression, existingExpression, "                                        ");
+                            }
+                            builder.AppendLine("                                        throw reader.CreateException($\"Duplicate key '{__duplicateName}' was encountered.\");");
+                            builder.AppendLine("                                    }");
                             builder.AppendLine("                                    seenMask |= bit;");
                         }
-                        else
+                        else if (member.IsRequired)
                         {
-                            builder.AppendLine("                                    if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error) seenMask |= bit;");
+                            builder.Append("                                    const ulong bit = 1UL << ").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
+                            builder.AppendLine("                                    seenMask |= bit;");
                         }
                     }
                     else
                     {
-                        builder.AppendLine("                                    if (seen is not null)");
-                        builder.AppendLine("                                    {");
-                        builder.AppendLine("                                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
-                        builder.AppendLine("                                        {");
-                        builder.Append("                                            if (seen[").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine("])");
-                        builder.AppendLine("                                            {");
-                        builder.AppendLine("                                                var __duplicateName = reader.PropertyName!;");
-                        builder.AppendLine("                                                reader.Read();");
-                        var existingExpression = member.CanSet
-                            ? "__memberValue" + action.Index.ToString(CultureInfo.InvariantCulture)
-                            : GetLinkedParameterExpression(action.Index);
-                        if (existingExpression is not null && CanEmitTableHeaderExtension(member.Type))
+                        if (throwOnDuplicate)
                         {
-                            EmitRepeatedTableExtensionIntoTarget(builder, member.Type, existingExpression, existingExpression, "                                                ");
+                            builder.Append("                                    if (seen[").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine("])");
+                            builder.AppendLine("                                    {");
+                            builder.AppendLine("                                        var __duplicateName = reader.PropertyName!;");
+                            builder.AppendLine("                                        reader.Read();");
+                            if (existingExpression is not null && CanEmitTableHeaderExtension(member.Type))
+                            {
+                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, existingExpression, existingExpression, "                                        ");
+                            }
+                            builder.AppendLine("                                        throw reader.CreateException($\"Duplicate key '{__duplicateName}' was encountered.\");");
+                            builder.AppendLine("                                    }");
+                            builder.Append("                                    seen[").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
                         }
-                        builder.AppendLine("                                                throw reader.CreateException($\"Duplicate key '{__duplicateName}' was encountered.\");");
-                        builder.AppendLine("                                            }");
-                        builder.AppendLine("                                        }");
-                        builder.Append("                                        seen[").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
-                        builder.AppendLine("                                    }");
+                        else if (member.IsRequired)
+                        {
+                            builder.Append("                                    seen[").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
+                        }
                     }
 
                     builder.AppendLine("                                    reader.Read();");
@@ -1482,7 +1498,8 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         builder.AppendLine("                    reader.Read();");
         builder.AppendLine("                    reader.Skip();");
-        builder.AppendLine("                }");
+            builder.AppendLine("                }");
+        }
         builder.AppendLine("            }");
 
         builder.AppendLine("            var endTableSpan = reader.CurrentSpan;");
@@ -1763,7 +1780,8 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         string typeName,
         PocoShape poco,
         bool callsOnDeserializing,
-        bool callsOnDeserialized)
+        bool callsOnDeserialized,
+        SourceGenOptions options)
     {
         builder.AppendLine();
         builder.AppendLine("        public override object? ReadInto(TomlReader reader, object? existingValue)");
@@ -1780,9 +1798,10 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         var hasRequiredMembers = poco.Members.Any(static m => m.IsRequired);
+        var throwOnDuplicate = ShouldThrowOnDuplicate(options);
         if (poco.Members.Length <= 64)
         {
-            if (poco.Members.Length > 0)
+            if (poco.Members.Length > 0 && (throwOnDuplicate || hasRequiredMembers))
             {
                 builder.AppendLine("            ulong seenMask = 0;");
             }
@@ -1803,29 +1822,26 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
         else
         {
-            builder.Append("            var seen = (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error");
-            if (hasRequiredMembers)
+            if (throwOnDuplicate || hasRequiredMembers)
             {
-                builder.Append(" || true");
+                builder.Append("            var seen = new bool[").Append(poco.Members.Length.ToString(CultureInfo.InvariantCulture)).AppendLine("];");
             }
-
-            builder.Append(") ? new bool[").Append(poco.Members.Length.ToString(CultureInfo.InvariantCulture)).AppendLine("] : null;");
         }
 
         builder.AppendLine("            reader.Read();");
         builder.AppendLine("            while (reader.TokenType != TomlTokenType.EndTable)");
         builder.AppendLine("            {");
         builder.AppendLine("                if (reader.TokenType != TomlTokenType.PropertyName) throw reader.CreateException($\"Expected {TomlTokenType.PropertyName} token but was {reader.TokenType}.\");");
-        builder.AppendLine("                if (Options.PropertyNameCaseInsensitive)");
-        builder.AppendLine("                {");
-        builder.AppendLine("                    var name = reader.PropertyName!;");
-        builder.AppendLine("                    reader.Read();");
-        EmitMemberDispatch(builder, poco, ignoreCase: true);
-        builder.AppendLine("                }");
-        builder.AppendLine("                else");
-        builder.AppendLine("                {");
-        EmitMemberDispatch(builder, poco, ignoreCase: false);
-        builder.AppendLine("                }");
+        if (GetEffectivePropertyNameCaseInsensitive(options))
+        {
+            builder.AppendLine("                var name = reader.PropertyName!;");
+            builder.AppendLine("                reader.Read();");
+            EmitMemberDispatch(builder, poco, ignoreCase: true, options);
+        }
+        else
+        {
+            EmitMemberDispatch(builder, poco, ignoreCase: false, options);
+        }
         builder.AppendLine("            }");
         builder.AppendLine("            var endTableSpan = reader.CurrentSpan;");
         builder.AppendLine("            reader.Read();");
@@ -1953,19 +1969,23 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.AppendLine("            }");
     }
 
-    private static string? GetPopulateConditionExpression(PocoMember member)
+    private static string? GetPopulateConditionExpression(PocoMember member, SourceGenOptions options)
     {
-        return member.ObjectCreationHandling switch
+        var objectCreationHandling = member.ObjectCreationHandling == ObjectCreationHandlingKind.Default
+            ? GetEffectiveObjectCreationHandling(options)
+            : member.ObjectCreationHandling;
+
+        return objectCreationHandling switch
         {
             ObjectCreationHandlingKind.Replace => null,
             ObjectCreationHandlingKind.Populate => "true",
-            _ => "Options.PreferredObjectCreationHandling == global::System.Text.Json.Serialization.JsonObjectCreationHandling.Populate",
+            _ => null,
         };
     }
 
-    private static string GetSingleOrArrayPopulateConditionExpression(PocoMember member)
+    private static string GetSingleOrArrayPopulateConditionExpression(PocoMember member, SourceGenOptions options)
     {
-        var populateCondition = GetPopulateConditionExpression(member);
+        var populateCondition = GetPopulateConditionExpression(member, options);
         if (!member.CanSet)
         {
             return "true";
@@ -2115,11 +2135,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private static bool CanEmitTableHeaderExtension(ITypeSymbol type) => !type.IsValueType;
 
-    private static void EmitSingleOrArrayMemberRead(StringBuilder builder, PocoMember member, string indent)
+    private static void EmitSingleOrArrayMemberRead(StringBuilder builder, PocoMember member, string indent, SourceGenOptions options)
     {
         var memberTypeName = member.Type.ToDisplayString(FullyQualifiedNullableFormat);
         var memberAccess = "value." + member.MemberName;
-        var populateCondition = GetSingleOrArrayPopulateConditionExpression(member);
+        var populateCondition = GetSingleOrArrayPopulateConditionExpression(member, options);
         var errorPrefix = $"Member '{EscapeStringLiteral(member.MemberName)}' on '{{value.GetType().FullName}}' uses [TomlSingleOrArray]";
         var createExpression = GetSingleOrArrayCreateExpression(member.Type);
         var canPopulateExpression = GetSingleOrArrayCanPopulateExpression(member.Type, memberAccess + "!");
@@ -2236,17 +2256,17 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.Append(indent).AppendLine("}");
     }
 
-    private static void EmitMemberRead(StringBuilder builder, PocoMember member, int index, string indent)
+    private static void EmitMemberRead(StringBuilder builder, PocoMember member, int index, string indent, SourceGenOptions options)
     {
         if (member.HasSingleOrArray)
         {
-            EmitSingleOrArrayMemberRead(builder, member, indent);
+            EmitSingleOrArrayMemberRead(builder, member, indent, options);
             return;
         }
 
         var memberTypeName = member.Type.ToDisplayString(FullyQualifiedNullableFormat);
         var typeInfoPropertyName = GetTypeInfoPropertyName(member.Type);
-        var populateCondition = GetPopulateConditionExpression(member);
+        var populateCondition = GetPopulateConditionExpression(member, options);
         var existingLocal = "__existing" + index.ToString(CultureInfo.InvariantCulture);
         var populatedLocal = "__populated" + index.ToString(CultureInfo.InvariantCulture);
         var memberAccess = "value." + member.MemberName;
@@ -2361,13 +2381,13 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.Append(indent).AppendLine("}");
     }
 
-    private static void EmitRecoverableMemberRead(StringBuilder builder, PocoMember member, int index, string indent)
+    private static void EmitRecoverableMemberRead(StringBuilder builder, PocoMember member, int index, string indent, SourceGenOptions options)
     {
         builder.Append(indent).AppendLine("var __readTokenType = reader.TokenType;");
         builder.Append(indent).AppendLine("var __readSpan = reader.CurrentSpan;");
         builder.Append(indent).AppendLine("try");
         builder.Append(indent).AppendLine("{");
-        EmitMemberRead(builder, member, index, indent + "    ");
+        EmitMemberRead(builder, member, index, indent + "    ", options);
         builder.Append(indent).AppendLine("}");
         builder.Append(indent).AppendLine("catch (TomlException __ex) when (TryAddDeserializationDiagnostic(reader, __readTokenType, __readSpan, __ex))");
         builder.Append(indent).AppendLine("{");
@@ -2375,9 +2395,10 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.Append(indent).AppendLine("}");
     }
 
-    private static void EmitMemberDispatch(StringBuilder builder, PocoShape poco, bool ignoreCase)
+    private static void EmitMemberDispatch(StringBuilder builder, PocoShape poco, bool ignoreCase, SourceGenOptions options)
     {
         var useSeenMask = poco.Members.Length <= 64;
+        var throwOnDuplicate = ShouldThrowOnDuplicate(options);
         if (ignoreCase)
         {
             var comparison = "StringComparison.OrdinalIgnoreCase";
@@ -2401,116 +2422,65 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
                 if (useSeenMask)
                 {
-                    if (member.IsRequired)
+                    if (throwOnDuplicate)
                     {
                         builder.Append("                        const ulong bit = 1UL << ").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
-                        builder.AppendLine("                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
+                        builder.AppendLine("                        if ((seenMask & bit) != 0)");
                         builder.AppendLine("                        {");
-                        builder.AppendLine("                            if ((seenMask & bit) != 0)");
-                        builder.AppendLine("                            {");
                         if (member.CanSet)
                         {
                             if (CanEmitTableHeaderExtension(member.Type))
                             {
-                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, "value." + member.MemberName, "value." + member.MemberName, "                                ");
+                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, "value." + member.MemberName, "value." + member.MemberName, "                            ");
                             }
                         }
                         else
                         {
                             if (CanEmitTableHeaderExtension(member.Type))
                             {
-                                EmitRepeatedTableExtensionIntoReadOnlyMember(builder, member, "                                ");
+                                EmitRepeatedTableExtensionIntoReadOnlyMember(builder, member, "                            ");
                             }
                         }
-                        builder.AppendLine("                                throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
-                        builder.AppendLine("                            }");
+                        builder.AppendLine("                            throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
                         builder.AppendLine("                        }");
                         builder.AppendLine("                        seenMask |= bit;");
                     }
-                    else
+                    else if (member.IsRequired)
                     {
-                        builder.AppendLine("                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
-                        builder.AppendLine("                        {");
-                        builder.Append("                            const ulong bit = 1UL << ").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
-                        builder.AppendLine("                            if ((seenMask & bit) != 0)");
-                        builder.AppendLine("                            {");
-                        if (member.CanSet)
-                        {
-                            if (CanEmitTableHeaderExtension(member.Type))
-                            {
-                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, "value." + member.MemberName, "value." + member.MemberName, "                                ");
-                            }
-                        }
-                        else
-                        {
-                            if (CanEmitTableHeaderExtension(member.Type))
-                            {
-                                EmitRepeatedTableExtensionIntoReadOnlyMember(builder, member, "                                ");
-                            }
-                        }
-                        builder.AppendLine("                                throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
-                        builder.AppendLine("                            }");
-                        builder.AppendLine("                            seenMask |= bit;");
-                        builder.AppendLine("                        }");
+                        builder.Append("                        const ulong bit = 1UL << ").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
+                        builder.AppendLine("                        seenMask |= bit;");
                     }
                 }
                 else
                 {
-                    builder.AppendLine("                        if (seen is not null)");
-                    builder.AppendLine("                        {");
-                    if (member.IsRequired)
+                    if (throwOnDuplicate)
                     {
-                        builder.AppendLine("                            if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
-                        builder.AppendLine("                            {");
-                        builder.Append("                                if (seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("])");
-                        builder.AppendLine("                                {");
+                        builder.Append("                        if (seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("])");
+                        builder.AppendLine("                        {");
                         if (member.CanSet)
                         {
                             if (CanEmitTableHeaderExtension(member.Type))
                             {
-                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, "value." + member.MemberName, "value." + member.MemberName, "                                    ");
+                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, "value." + member.MemberName, "value." + member.MemberName, "                            ");
                             }
                         }
                         else
                         {
                             if (CanEmitTableHeaderExtension(member.Type))
                             {
-                                EmitRepeatedTableExtensionIntoReadOnlyMember(builder, member, "                                    ");
+                                EmitRepeatedTableExtensionIntoReadOnlyMember(builder, member, "                            ");
                             }
                         }
-                        builder.AppendLine("                                    throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
-                        builder.AppendLine("                                }");
-                        builder.AppendLine("                            }");
-                        builder.Append("                            seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
+                        builder.AppendLine("                            throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
+                        builder.AppendLine("                        }");
+                        builder.Append("                        seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
                     }
-                    else
+                    else if (member.IsRequired)
                     {
-                        builder.AppendLine("                            if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
-                        builder.AppendLine("                            {");
-                        builder.Append("                                if (seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("])");
-                        builder.AppendLine("                                {");
-                        if (member.CanSet)
-                        {
-                            if (CanEmitTableHeaderExtension(member.Type))
-                            {
-                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, "value." + member.MemberName, "value." + member.MemberName, "                                    ");
-                            }
-                        }
-                        else
-                        {
-                            if (CanEmitTableHeaderExtension(member.Type))
-                            {
-                                EmitRepeatedTableExtensionIntoReadOnlyMember(builder, member, "                                    ");
-                            }
-                        }
-                        builder.AppendLine("                                    throw reader.CreateException($\"Duplicate key '{name}' was encountered.\");");
-                        builder.AppendLine("                                }");
-                        builder.Append("                                seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
-                        builder.AppendLine("                            }");
+                        builder.Append("                        seen[").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
                     }
-                    builder.AppendLine("                        }");
                 }
-                EmitRecoverableMemberRead(builder, member, i, "                        ");
+                EmitRecoverableMemberRead(builder, member, i, "                        ", options);
                 if (!alwaysThrowsOnRead)
                 {
                     builder.AppendLine("                        continue;");
@@ -2580,121 +2550,80 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
                 if (useSeenMask)
                 {
-                    if (member.IsRequired)
+                    if (throwOnDuplicate)
                     {
                         builder.Append("                                    const ulong bit = 1UL << ").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
-                        builder.AppendLine("                                    if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
+                        builder.AppendLine("                                    if ((seenMask & bit) != 0)");
                         builder.AppendLine("                                    {");
-                        builder.AppendLine("                                        if ((seenMask & bit) != 0)");
-                        builder.AppendLine("                                        {");
+                        if (!member.IsRequired)
+                        {
+                            builder.AppendLine("                                        var __duplicateName = reader.PropertyName!;");
+                            builder.AppendLine("                                        reader.Read();");
+                        }
                         if (member.CanSet)
                         {
                             if (CanEmitTableHeaderExtension(member.Type))
                             {
-                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, "value." + member.MemberName, "value." + member.MemberName, "                                            ");
+                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, "value." + member.MemberName, "value." + member.MemberName, "                                        ");
                             }
                         }
                         else
                         {
                             if (CanEmitTableHeaderExtension(member.Type))
                             {
-                                EmitRepeatedTableExtensionIntoReadOnlyMember(builder, member, "                                            ");
+                                EmitRepeatedTableExtensionIntoReadOnlyMember(builder, member, "                                        ");
                             }
                         }
-                        builder.AppendLine("                                            throw reader.CreateException($\"Duplicate key '{reader.PropertyName}' was encountered.\");");
-                        builder.AppendLine("                                        }");
+                        if (member.IsRequired)
+                        {
+                            builder.AppendLine("                                        throw reader.CreateException($\"Duplicate key '{reader.PropertyName}' was encountered.\");");
+                        }
+                        else
+                        {
+                            builder.AppendLine("                                        throw reader.CreateException($\"Duplicate key '{__duplicateName}' was encountered.\");");
+                        }
                         builder.AppendLine("                                    }");
                         builder.AppendLine("                                    seenMask |= bit;");
                     }
-                    else
+                    else if (member.IsRequired)
                     {
-                        builder.AppendLine("                                    if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
-                        builder.AppendLine("                                    {");
-                        builder.Append("                                        const ulong bit = 1UL << ").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
-                        builder.AppendLine("                                        if ((seenMask & bit) != 0)");
-                        builder.AppendLine("                                        {");
-                        builder.AppendLine("                                            var __duplicateName = reader.PropertyName!;");
-                        builder.AppendLine("                                            reader.Read();");
-                        if (member.CanSet)
-                        {
-                            if (CanEmitTableHeaderExtension(member.Type))
-                            {
-                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, "value." + member.MemberName, "value." + member.MemberName, "                                            ");
-                            }
-                        }
-                        else
-                        {
-                            if (CanEmitTableHeaderExtension(member.Type))
-                            {
-                                EmitRepeatedTableExtensionIntoReadOnlyMember(builder, member, "                                            ");
-                            }
-                        }
-                        builder.AppendLine("                                            throw reader.CreateException($\"Duplicate key '{__duplicateName}' was encountered.\");");
-                        builder.AppendLine("                                        }");
-                        builder.AppendLine("                                        seenMask |= bit;");
-                        builder.AppendLine("                                    }");
+                        builder.Append("                                    const ulong bit = 1UL << ").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
+                        builder.AppendLine("                                    seenMask |= bit;");
                     }
                 }
                 else
                 {
-                    builder.AppendLine("                                    if (seen is not null)");
-                    builder.AppendLine("                                    {");
-                    if (member.IsRequired)
+                    if (throwOnDuplicate)
                     {
-                        builder.AppendLine("                                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
-                        builder.AppendLine("                                        {");
-                        builder.Append("                                            if (seen[").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine("])");
-                        builder.AppendLine("                                            {");
-                        builder.AppendLine("                                                var __duplicateName = reader.PropertyName!;");
-                        builder.AppendLine("                                                reader.Read();");
+                        builder.Append("                                    if (seen[").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine("])");
+                        builder.AppendLine("                                    {");
+                        builder.AppendLine("                                        var __duplicateName = reader.PropertyName!;");
+                        builder.AppendLine("                                        reader.Read();");
                         if (member.CanSet)
                         {
                             if (CanEmitTableHeaderExtension(member.Type))
                             {
-                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, "value." + member.MemberName, "value." + member.MemberName, "                                                ");
+                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, "value." + member.MemberName, "value." + member.MemberName, "                                        ");
                             }
                         }
                         else
                         {
                             if (CanEmitTableHeaderExtension(member.Type))
                             {
-                                EmitRepeatedTableExtensionIntoReadOnlyMember(builder, member, "                                                ");
+                                EmitRepeatedTableExtensionIntoReadOnlyMember(builder, member, "                                        ");
                             }
                         }
-                        builder.AppendLine("                                                throw reader.CreateException($\"Duplicate key '{reader.PropertyName}' was encountered.\");");
-                        builder.AppendLine("                                            }");
-                        builder.AppendLine("                                        }");
-                        builder.Append("                                        seen[").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
+                        builder.AppendLine("                                        throw reader.CreateException($\"Duplicate key '{__duplicateName}' was encountered.\");");
+                        builder.AppendLine("                                    }");
+                        builder.Append("                                    seen[").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
                     }
-                    else
+                    else if (member.IsRequired)
                     {
-                        builder.AppendLine("                                        if (Options.DuplicateKeyHandling == TomlDuplicateKeyHandling.Error)");
-                        builder.AppendLine("                                        {");
-                        builder.Append("                                            if (seen[").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine("])");
-                        builder.AppendLine("                                            {");
-                        if (member.CanSet)
-                        {
-                            if (CanEmitTableHeaderExtension(member.Type))
-                            {
-                                EmitRepeatedTableExtensionIntoTarget(builder, member.Type, "value." + member.MemberName, "value." + member.MemberName, "                                                ");
-                            }
-                        }
-                        else
-                        {
-                            if (CanEmitTableHeaderExtension(member.Type))
-                            {
-                                EmitRepeatedTableExtensionIntoReadOnlyMember(builder, member, "                                                ");
-                            }
-                        }
-                        builder.AppendLine("                                                throw reader.CreateException($\"Duplicate key '{__duplicateName}' was encountered.\");");
-                        builder.AppendLine("                                            }");
-                        builder.Append("                                            seen[").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
-                        builder.AppendLine("                                        }");
+                        builder.Append("                                    seen[").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine("] = true;");
                     }
-                    builder.AppendLine("                                    }");
                 }
                 builder.AppendLine("                                    reader.Read();");
-                EmitRecoverableMemberRead(builder, member, index, "                                    ");
+                EmitRecoverableMemberRead(builder, member, index, "                                    ", options);
                 if (!alwaysThrowsOnRead)
                 {
                     builder.AppendLine("                                    continue;");
@@ -2729,7 +2658,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.AppendLine("                    reader.Skip();");
     }
 
-    private static void EmitWriteMember(StringBuilder builder, PocoMember member, int index, string memberTypeName, bool canBeNull, string? usedKeysVariable)
+    private static void EmitWriteMember(StringBuilder builder, PocoMember member, int index, string memberTypeName, bool canBeNull, string? usedKeysVariable, SourceGenOptions options)
     {
         var localName = "__member" + index.ToString(CultureInfo.InvariantCulture);
         var writeArgument = canBeNull ? localName + "!" : localName;
@@ -2737,13 +2666,14 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         var openIndent = "            ";
         var defaultLiteral = GetDefaultLiteral(member.Type);
         var defaultIsNull = member.Type.IsReferenceType || TryGetNullableUnderlyingType(member.Type, out _);
+        var writeIgnore = GetEffectiveWriteIgnore(member, options);
 
-        if (member.WriteIgnore == WriteIgnoreKind.WhenWriting)
+        if (writeIgnore == WriteIgnoreKind.WhenWriting)
         {
             return;
         }
 
-        if (member.WriteIgnore == WriteIgnoreKind.WhenWritingNull)
+        if (writeIgnore == WriteIgnoreKind.WhenWritingNull)
         {
             if (canBeNull)
             {
@@ -2768,7 +2698,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             return;
         }
 
-        if (member.WriteIgnore == WriteIgnoreKind.WhenWritingDefault)
+        if (writeIgnore == WriteIgnoreKind.WhenWritingDefault)
         {
             if (defaultIsNull && canBeNull)
             {
@@ -2796,41 +2726,13 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             return;
         }
 
-        builder.Append(openIndent).Append("if (!(Options.DefaultIgnoreCondition is global::Tomlyn.TomlIgnoreCondition.Always or global::Tomlyn.TomlIgnoreCondition.WhenWriting");
-        var hasPrevious = true;
-        if (canBeNull)
-        {
-            builder.Append(") && !(");
-            builder.Append("Options.DefaultIgnoreCondition == global::Tomlyn.TomlIgnoreCondition.WhenWritingNull && ")
-                .Append(localName)
-                .Append(" is null");
-        }
-
-        builder.Append(hasPrevious ? ") && !(" : string.Empty);
-        builder.Append("Options.DefaultIgnoreCondition == global::Tomlyn.TomlIgnoreCondition.WhenWritingDefault && ");
-        if (defaultIsNull && canBeNull)
-        {
-            builder.Append(localName).Append(" is null");
-        }
-        else
-        {
-            builder.Append("global::System.Collections.Generic.EqualityComparer<")
-                .Append(memberTypeName)
-                .Append(">.Default.Equals(")
-                .Append(localName)
-                .Append(", ")
-                .Append(defaultLiteral)
-                .Append(")");
-        }
-        builder.AppendLine("))");
-        builder.Append(openIndent).AppendLine("{");
-        builder.Append(writeIndent).Append("writer.WritePropertyName(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
+        builder.Append(openIndent).Append("writer.WritePropertyName(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
         if (usedKeysVariable is not null)
         {
-            builder.Append(writeIndent).Append(usedKeysVariable).Append("?.Add(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
+            builder.Append(openIndent).Append(usedKeysVariable).Append("?.Add(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
         }
-        builder.Append(writeIndent).Append("_context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".Write(writer, ").Append(writeArgument).AppendLine(");");
-        builder.Append(openIndent).AppendLine("}");
+
+        builder.Append(openIndent).Append("_context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".Write(writer, ").Append(writeArgument).AppendLine(");");
     }
 
     private static bool CanBeNull(ITypeSymbol type)
@@ -3317,6 +3219,28 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         WhenWriting = 4,
     }
 
+    private static WriteIgnoreKind GetEffectiveWriteIgnore(PocoMember member, SourceGenOptions options)
+    {
+        if (member.WriteIgnore != WriteIgnoreKind.None)
+        {
+            return member.WriteIgnore;
+        }
+
+        return GetDefaultWriteIgnore(options);
+    }
+
+    private static WriteIgnoreKind GetDefaultWriteIgnore(SourceGenOptions options)
+    {
+        return (options.DefaultIgnoreCondition ?? DefaultDefaultIgnoreCondition) switch
+        {
+            0 or 5 => WriteIgnoreKind.None,
+            1 => WriteIgnoreKind.WhenWritingNull,
+            2 => WriteIgnoreKind.WhenWritingDefault,
+            3 or 4 => WriteIgnoreKind.WhenWriting,
+            _ => WriteIgnoreKind.None,
+        };
+    }
+
     private enum ObjectCreationHandlingKind
     {
         Default = 0,
@@ -3604,7 +3528,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     memberIndexByClrName[membersSoFar[i].MemberName] = i;
                 }
 
-                var parameterComparer = model.Options.PropertyNameCaseInsensitive == true ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+                var parameterComparer = GetEffectivePropertyNameCaseInsensitive(model.Options) ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
                 var parameterKeys = new HashSet<string>(parameterComparer);
                 var parameters = ImmutableArray.CreateBuilder<PocoConstructorParameter>(selectedConstructor.Parameters.Length);
 

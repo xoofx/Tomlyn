@@ -15,6 +15,116 @@ namespace Tomlyn.Tests;
 public sealed class SourceGenerationDiagnosticsTests
 {
     [Test]
+    public void Generator_ResolvesKnownOptionBranchesAtBuildTime()
+    {
+        var source = """
+            #nullable enable
+            using System.Collections.Generic;
+            using System.Text.Json.Serialization;
+            using Tomlyn;
+            using Tomlyn.Serialization;
+
+            [TomlSourceGenerationOptions(
+                PropertyNameCaseInsensitive = true,
+                DefaultIgnoreCondition = TomlIgnoreCondition.Never,
+                DuplicateKeyHandling = TomlDuplicateKeyHandling.LastWins,
+                MappingOrder = TomlMappingOrderPolicy.Alphabetical,
+                DictionaryKeyPolicy = JsonKnownNamingPolicy.CamelCase,
+                PreferredObjectCreationHandling = JsonObjectCreationHandling.Populate)]
+            [TomlSerializable(typeof(Person))]
+            [TomlSerializable(typeof(CtorPerson))]
+            internal partial class Ctx : TomlSerializerContext { }
+
+            public sealed class Person
+            {
+                public string? Name { get; set; }
+                public int Age { get; set; }
+                public Child Child { get; } = new();
+                [TomlExtensionData]
+                public Dictionary<string, string>? Extra { get; set; }
+            }
+
+            public sealed class CtorPerson
+            {
+                [JsonConstructor]
+                public CtorPerson(string? name, int age)
+                {
+                    Name = name;
+                    Age = age;
+                }
+
+                public string? Name { get; }
+                public int Age { get; }
+            }
+
+            public sealed class Child
+            {
+                public string? Value { get; set; }
+            }
+            """;
+
+        var generatedSource = RunGeneratorTest(source).GeneratedSources.Single();
+
+        AssertNoDynamicKnownOptionBranches(generatedSource);
+    }
+
+    [Test]
+    public void Generator_ResolvesDefaultOptionBranchesAtBuildTime()
+    {
+        var source = """
+            #nullable enable
+            using System.Collections.Generic;
+            using System.Text.Json.Serialization;
+            using Tomlyn.Serialization;
+
+            [TomlSerializable(typeof(Person))]
+            [TomlSerializable(typeof(CtorPerson))]
+            internal partial class Ctx : TomlSerializerContext { }
+
+            public sealed class Person
+            {
+                public string? Name { get; set; }
+                public int Age { get; set; }
+                public Child Child { get; } = new();
+                [TomlExtensionData]
+                public Dictionary<string, string>? Extra { get; set; }
+            }
+
+            public sealed class CtorPerson
+            {
+                [JsonConstructor]
+                public CtorPerson(string? name, int age)
+                {
+                    Name = name;
+                    Age = age;
+                }
+
+                public string? Name { get; }
+                public int Age { get; }
+            }
+
+            public sealed class Child
+            {
+                public string? Value { get; set; }
+            }
+            """;
+
+        var generatedSource = RunGeneratorTest(source).GeneratedSources.Single();
+
+        AssertNoDynamicKnownOptionBranches(generatedSource);
+    }
+
+    private static void AssertNoDynamicKnownOptionBranches(string generatedSource)
+    {
+        Assert.That(generatedSource, Does.Not.Contain("Options.PropertyNameCaseInsensitive"));
+        Assert.That(generatedSource, Does.Not.Contain("Options.DefaultIgnoreCondition"));
+        Assert.That(generatedSource, Does.Not.Contain("Options.DuplicateKeyHandling"));
+        Assert.That(generatedSource, Does.Not.Contain("Options.MappingOrder"));
+        Assert.That(generatedSource, Does.Not.Contain("Options.DictionaryKeyPolicy"));
+        Assert.That(generatedSource, Does.Not.Contain("Options.PreferredObjectCreationHandling"));
+    }
+
+    [Test]
     public void Generator_ReportsInvalidIndentSize()
     {
         var source = """
