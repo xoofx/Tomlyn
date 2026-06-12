@@ -11,6 +11,7 @@ public class PocoBenchmarks
     private string _documentToml = string.Empty;
     private byte[] _documentUtf8 = [];
     private CsTomlSerializerOptions _csTomlOptions = null!;
+    private TomlTypeInfo<BenchmarkDocument> _tomlynCompiledTypeInfo = null!;
 
     [GlobalSetup]
     public void Setup()
@@ -20,13 +21,22 @@ public class PocoBenchmarks
         _document = BenchmarkDataFactory.CreateDocument(serviceCount: 200, endpointCountPerService: 12);
         _documentToml = BenchmarkDataFactory.CreateToml(_document);
         _documentUtf8 = BenchmarkDataFactory.ToUtf8Bytes(_documentToml);
-        _csTomlOptions = CsTomlSerializerOptions.Default;
+        _csTomlOptions = CsTomlSerializerOptions.Default with
+        {
+            SerializeOptions = new SerializeOptions { TableStyle = TomlTableStyle.Header },
+        };
+        _tomlynCompiledTypeInfo = TomlynBenchmarkContext.Default.BenchmarkDocument;
     }
 
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("Serialize_Poco")]
     public string Tomlyn_Serialize_Poco()
         => TomlSerializer.Serialize(_document);
+
+    [Benchmark]
+    [BenchmarkCategory("Serialize_Poco")]
+    public string Tomlyn_Compiled_Serialize_Poco()
+        => TomlSerializer.Serialize(_document, _tomlynCompiledTypeInfo);
 
     [Benchmark]
     [BenchmarkCategory("Serialize_Poco")]
@@ -47,6 +57,11 @@ public class PocoBenchmarks
     [BenchmarkCategory("Deserialize_Poco")]
     public BenchmarkDocument Tomlyn_Deserialize_Poco()
         => TomlSerializer.Deserialize<BenchmarkDocument>(_documentToml)!;
+
+    [Benchmark]
+    [BenchmarkCategory("Deserialize_Poco")]
+    public BenchmarkDocument Tomlyn_Compiled_Deserialize_Poco()
+        => TomlSerializer.Deserialize(_documentToml, _tomlynCompiledTypeInfo)!;
 
     [Benchmark]
     [BenchmarkCategory("Deserialize_Poco")]
