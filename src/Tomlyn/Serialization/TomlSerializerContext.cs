@@ -114,7 +114,7 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
         if (type == typeof(Version)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<Version>(options, TomlVersionConverter.Instance);
 
         if (type == typeof(TomlObject)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<TomlObject>(options, TomlTomlObjectConverter.Instance);
-        if (type == typeof(TomlTable)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<TomlTable>(options, TomlTomlTableConverter.Instance);
+        if (type == typeof(TomlTable)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<TomlTable>(options, TomlTomlTableConverter.Instance, writesTable: true);
         if (type == typeof(TomlArray)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<TomlArray>(options, TomlTomlArrayConverter.Instance);
         if (type == typeof(TomlTableArray)) return (TomlTypeInfo<T>)(object)new TomlConverterTypeInfo<TomlTableArray>(options, TomlTomlTableArrayConverter.Instance);
 
@@ -160,6 +160,31 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
         {
             throw new TomlException(diagnostics);
         }
+    }
+
+    /// <summary>
+    /// Writes a TOML property name using an optional dotted-key handling override.
+    /// </summary>
+    /// <param name="writer">The TOML writer.</param>
+    /// <param name="name">The property name.</param>
+    /// <param name="dottedKeyHandling">The dotted-key handling override, or <see langword="null" /> to use the writer options.</param>
+    protected static void WritePropertyName(TomlWriter writer, string name, TomlDottedKeyHandling? dottedKeyHandling)
+    {
+        ArgumentGuard.ThrowIfNull(writer, nameof(writer));
+        writer.WritePropertyName(name, dottedKeyHandling);
+    }
+
+    /// <summary>
+    /// Applies formatting metadata for a TOML property currently being written by source-generated metadata.
+    /// </summary>
+    /// <param name="writer">The TOML writer.</param>
+    /// <param name="name">The property name.</param>
+    /// <param name="metadata">The metadata to merge.</param>
+    protected static void ApplyPropertyMetadata(TomlWriter writer, string name, TomlPropertyMetadata metadata)
+    {
+        ArgumentGuard.ThrowIfNull(writer, nameof(writer));
+        ArgumentGuard.ThrowIfNull(metadata, nameof(metadata));
+        writer.ApplyPropertyMetadata(name, metadata);
     }
 
     /// <summary>

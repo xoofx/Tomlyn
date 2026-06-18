@@ -207,6 +207,72 @@ Behavior matches the declared collection semantics:
 - Writable members still use replace semantics unless object creation handling says to populate.
 - Without [`TomlSingleOrArrayAttribute`](xref:Tomlyn.Serialization.TomlSingleOrArrayAttribute), collection members require a TOML array.
 
+### Tables, arrays of tables, and inline tables
+
+Typed collections whose element type writes as a TOML table (for example POCOs, dictionaries, or `TomlTable`) serialize as semantic arrays of tables when they are written as a table property:
+
+```csharp
+public sealed class Config
+{
+    public Package[] Package { get; set; } = [];
+}
+
+public sealed class Package
+{
+    public string Name { get; set; } = "";
+}
+```
+
+```toml
+[[Package]]
+Name = "core"
+
+[[Package]]
+Name = "tools"
+```
+
+Empty object collections still write as ordinary empty arrays (`Package = []`), because TOML has no header syntax for an empty array of tables. Primitive collections continue to write as ordinary arrays.
+
+[`TableArrayStyle`](xref:Tomlyn.TomlSerializerOptions.TableArrayStyle) controls how arrays of tables are formatted:
+
+| Value | Behavior |
+| --- | --- |
+| [`Headers`](xref:Tomlyn.TomlTableArrayStyle.Headers) | Emit array-of-table headers (`[[Package]]`). This is the default. |
+| [`InlineArrayOfTables`](xref:Tomlyn.TomlTableArrayStyle.InlineArrayOfTables) | Emit inline arrays of inline tables (`Package = [{Name = "core"}]`) when the contents can be written inline. |
+
+[`InlineTablePolicy`](xref:Tomlyn.TomlSerializerOptions.InlineTablePolicy) similarly controls whether nested object values may be emitted as inline tables.
+
+### Formatting attributes
+
+Global formatting options can be overridden for a specific member or declaring type. These attributes work with both reflection-based metadata and source-generated `TomlSerializerContext` metadata. They affect serialization formatting; they do not change parser behavior or the semantic value being deserialized.
+
+```csharp
+using Tomlyn;
+using Tomlyn.Serialization;
+
+[TomlMappingOrder(TomlMappingOrderPolicy.Alphabetical)]
+[TomlDottedKeyHandling(TomlDottedKeyHandling.Expand)]
+public sealed class Config
+{
+    [TomlTableArrayStyle(TomlTableArrayStyle.Headers)]
+    public Package[] Package { get; set; } = [];
+
+    [TomlInlineTable(TomlInlineTablePolicy.Always)]
+    public Owner Owner { get; set; } = new();
+
+    [TomlStringStyle(TomlStringStyle.Literal, PreferLiteralWhenNoEscapes = TomlBooleanPreference.True)]
+    public string Description { get; set; } = "plain text";
+}
+```
+
+| Attribute | Target | Description |
+| --- | --- | --- |
+| [`TomlTableArrayStyleAttribute`](xref:Tomlyn.Serialization.TomlTableArrayStyleAttribute) | Property/field | Overrides [`TableArrayStyle`](xref:Tomlyn.TomlSerializerOptions.TableArrayStyle) for that collection value. |
+| [`TomlInlineTableAttribute`](xref:Tomlyn.Serialization.TomlInlineTableAttribute) | Property/field | Overrides [`InlineTablePolicy`](xref:Tomlyn.TomlSerializerOptions.InlineTablePolicy) for that property value only. Nested members use their own attributes or global options. |
+| [`TomlStringStyleAttribute`](xref:Tomlyn.Serialization.TomlStringStyleAttribute) | String property/field | Overrides string style for that string value. `PreferLiteralWhenNoEscapes` and `AllowHexEscapes` use [`TomlBooleanPreference.Unspecified`](xref:Tomlyn.Serialization.TomlBooleanPreference.Unspecified) by default, so omitted preferences fall back to global [`StringStylePreferences`](xref:Tomlyn.TomlSerializerOptions.StringStylePreferences). |
+| [`TomlMappingOrderAttribute`](xref:Tomlyn.Serialization.TomlMappingOrderAttribute) | Class/struct | Overrides member ordering for that type. |
+| [`TomlDottedKeyHandlingAttribute`](xref:Tomlyn.Serialization.TomlDottedKeyHandlingAttribute) | Class/struct | Overrides dotted-key handling for member names declared on that type. Dictionary keys written by dictionary members still use dictionary/global handling. |
+
 ### Mapping order
 
 [`MappingOrder`](xref:Tomlyn.TomlSerializerOptions.MappingOrder) controls the order properties appear in the serialized output:
@@ -218,6 +284,8 @@ Behavior matches the declared collection semantics:
 | [`OrderThenDeclaration`](xref:Tomlyn.TomlMappingOrderPolicy.OrderThenDeclaration) | Properties with [`[TomlPropertyOrder]`](xref:Tomlyn.Serialization.TomlPropertyOrderAttribute) first, then declaration order. |
 | [`OrderThenAlphabetical`](xref:Tomlyn.TomlMappingOrderPolicy.OrderThenAlphabetical) | Properties with [`[TomlPropertyOrder]`](xref:Tomlyn.Serialization.TomlPropertyOrderAttribute) first, then alphabetical. |
 
+Use [`TomlMappingOrderAttribute`](xref:Tomlyn.Serialization.TomlMappingOrderAttribute) when one type needs a different order from the global option.
+
 ### String style preferences
 
 [`TomlStringStylePreferences`](xref:Tomlyn.TomlStringStylePreferences) controls how strings are emitted:
@@ -228,13 +296,15 @@ var options = new TomlSerializerOptions
     StringStylePreferences = new TomlStringStylePreferences
     {
         DefaultStyle = TomlStringStyle.Basic,           // default
-        PreferLiteralWhenNoEscapes = true,              // default
+        PreferLiteralWhenNoEscapes = false,             // default
         AllowHexEscapes = true,                         // default
     }
 };
 ```
 
 The four string styles are: [`Basic`](xref:Tomlyn.TomlStringStyle.Basic) (`"..."`), [`Literal`](xref:Tomlyn.TomlStringStyle.Literal) (`'...'`), [`MultilineBasic`](xref:Tomlyn.TomlStringStyle.MultilineBasic) (`"""..."""`), and [`MultilineLiteral`](xref:Tomlyn.TomlStringStyle.MultilineLiteral) (`'''...'''`).
+
+Use [`TomlStringStyleAttribute`](xref:Tomlyn.Serialization.TomlStringStyleAttribute) for member-specific string formatting. The attribute is valid only on `string` members.
 
 ## Supported types
 
@@ -287,6 +357,9 @@ so you can reuse models across JSON and TOML. When both are present, the TOML-sp
 | [`TomlRequiredAttribute`](xref:Tomlyn.Serialization.TomlRequiredAttribute) | [`JsonRequiredAttribute`](xref:System.Text.Json.Serialization.JsonRequiredAttribute) | Member must be present in the TOML input; missing values throw [`TomlException`](xref:Tomlyn.TomlException). |
 |  | [`JsonObjectCreationHandlingAttribute`](xref:System.Text.Json.Serialization.JsonObjectCreationHandlingAttribute) | Overrides replace/populate behavior for a specific member during deserialization. |
 | [`TomlSingleOrArrayAttribute`](xref:Tomlyn.Serialization.TomlSingleOrArrayAttribute) |  | Allows a collection member to accept either a single TOML value or a TOML array during deserialization. |
+| [`TomlTableArrayStyleAttribute`](xref:Tomlyn.Serialization.TomlTableArrayStyleAttribute) |  | Overrides array-of-tables formatting for a collection member. |
+| [`TomlInlineTableAttribute`](xref:Tomlyn.Serialization.TomlInlineTableAttribute) |  | Overrides inline-table formatting for a member value. |
+| [`TomlStringStyleAttribute`](xref:Tomlyn.Serialization.TomlStringStyleAttribute) |  | Overrides string formatting for a string member. |
 | [`TomlExtensionDataAttribute`](xref:Tomlyn.Serialization.TomlExtensionDataAttribute) | [`JsonExtensionDataAttribute`](xref:System.Text.Json.Serialization.JsonExtensionDataAttribute) | Captures unmapped keys into a dictionary. |
 | [`TomlConverterAttribute`](xref:Tomlyn.Serialization.TomlConverterAttribute) | [`JsonConverterAttribute`](xref:System.Text.Json.Serialization.JsonConverterAttribute) | Selects a custom converter for a type or member (reflection only). |
 
@@ -296,6 +369,8 @@ so you can reuse models across JSON and TOML. When both are present, the TOML-sp
 | --- | --- | --- |
 | [`TomlConstructorAttribute`](xref:Tomlyn.Serialization.TomlConstructorAttribute) | [`JsonConstructorAttribute`](xref:System.Text.Json.Serialization.JsonConstructorAttribute) | Selects which constructor to use for deserialization. |
 |  | [`JsonObjectCreationHandlingAttribute`](xref:System.Text.Json.Serialization.JsonObjectCreationHandlingAttribute) | Sets the default replace/populate behavior inherited by members of the type. |
+| [`TomlMappingOrderAttribute`](xref:Tomlyn.Serialization.TomlMappingOrderAttribute) |  | Overrides member ordering for the type. |
+| [`TomlDottedKeyHandlingAttribute`](xref:Tomlyn.Serialization.TomlDottedKeyHandlingAttribute) |  | Overrides dotted-key handling for member names declared on the type. |
 | [`TomlPolymorphicAttribute`](xref:Tomlyn.Serialization.TomlPolymorphicAttribute) | [`JsonPolymorphicAttribute`](xref:System.Text.Json.Serialization.JsonPolymorphicAttribute) | Enables discriminator-based polymorphism on a base type. |
 | [`TomlDerivedTypeAttribute`](xref:Tomlyn.Serialization.TomlDerivedTypeAttribute) | [`JsonDerivedTypeAttribute`](xref:System.Text.Json.Serialization.JsonDerivedTypeAttribute) | Registers a derived type and its discriminator value. |
 

@@ -95,6 +95,14 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
+    private static readonly DiagnosticDescriptor InvalidAttributeUsage = new(
+        id: "TOMLYN011",
+        title: "Invalid TOML attribute usage",
+        messageFormat: "Type '{0}' member '{1}' has invalid TOML attribute usage: {2}",
+        category: "Tomlyn.SourceGeneration",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     private const string TomlSerializerContextMetadataName = "Tomlyn.Serialization.TomlSerializerContext";
     private const string TomlSerializableAttributeMetadataName = "Tomlyn.Serialization.TomlSerializableAttribute";
     private const string TomlDerivedTypeMappingAttributeMetadataName = "Tomlyn.Serialization.TomlDerivedTypeMappingAttribute";
@@ -706,6 +714,8 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.AppendLine("            _context = context;");
         builder.AppendLine("        }");
         builder.AppendLine();
+        builder.AppendLine("        public override bool WritesTable => true;");
+        builder.AppendLine();
 
         EmitNonPublicGetterAccessors(builder, poco);
 
@@ -767,11 +777,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 var member = poco.Members[i];
                 var memberTypeName = member.Type.ToDisplayString(FullyQualifiedNullableFormat);
                 var canBeNull = CanBeNull(member.Type);
-                EmitWriteMember(builder, member, i, memberTypeName, canBeNull, usedKeysVariable, options);
+                EmitWriteMember(builder, member, i, memberTypeName, canBeNull, usedKeysVariable, options, poco.DottedKeyHandling);
             }
         }
 
-        var mappingOrder = GetEffectiveMappingOrder(model.Options);
+        var mappingOrder = poco.MappingOrder ?? GetEffectiveMappingOrder(model.Options);
         var selectedOrder = mappingOrder switch
         {
             1 => alphabeticalOrder,
@@ -2658,15 +2668,35 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.AppendLine("                    reader.Skip();");
     }
 
-    private static void EmitWriteMember(StringBuilder builder, PocoMember member, int index, string memberTypeName, bool canBeNull, string? usedKeysVariable, SourceGenOptions options)
+    private static void EmitWriteMember(StringBuilder builder, PocoMember member, int index, string memberTypeName, bool canBeNull, string? usedKeysVariable, SourceGenOptions options, int? dottedKeyHandling)
     {
         var localName = "__member" + index.ToString(CultureInfo.InvariantCulture);
         var writeArgument = canBeNull ? localName + "!" : localName;
         var writeIndent = "                ";
         var openIndent = "            ";
+        var serializedName = EscapeStringLiteral(member.SerializedName);
         var defaultLiteral = GetDefaultLiteral(member.Type);
         var defaultIsNull = member.Type.IsReferenceType || TryGetNullableUnderlyingType(member.Type, out _);
         var writeIgnore = GetEffectiveWriteIgnore(member, options);
+
+        void EmitPropertyName(string indent)
+        {
+            if (member.HasFormattingMetadata)
+            {
+                builder.Append(indent).Append("ApplyPropertyMetadata(writer, \"").Append(serializedName).Append("\", ");
+                EmitPropertyMetadataInitializer(builder, member);
+                builder.AppendLine(");");
+            }
+
+            if (dottedKeyHandling is not null && TryGetTomlDottedKeyHandlingExpression(dottedKeyHandling.Value, out var dottedKeyHandlingExpression))
+            {
+                builder.Append(indent).Append("WritePropertyName(writer, \"").Append(serializedName).Append("\", ").Append(dottedKeyHandlingExpression).AppendLine(");");
+            }
+            else
+            {
+                builder.Append(indent).Append("writer.WritePropertyName(\"").Append(serializedName).AppendLine("\");");
+            }
+        }
 
         if (writeIgnore == WriteIgnoreKind.WhenWriting)
         {
@@ -2679,20 +2709,20 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             {
                 builder.Append(openIndent).Append("if (").Append(localName).AppendLine(" is not null)");
                 builder.Append(openIndent).AppendLine("{");
-                builder.Append(writeIndent).Append("writer.WritePropertyName(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
+                EmitPropertyName(writeIndent);
                 if (usedKeysVariable is not null)
                 {
-                    builder.Append(writeIndent).Append(usedKeysVariable).Append("?.Add(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
+                    builder.Append(writeIndent).Append(usedKeysVariable).Append("?.Add(\"").Append(serializedName).AppendLine("\");");
                 }
                 builder.Append(writeIndent).Append("_context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".Write(writer, ").Append(localName).AppendLine(");");
                 builder.Append(openIndent).AppendLine("}");
                 return;
             }
 
-            builder.Append(openIndent).Append("writer.WritePropertyName(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
+            EmitPropertyName(openIndent);
             if (usedKeysVariable is not null)
             {
-                builder.Append(openIndent).Append(usedKeysVariable).Append("?.Add(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
+                builder.Append(openIndent).Append(usedKeysVariable).Append("?.Add(\"").Append(serializedName).AppendLine("\");");
             }
             builder.Append(openIndent).Append("_context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".Write(writer, ").Append(localName).AppendLine(");");
             return;
@@ -2716,20 +2746,20 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             }
 
             builder.Append(openIndent).AppendLine("{");
-            builder.Append(writeIndent).Append("writer.WritePropertyName(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
+            EmitPropertyName(writeIndent);
             if (usedKeysVariable is not null)
             {
-                builder.Append(writeIndent).Append(usedKeysVariable).Append("?.Add(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
+                builder.Append(writeIndent).Append(usedKeysVariable).Append("?.Add(\"").Append(serializedName).AppendLine("\");");
             }
             builder.Append(writeIndent).Append("_context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".Write(writer, ").Append(writeArgument).AppendLine(");");
             builder.Append(openIndent).AppendLine("}");
             return;
         }
 
-        builder.Append(openIndent).Append("writer.WritePropertyName(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
+        EmitPropertyName(openIndent);
         if (usedKeysVariable is not null)
         {
-            builder.Append(openIndent).Append(usedKeysVariable).Append("?.Add(\"").Append(EscapeStringLiteral(member.SerializedName)).AppendLine("\");");
+            builder.Append(openIndent).Append(usedKeysVariable).Append("?.Add(\"").Append(serializedName).AppendLine("\");");
         }
 
         builder.Append(openIndent).Append("_context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".Write(writer, ").Append(writeArgument).AppendLine(");");
@@ -2743,6 +2773,54 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         return TryGetNullableUnderlyingType(type, out _);
+    }
+
+    private static void EmitPropertyMetadataInitializer(StringBuilder builder, PocoMember member)
+    {
+        builder.Append("new global::Tomlyn.Model.TomlPropertyMetadata { ");
+        var hasPrevious = false;
+
+        void AppendSeparator()
+        {
+            if (hasPrevious)
+            {
+                builder.Append(", ");
+            }
+
+            hasPrevious = true;
+        }
+
+        if (member.TableArrayStyle is not null && TryGetTomlTableArrayStyleExpression(member.TableArrayStyle.Value, out var tableArrayStyleExpression))
+        {
+            AppendSeparator();
+            builder.Append("TableArrayStyle = ").Append(tableArrayStyleExpression);
+        }
+
+        if (member.InlineTablePolicy is not null && TryGetTomlInlineTablePolicyExpression(member.InlineTablePolicy.Value, out var inlineTablePolicyExpression))
+        {
+            AppendSeparator();
+            builder.Append("InlineTablePolicy = ").Append(inlineTablePolicyExpression);
+        }
+
+        if (member.StringStyle is not null && TryGetTomlStringStyleExpression(member.StringStyle.Value, out var stringStyleExpression))
+        {
+            AppendSeparator();
+            builder.Append("StringStyle = ").Append(stringStyleExpression);
+        }
+
+        if (member.PreferLiteralWhenNoEscapes is not null)
+        {
+            AppendSeparator();
+            builder.Append("PreferLiteralWhenNoEscapes = ").Append(member.PreferLiteralWhenNoEscapes.Value ? "true" : "false");
+        }
+
+        if (member.AllowHexEscapes is not null)
+        {
+            AppendSeparator();
+            builder.Append("AllowHexEscapes = ").Append(member.AllowHexEscapes.Value ? "true" : "false");
+        }
+
+        builder.Append(" }");
     }
 
     private static string GetDefaultLiteral(ITypeSymbol type)
@@ -3040,7 +3118,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private sealed class PocoMember
     {
-        public PocoMember(string memberName, string serializedName, ITypeSymbol type, ITypeSymbol declaringType, int order, WriteIgnoreKind writeIgnore, bool isIgnoredOnRead, ObjectCreationHandlingKind objectCreationHandling, bool hasExplicitObjectCreationHandling, bool hasSingleOrArray, bool isRequired, bool isCompilerRequired, bool canSet, bool isInitOnly, bool isField, string? getterAccessorName)
+        public PocoMember(string memberName, string serializedName, ITypeSymbol type, ITypeSymbol declaringType, int order, WriteIgnoreKind writeIgnore, bool isIgnoredOnRead, ObjectCreationHandlingKind objectCreationHandling, bool hasExplicitObjectCreationHandling, bool hasSingleOrArray, bool isRequired, bool isCompilerRequired, bool canSet, bool isInitOnly, bool isField, string? getterAccessorName, int? tableArrayStyle, int? inlineTablePolicy, int? stringStyle, bool? preferLiteralWhenNoEscapes, bool? allowHexEscapes)
         {
             MemberName = memberName;
             SerializedName = serializedName;
@@ -3058,6 +3136,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             IsInitOnly = isInitOnly;
             IsField = isField;
             GetterAccessorName = getterAccessorName;
+            TableArrayStyle = tableArrayStyle;
+            InlineTablePolicy = inlineTablePolicy;
+            StringStyle = stringStyle;
+            PreferLiteralWhenNoEscapes = preferLiteralWhenNoEscapes;
+            AllowHexEscapes = allowHexEscapes;
         }
 
         public string MemberName { get; }
@@ -3076,6 +3159,12 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         public bool IsInitOnly { get; }
         public bool IsField { get; }
         public string? GetterAccessorName { get; }
+        public int? TableArrayStyle { get; }
+        public int? InlineTablePolicy { get; }
+        public int? StringStyle { get; }
+        public bool? PreferLiteralWhenNoEscapes { get; }
+        public bool? AllowHexEscapes { get; }
+        public bool HasFormattingMetadata => TableArrayStyle is not null || InlineTablePolicy is not null || StringStyle is not null || PreferLiteralWhenNoEscapes is not null || AllowHexEscapes is not null;
     }
 
     private sealed class PocoExtensionData
@@ -3145,18 +3234,22 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private sealed class PocoShape
     {
-        public PocoShape(ImmutableArray<PocoMember> members, PocoExtensionData? extensionData, PocoConstructor? constructor, bool requiresGeneratedObjectInitializer)
+        public PocoShape(ImmutableArray<PocoMember> members, PocoExtensionData? extensionData, PocoConstructor? constructor, bool requiresGeneratedObjectInitializer, int? mappingOrder, int? dottedKeyHandling)
         {
             Members = members;
             ExtensionData = extensionData;
             Constructor = constructor;
             RequiresGeneratedObjectInitializer = requiresGeneratedObjectInitializer;
+            MappingOrder = mappingOrder;
+            DottedKeyHandling = dottedKeyHandling;
         }
 
         public ImmutableArray<PocoMember> Members { get; }
         public PocoExtensionData? ExtensionData { get; }
         public PocoConstructor? Constructor { get; }
         public bool RequiresGeneratedObjectInitializer { get; }
+        public int? MappingOrder { get; }
+        public int? DottedKeyHandling { get; }
     }
 
     private static bool RequiresGeneratedObjectInitializer(
@@ -3347,6 +3440,8 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         var namingPolicy = model.Options.PropertyNamingPolicyExpression;
         var typeObjectCreationHandling = GetObjectCreationHandling(named);
+        var typeMappingOrder = GetTypeLevelMappingOrder(named);
+        var typeDottedKeyHandling = GetTypeLevelDottedKeyHandling(named);
 
         var members = ImmutableArray.CreateBuilder<PocoMember>();
         PocoExtensionData? extensionData = null;
@@ -3432,7 +3527,19 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             var serializedName = GetSerializedName(member, member.Name, namingPolicy);
             var order = GetOrder(member);
             var required = IsRequired(member) && !ignore.IgnoreOnRead;
-            members.Add(new PocoMember(member.Name, serializedName, member.Type, member.ContainingType, order, ignore.WriteIgnore, ignore.IgnoreOnRead, objectCreationHandling, hasExplicitObjectCreationHandling, hasSingleOrArray, required, isCompilerRequired, canSet, isInitOnly, isField: false, getterAccessorName));
+            var formatting = GetFormattingMetadata(member);
+            if (formatting.StringStyle is not null && member.Type.SpecialType != SpecialType.System_String)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InvalidAttributeUsage,
+                    member.Locations.FirstOrDefault(),
+                    type.ToDisplayString(),
+                    member.Name,
+                    "[TomlStringStyle] can only be applied to string members."));
+                continue;
+            }
+
+            members.Add(new PocoMember(member.Name, serializedName, member.Type, member.ContainingType, order, ignore.WriteIgnore, ignore.IgnoreOnRead, objectCreationHandling, hasExplicitObjectCreationHandling, hasSingleOrArray, required, isCompilerRequired, canSet, isInitOnly, isField: false, getterAccessorName, formatting.TableArrayStyle, formatting.InlineTablePolicy, formatting.StringStyle, formatting.PreferLiteralWhenNoEscapes, formatting.AllowHexEscapes));
         }
 
         foreach (var member in EnumerateSerializableInstanceFields(named))
@@ -3508,7 +3615,19 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             var required = IsRequired(member) && !ignore.IgnoreOnRead;
             var getterAccessorName = IsAccessibleFromGeneratedContext(member.DeclaredAccessibility) ? null : "__Get" + members.Count.ToString(CultureInfo.InvariantCulture);
             var canSet = IsAccessibleFromGeneratedContext(member.DeclaredAccessibility);
-            members.Add(new PocoMember(member.Name, serializedName, member.Type, member.ContainingType, order, ignore.WriteIgnore, ignore.IgnoreOnRead, objectCreationHandling, hasExplicitObjectCreationHandling, hasSingleOrArray, required, member.IsRequired, canSet, isInitOnly: false, isField: true, getterAccessorName));
+            var formatting = GetFormattingMetadata(member);
+            if (formatting.StringStyle is not null && member.Type.SpecialType != SpecialType.System_String)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InvalidAttributeUsage,
+                    member.Locations.FirstOrDefault(),
+                    type.ToDisplayString(),
+                    member.Name,
+                    "[TomlStringStyle] can only be applied to string members."));
+                continue;
+            }
+
+            members.Add(new PocoMember(member.Name, serializedName, member.Type, member.ContainingType, order, ignore.WriteIgnore, ignore.IgnoreOnRead, objectCreationHandling, hasExplicitObjectCreationHandling, hasSingleOrArray, required, member.IsRequired, canSet, isInitOnly: false, isField: true, getterAccessorName, formatting.TableArrayStyle, formatting.InlineTablePolicy, formatting.StringStyle, formatting.PreferLiteralWhenNoEscapes, formatting.AllowHexEscapes));
         }
 
         PocoConstructor? constructorModel = null;
@@ -3563,7 +3682,9 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     membersSoFar,
                     extensionData,
                     constructorModel,
-                    RequiresGeneratedObjectInitializer(membersSoFar, extensionData, constructorModel, parameterlessConstructorSetsRequiredMembers));
+                    RequiresGeneratedObjectInitializer(membersSoFar, extensionData, constructorModel, parameterlessConstructorSetsRequiredMembers),
+                    typeMappingOrder,
+                    typeDottedKeyHandling);
                 return true;
             }
 
@@ -3575,7 +3696,9 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             finalMembers,
             extensionData,
             constructorModel,
-            RequiresGeneratedObjectInitializer(finalMembers, extensionData, constructorModel, parameterlessConstructorSetsRequiredMembers));
+            RequiresGeneratedObjectInitializer(finalMembers, extensionData, constructorModel, parameterlessConstructorSetsRequiredMembers),
+            typeMappingOrder,
+            typeDottedKeyHandling);
         return true;
     }
 
@@ -4570,6 +4693,77 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         return 0;
     }
 
+    private static (int? TableArrayStyle, int? InlineTablePolicy, int? StringStyle, bool? PreferLiteralWhenNoEscapes, bool? AllowHexEscapes) GetFormattingMetadata(ISymbol member)
+    {
+        int? tableArrayStyle = null;
+        int? inlineTablePolicy = null;
+        int? stringStyle = null;
+        bool? preferLiteralWhenNoEscapes = null;
+        bool? allowHexEscapes = null;
+
+        if (TryGetAttribute(member, "Tomlyn.Serialization.TomlTableArrayStyleAttribute", out var tableArrayStyleAttr) &&
+            tableArrayStyleAttr.ConstructorArguments.Length == 1 &&
+            tableArrayStyleAttr.ConstructorArguments[0].Value is int tableArrayStyleValue)
+        {
+            tableArrayStyle = tableArrayStyleValue;
+        }
+
+        if (TryGetAttribute(member, "Tomlyn.Serialization.TomlInlineTableAttribute", out var inlineTableAttr) &&
+            inlineTableAttr.ConstructorArguments.Length == 1 &&
+            inlineTableAttr.ConstructorArguments[0].Value is int inlineTablePolicyValue)
+        {
+            inlineTablePolicy = inlineTablePolicyValue;
+        }
+
+        if (TryGetAttribute(member, "Tomlyn.Serialization.TomlStringStyleAttribute", out var stringStyleAttr) &&
+            stringStyleAttr.ConstructorArguments.Length == 1 &&
+            stringStyleAttr.ConstructorArguments[0].Value is int stringStyleValue)
+        {
+            stringStyle = stringStyleValue;
+
+            foreach (var namedArgument in stringStyleAttr.NamedArguments)
+            {
+                if (namedArgument.Value.Value is not int preference)
+                {
+                    continue;
+                }
+
+                var boolValue = preference switch
+                {
+                    1 => true,
+                    2 => false,
+                    _ => (bool?)null,
+                };
+
+                switch (namedArgument.Key)
+                {
+                    case "PreferLiteralWhenNoEscapes":
+                        preferLiteralWhenNoEscapes = boolValue;
+                        break;
+                    case "AllowHexEscapes":
+                        allowHexEscapes = boolValue;
+                        break;
+                }
+            }
+        }
+
+        return (tableArrayStyle, inlineTablePolicy, stringStyle, preferLiteralWhenNoEscapes, allowHexEscapes);
+    }
+
+    private static int? GetTypeLevelMappingOrder(ITypeSymbol type)
+        => TryGetAttribute(type, "Tomlyn.Serialization.TomlMappingOrderAttribute", out var attr) &&
+           attr.ConstructorArguments.Length == 1 &&
+           attr.ConstructorArguments[0].Value is int value
+            ? value
+            : null;
+
+    private static int? GetTypeLevelDottedKeyHandling(ITypeSymbol type)
+        => TryGetAttribute(type, "Tomlyn.Serialization.TomlDottedKeyHandlingAttribute", out var attr) &&
+           attr.ConstructorArguments.Length == 1 &&
+           attr.ConstructorArguments[0].Value is int value
+            ? value
+            : null;
+
     private static bool TryConvertKnownName(string name, string namingPolicyExpression, out string converted)
     {
         JsonNamingPolicy? policy = namingPolicyExpression switch
@@ -5265,6 +5459,20 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         {
             0 => "global::Tomlyn.TomlTableArrayStyle.Headers",
             1 => "global::Tomlyn.TomlTableArrayStyle.InlineArrayOfTables",
+            _ => null!,
+        };
+
+        return expression is not null;
+    }
+
+    private static bool TryGetTomlStringStyleExpression(int value, out string expression)
+    {
+        expression = value switch
+        {
+            0 => "global::Tomlyn.TomlStringStyle.Basic",
+            1 => "global::Tomlyn.TomlStringStyle.Literal",
+            2 => "global::Tomlyn.TomlStringStyle.MultilineBasic",
+            3 => "global::Tomlyn.TomlStringStyle.MultilineLiteral",
             _ => null!,
         };
 

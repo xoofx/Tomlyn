@@ -38,6 +38,11 @@ public abstract class TomlTypeInfo
     public TomlSerializerOptions Options { get; }
 
     /// <summary>
+    /// Gets a value indicating whether this metadata writes values as TOML tables.
+    /// </summary>
+    public virtual bool WritesTable => false;
+
+    /// <summary>
     /// Writes a value to an existing TOML writer.
     /// </summary>
     public abstract void Write(TomlWriter writer, object? value);

@@ -32,11 +32,13 @@ internal static class TomlReflectionTypeInfoResolver
             return null;
         }
 
-        var members = CollectMembers(type, options);
+        var mappingOrder = type.GetCustomAttribute<TomlMappingOrderAttribute>(inherit: true)?.Policy ?? options.MappingOrder;
+        var dottedKeyHandling = type.GetCustomAttribute<TomlDottedKeyHandlingAttribute>(inherit: true)?.Handling;
+        var members = CollectMembers(type, options, mappingOrder);
 
         var constructor = SelectConstructor(type);
 
-        return new ReflectionObjectTomlTypeInfo(type, options, members, constructor);
+        return new ReflectionObjectTomlTypeInfo(type, options, members, constructor, dottedKeyHandling);
     }
 
     private static ConstructorInfo? SelectConstructor(Type type)
@@ -127,7 +129,7 @@ internal static class TomlReflectionTypeInfoResolver
 #endif
     }
 
-    private static List<MemberModel> CollectMembers(Type type, TomlSerializerOptions options)
+    private static List<MemberModel> CollectMembers(Type type, TomlSerializerOptions options, TomlMappingOrderPolicy mappingOrder)
     {
         var properties = type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         var members = new List<MemberModel>(properties.Length);
@@ -183,6 +185,7 @@ internal static class TomlReflectionTypeInfoResolver
                 HasSingleOrArrayAttribute(property),
                 IsRequired(property),
                 IsExtensionData(property),
+                CreateFormattingMetadata(property, property.PropertyType),
                 TryCreateMemberConverter(property, property.PropertyType, options)));
         }
 
@@ -227,10 +230,11 @@ internal static class TomlReflectionTypeInfoResolver
                 HasSingleOrArrayAttribute(field),
                 IsRequired(field),
                 IsExtensionData(field),
+                CreateFormattingMetadata(field, field.FieldType),
                 TryCreateMemberConverter(field, field.FieldType, options)));
         }
 
-        return OrderMembers(members, options);
+        return OrderMembers(members, mappingOrder);
     }
 
     private static bool HasIncludeAttribute(MemberInfo member)
@@ -277,6 +281,49 @@ internal static class TomlReflectionTypeInfoResolver
 
         return false;
     }
+
+    private static TomlPropertyMetadata? CreateFormattingMetadata(MemberInfo member, Type memberType)
+    {
+        TomlPropertyMetadata? metadata = null;
+
+        var tableArrayStyle = member.GetCustomAttribute<TomlTableArrayStyleAttribute>(inherit: true);
+        if (tableArrayStyle is not null)
+        {
+            metadata ??= new TomlPropertyMetadata();
+            metadata.TableArrayStyle = tableArrayStyle.Style;
+        }
+
+        var inlineTable = member.GetCustomAttribute<TomlInlineTableAttribute>(inherit: true);
+        if (inlineTable is not null)
+        {
+            metadata ??= new TomlPropertyMetadata();
+            metadata.InlineTablePolicy = inlineTable.Policy;
+        }
+
+        var stringStyle = member.GetCustomAttribute<TomlStringStyleAttribute>(inherit: true);
+        if (stringStyle is not null)
+        {
+            if (memberType != typeof(string))
+            {
+                throw new TomlException($"[TomlStringStyle] can only be applied to string members. Member '{member.Name}' is of type '{memberType.FullName}'.");
+            }
+
+            metadata ??= new TomlPropertyMetadata();
+            metadata.StringStyle = stringStyle.Style;
+            metadata.PreferLiteralWhenNoEscapes = ToNullableBool(stringStyle.PreferLiteralWhenNoEscapes);
+            metadata.AllowHexEscapes = ToNullableBool(stringStyle.AllowHexEscapes);
+        }
+
+        return metadata;
+    }
+
+    private static bool? ToNullableBool(TomlBooleanPreference preference)
+        => preference switch
+        {
+            TomlBooleanPreference.True => true,
+            TomlBooleanPreference.False => false,
+            _ => null,
+        };
 
     private static TomlConverter? TryCreateMemberConverter(MemberInfo member, Type memberType, TomlSerializerOptions options)
     {
@@ -520,7 +567,7 @@ internal static class TomlReflectionTypeInfoResolver
         return 0;
     }
 
-    private static List<MemberModel> OrderMembers(List<MemberModel> members, TomlSerializerOptions options)
+    private static List<MemberModel> OrderMembers(List<MemberModel> members, TomlMappingOrderPolicy mappingOrder)
     {
         // Best-effort declaration order using MetadataToken.
         static int DeclarationOrder(MemberModel m)
@@ -537,7 +584,7 @@ internal static class TomlReflectionTypeInfoResolver
 
         var comparer = StringComparer.Ordinal;
 
-        return options.MappingOrder switch
+        return mappingOrder switch
         {
             TomlMappingOrderPolicy.Declaration => members.OrderBy(DeclarationOrder).ToList(),
             TomlMappingOrderPolicy.Alphabetical => members.OrderBy(m => m.SerializedName, comparer).ToList(),
@@ -562,6 +609,7 @@ internal static class TomlReflectionTypeInfoResolver
         bool HasSingleOrArray,
         bool IsRequired,
         bool IsExtensionData,
+        TomlPropertyMetadata? FormattingMetadata,
         TomlConverter? Converter);
 
     private static bool ShouldIgnoreValue(object? memberValue, TomlIgnoreCondition ignoreCondition, object? defaultValue)
@@ -592,12 +640,14 @@ internal static class TomlReflectionTypeInfoResolver
         private readonly bool _invokeOnSerialized;
         private readonly bool _invokeOnDeserializing;
         private readonly bool _invokeOnDeserialized;
+        private readonly TomlDottedKeyHandling? _dottedKeyHandling;
 
-        public ReflectionObjectTomlTypeInfo(Type type, TomlSerializerOptions options, List<MemberModel> members, ConstructorInfo? constructor)
+        public ReflectionObjectTomlTypeInfo(Type type, TomlSerializerOptions options, List<MemberModel> members, ConstructorInfo? constructor, TomlDottedKeyHandling? dottedKeyHandling)
             : base(type, options)
         {
             _members = members ?? throw new ArgumentNullException(nameof(members));
             _constructor = constructor;
+            _dottedKeyHandling = dottedKeyHandling;
             _nameComparer = options.PropertyNameCaseInsensitive ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
             _invokeOnSerializing = typeof(ITomlOnSerializing).IsAssignableFrom(type);
             _invokeOnSerialized = typeof(ITomlOnSerialized).IsAssignableFrom(type);
@@ -701,6 +751,8 @@ internal static class TomlReflectionTypeInfoResolver
             }
         }
 
+        public override bool WritesTable => true;
+
         public override void Write(TomlWriter writer, object? value)
         {
             ArgumentGuard.ThrowIfNull(writer, nameof(writer));
@@ -739,7 +791,12 @@ internal static class TomlReflectionTypeInfoResolver
                     continue;
                 }
 
-                writer.WritePropertyName(member.SerializedName);
+                if (member.FormattingMetadata is not null)
+                {
+                    writer.ApplyPropertyMetadata(member.SerializedName, member.FormattingMetadata);
+                }
+
+                writer.WritePropertyName(member.SerializedName, _dottedKeyHandling);
                 usedKeys?.Add(member.SerializedName);
                 if (member.Converter is { } converter)
                 {

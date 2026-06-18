@@ -66,7 +66,7 @@ internal static class TomlBuiltInTypeInfoResolver
         if (type == typeof(Version)) return new BuiltInTomlTypeInfo<Version>(options, TomlVersionConverter.Instance);
 
         if (type == typeof(TomlObject)) return new BuiltInTomlTypeInfo<TomlObject>(options, TomlTomlObjectConverter.Instance);
-        if (type == typeof(TomlTable)) return new BuiltInTomlTypeInfo<TomlTable>(options, TomlTomlTableConverter.Instance);
+        if (type == typeof(TomlTable)) return new BuiltInTomlTypeInfo<TomlTable>(options, TomlTomlTableConverter.Instance, writesTable: true);
         if (type == typeof(TomlArray)) return new BuiltInTomlTypeInfo<TomlArray>(options, TomlTomlArrayConverter.Instance);
         if (type == typeof(TomlTableArray)) return new BuiltInTomlTypeInfo<TomlTableArray>(options, TomlTomlTableArrayConverter.Instance);
 
@@ -204,12 +204,16 @@ internal static class TomlBuiltInTypeInfoResolver
     private sealed class BuiltInTomlTypeInfo<T> : TomlTypeInfo<T>
     {
         private readonly TomlConverter<T> _converter;
+        private readonly bool _writesTable;
 
-        public BuiltInTomlTypeInfo(TomlSerializerOptions options, TomlConverter<T> converter)
+        public BuiltInTomlTypeInfo(TomlSerializerOptions options, TomlConverter<T> converter, bool writesTable = false)
             : base(options)
         {
             _converter = converter ?? throw new ArgumentNullException(nameof(converter));
+            _writesTable = writesTable;
         }
+
+        public override bool WritesTable => _writesTable;
 
         public override void Write(TomlWriter writer, T value)
         {

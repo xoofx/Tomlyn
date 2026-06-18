@@ -5,6 +5,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using Tomlyn;
 using Tomlyn.Syntax;
 
 namespace Tomlyn.Model;
@@ -78,6 +79,31 @@ public class TomlPropertyMetadata
     public TomlPropertyDisplayKind DisplayKind { get; set; }
 
     /// <summary>
+    /// Gets or sets the preferred array-of-tables style for this property.
+    /// </summary>
+    public TomlTableArrayStyle? TableArrayStyle { get; set; }
+
+    /// <summary>
+    /// Gets or sets the preferred inline table policy for this property.
+    /// </summary>
+    public TomlInlineTablePolicy? InlineTablePolicy { get; set; }
+
+    /// <summary>
+    /// Gets or sets the preferred string style for this property.
+    /// </summary>
+    public TomlStringStyle? StringStyle { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether literal strings should be preferred when no escaping is required.
+    /// </summary>
+    public bool? PreferLiteralWhenNoEscapes { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether hexadecimal escapes may be emitted for control characters.
+    /// </summary>
+    public bool? AllowHexEscapes { get; set; }
+
+    /// <summary>
     /// Gets the trailing trivia attached to this node. Might be null if no trailing trivias.
     /// </summary>
     public List<TomlSyntaxTriviaMetadata>? TrailingTrivia { get; set; }
@@ -91,6 +117,20 @@ public class TomlPropertyMetadata
     /// Gets or sets the source span for the property.
     /// </summary>
     public SourceSpan Span {get; set;}
+
+    internal void MergeFormattingFrom(TomlPropertyMetadata metadata)
+    {
+        if (metadata.DisplayKind != TomlPropertyDisplayKind.Default)
+        {
+            DisplayKind = metadata.DisplayKind;
+        }
+
+        TableArrayStyle = metadata.TableArrayStyle ?? TableArrayStyle;
+        InlineTablePolicy = metadata.InlineTablePolicy ?? InlineTablePolicy;
+        StringStyle = metadata.StringStyle ?? StringStyle;
+        PreferLiteralWhenNoEscapes = metadata.PreferLiteralWhenNoEscapes ?? PreferLiteralWhenNoEscapes;
+        AllowHexEscapes = metadata.AllowHexEscapes ?? AllowHexEscapes;
+    }
 }
 
 /// <summary>

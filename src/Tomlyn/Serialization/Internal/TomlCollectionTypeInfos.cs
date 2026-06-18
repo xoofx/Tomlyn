@@ -27,13 +27,29 @@ internal sealed class TomlArrayTypeInfo<TElement> : TomlTypeInfo<TElement[]>
         ArgumentGuard.ThrowIfNull(writer, nameof(writer));
         ArgumentGuard.ThrowIfNull(value, nameof(value));
 
-        writer.WriteStartArray();
+        var writeTableArray = ShouldWriteTableArray(writer, value.Length);
+        if (writeTableArray)
+        {
+            writer.WriteStartTableArray();
+        }
+        else
+        {
+            writer.WriteStartArray();
+        }
+
         for (var i = 0; i < value.Length; i++)
         {
             WriteElement(writer, value[i]);
         }
 
-        writer.WriteEndArray();
+        if (writeTableArray)
+        {
+            writer.WriteEndTableArray();
+        }
+        else
+        {
+            writer.WriteEndArray();
+        }
     }
 
     public override TElement[]? Read(TomlReader reader)
@@ -72,6 +88,17 @@ internal sealed class TomlArrayTypeInfo<TElement> : TomlTypeInfo<TElement[]>
         var resolved = TomlTypeInfoResolverPipeline.Resolve(Options, typeof(TElement));
         _elementTypeInfo = resolved;
         _typedElementTypeInfo = resolved as TomlTypeInfo<TElement>;
+    }
+
+    private bool ShouldWriteTableArray(TomlWriter writer, int count)
+    {
+        if (count == 0 || !writer.CanWriteTableArrayValue)
+        {
+            return false;
+        }
+
+        EnsureElementTypeInfo();
+        return _elementTypeInfo!.WritesTable;
     }
 
     private void WriteElement(TomlWriter writer, TElement element)
@@ -122,13 +149,29 @@ internal sealed class TomlListTypeInfo<TElement> : TomlTypeInfo<List<TElement>>
         ArgumentGuard.ThrowIfNull(writer, nameof(writer));
         ArgumentGuard.ThrowIfNull(value, nameof(value));
 
-        writer.WriteStartArray();
+        var writeTableArray = ShouldWriteTableArray(writer, value.Count);
+        if (writeTableArray)
+        {
+            writer.WriteStartTableArray();
+        }
+        else
+        {
+            writer.WriteStartArray();
+        }
+
         for (var i = 0; i < value.Count; i++)
         {
             WriteElement(writer, value[i]);
         }
 
-        writer.WriteEndArray();
+        if (writeTableArray)
+        {
+            writer.WriteEndTableArray();
+        }
+        else
+        {
+            writer.WriteEndArray();
+        }
     }
 
     public override List<TElement>? Read(TomlReader reader)
@@ -185,6 +228,17 @@ internal sealed class TomlListTypeInfo<TElement> : TomlTypeInfo<List<TElement>>
         _typedElementTypeInfo = resolved as TomlTypeInfo<TElement>;
     }
 
+    private bool ShouldWriteTableArray(TomlWriter writer, int count)
+    {
+        if (count == 0 || !writer.CanWriteTableArrayValue)
+        {
+            return false;
+        }
+
+        EnsureElementTypeInfo();
+        return _elementTypeInfo!.WritesTable;
+    }
+
     private void WriteElement(TomlWriter writer, TElement element)
     {
         EnsureElementTypeInfo();
@@ -234,13 +288,31 @@ internal sealed class TomlListBackedEnumerableTypeInfo<TEnumerable, TElement> : 
         ArgumentGuard.ThrowIfNull(writer, nameof(writer));
         ArgumentGuard.ThrowIfNull(value, nameof(value));
 
-        writer.WriteStartArray();
-        foreach (var element in value)
+        var items = (IEnumerable<TElement>)value;
+        var count = GetCollectionCount(value, ref items);
+        var writeTableArray = ShouldWriteTableArray(writer, count);
+        if (writeTableArray)
+        {
+            writer.WriteStartTableArray();
+        }
+        else
+        {
+            writer.WriteStartArray();
+        }
+
+        foreach (var element in items)
         {
             WriteElement(writer, element);
         }
 
-        writer.WriteEndArray();
+        if (writeTableArray)
+        {
+            writer.WriteEndTableArray();
+        }
+        else
+        {
+            writer.WriteEndArray();
+        }
     }
 
     public override TEnumerable? Read(TomlReader reader)
@@ -297,6 +369,34 @@ internal sealed class TomlListBackedEnumerableTypeInfo<TEnumerable, TElement> : 
         _typedElementTypeInfo = resolved as TomlTypeInfo<TElement>;
     }
 
+    private bool ShouldWriteTableArray(TomlWriter writer, int count)
+    {
+        if (count == 0 || !writer.CanWriteTableArrayValue)
+        {
+            return false;
+        }
+
+        EnsureElementTypeInfo();
+        return _elementTypeInfo!.WritesTable;
+    }
+
+    private static int GetCollectionCount(TEnumerable value, ref IEnumerable<TElement> items)
+    {
+        if (value is ICollection<TElement> collection)
+        {
+            return collection.Count;
+        }
+
+        if (value is IReadOnlyCollection<TElement> readOnlyCollection)
+        {
+            return readOnlyCollection.Count;
+        }
+
+        var list = new List<TElement>(items);
+        items = list;
+        return list.Count;
+    }
+
     private void WriteElement(TomlWriter writer, TElement element)
     {
         EnsureElementTypeInfo();
@@ -345,12 +445,29 @@ internal sealed class TomlHashSetTypeInfo<TElement> : TomlTypeInfo<HashSet<TElem
         ArgumentGuard.ThrowIfNull(writer, nameof(writer));
         ArgumentGuard.ThrowIfNull(value, nameof(value));
 
-        writer.WriteStartArray();
+        var writeTableArray = ShouldWriteTableArray(writer, value.Count);
+        if (writeTableArray)
+        {
+            writer.WriteStartTableArray();
+        }
+        else
+        {
+            writer.WriteStartArray();
+        }
+
         foreach (var element in value)
         {
             WriteElement(writer, element);
         }
-        writer.WriteEndArray();
+
+        if (writeTableArray)
+        {
+            writer.WriteEndTableArray();
+        }
+        else
+        {
+            writer.WriteEndArray();
+        }
     }
 
     public override HashSet<TElement>? Read(TomlReader reader)
@@ -407,6 +524,17 @@ internal sealed class TomlHashSetTypeInfo<TElement> : TomlTypeInfo<HashSet<TElem
         _typedElementTypeInfo = resolved as TomlTypeInfo<TElement>;
     }
 
+    private bool ShouldWriteTableArray(TomlWriter writer, int count)
+    {
+        if (count == 0 || !writer.CanWriteTableArrayValue)
+        {
+            return false;
+        }
+
+        EnsureElementTypeInfo();
+        return _elementTypeInfo!.WritesTable;
+    }
+
     private void WriteElement(TomlWriter writer, TElement element)
     {
         EnsureElementTypeInfo();
@@ -456,12 +584,31 @@ internal sealed class TomlHashSetBackedEnumerableTypeInfo<TEnumerable, TElement>
         ArgumentGuard.ThrowIfNull(writer, nameof(writer));
         ArgumentGuard.ThrowIfNull(value, nameof(value));
 
-        writer.WriteStartArray();
-        foreach (var element in value)
+        var items = (IEnumerable<TElement>)value;
+        var count = GetCollectionCount(value, ref items);
+        var writeTableArray = ShouldWriteTableArray(writer, count);
+        if (writeTableArray)
+        {
+            writer.WriteStartTableArray();
+        }
+        else
+        {
+            writer.WriteStartArray();
+        }
+
+        foreach (var element in items)
         {
             WriteElement(writer, element);
         }
-        writer.WriteEndArray();
+
+        if (writeTableArray)
+        {
+            writer.WriteEndTableArray();
+        }
+        else
+        {
+            writer.WriteEndArray();
+        }
     }
 
     public override TEnumerable? Read(TomlReader reader)
@@ -518,6 +665,34 @@ internal sealed class TomlHashSetBackedEnumerableTypeInfo<TEnumerable, TElement>
         _typedElementTypeInfo = resolved as TomlTypeInfo<TElement>;
     }
 
+    private bool ShouldWriteTableArray(TomlWriter writer, int count)
+    {
+        if (count == 0 || !writer.CanWriteTableArrayValue)
+        {
+            return false;
+        }
+
+        EnsureElementTypeInfo();
+        return _elementTypeInfo!.WritesTable;
+    }
+
+    private static int GetCollectionCount(TEnumerable value, ref IEnumerable<TElement> items)
+    {
+        if (value is ICollection<TElement> collection)
+        {
+            return collection.Count;
+        }
+
+        if (value is IReadOnlyCollection<TElement> readOnlyCollection)
+        {
+            return readOnlyCollection.Count;
+        }
+
+        var list = new List<TElement>(items);
+        items = list;
+        return list.Count;
+    }
+
     private void WriteElement(TomlWriter writer, TElement element)
     {
         EnsureElementTypeInfo();
@@ -570,12 +745,29 @@ internal sealed class TomlImmutableArrayTypeInfo<TElement> : TomlTypeInfo<Immuta
             value = ImmutableArray<TElement>.Empty;
         }
 
-        writer.WriteStartArray();
+        var writeTableArray = ShouldWriteTableArray(writer, value.Length);
+        if (writeTableArray)
+        {
+            writer.WriteStartTableArray();
+        }
+        else
+        {
+            writer.WriteStartArray();
+        }
+
         for (var i = 0; i < value.Length; i++)
         {
             WriteElement(writer, value[i]);
         }
-        writer.WriteEndArray();
+
+        if (writeTableArray)
+        {
+            writer.WriteEndTableArray();
+        }
+        else
+        {
+            writer.WriteEndArray();
+        }
     }
 
     public override ImmutableArray<TElement> Read(TomlReader reader)
@@ -607,6 +799,17 @@ internal sealed class TomlImmutableArrayTypeInfo<TElement> : TomlTypeInfo<Immuta
         var resolved = TomlTypeInfoResolverPipeline.Resolve(Options, typeof(TElement));
         _elementTypeInfo = resolved;
         _typedElementTypeInfo = resolved as TomlTypeInfo<TElement>;
+    }
+
+    private bool ShouldWriteTableArray(TomlWriter writer, int count)
+    {
+        if (count == 0 || !writer.CanWriteTableArrayValue)
+        {
+            return false;
+        }
+
+        EnsureElementTypeInfo();
+        return _elementTypeInfo!.WritesTable;
     }
 
     private void WriteElement(TomlWriter writer, TElement element)
@@ -657,12 +860,29 @@ internal sealed class TomlImmutableListTypeInfo<TElement> : TomlTypeInfo<Immutab
         ArgumentGuard.ThrowIfNull(writer, nameof(writer));
         ArgumentGuard.ThrowIfNull(value, nameof(value));
 
-        writer.WriteStartArray();
+        var writeTableArray = ShouldWriteTableArray(writer, value.Count);
+        if (writeTableArray)
+        {
+            writer.WriteStartTableArray();
+        }
+        else
+        {
+            writer.WriteStartArray();
+        }
+
         for (var i = 0; i < value.Count; i++)
         {
             WriteElement(writer, value[i]);
         }
-        writer.WriteEndArray();
+
+        if (writeTableArray)
+        {
+            writer.WriteEndTableArray();
+        }
+        else
+        {
+            writer.WriteEndArray();
+        }
     }
 
     public override ImmutableList<TElement>? Read(TomlReader reader)
@@ -694,6 +914,17 @@ internal sealed class TomlImmutableListTypeInfo<TElement> : TomlTypeInfo<Immutab
         var resolved = TomlTypeInfoResolverPipeline.Resolve(Options, typeof(TElement));
         _elementTypeInfo = resolved;
         _typedElementTypeInfo = resolved as TomlTypeInfo<TElement>;
+    }
+
+    private bool ShouldWriteTableArray(TomlWriter writer, int count)
+    {
+        if (count == 0 || !writer.CanWriteTableArrayValue)
+        {
+            return false;
+        }
+
+        EnsureElementTypeInfo();
+        return _elementTypeInfo!.WritesTable;
     }
 
     private void WriteElement(TomlWriter writer, TElement element)
@@ -744,12 +975,29 @@ internal sealed class TomlImmutableHashSetTypeInfo<TElement> : TomlTypeInfo<Immu
         ArgumentGuard.ThrowIfNull(writer, nameof(writer));
         ArgumentGuard.ThrowIfNull(value, nameof(value));
 
-        writer.WriteStartArray();
+        var writeTableArray = ShouldWriteTableArray(writer, value.Count);
+        if (writeTableArray)
+        {
+            writer.WriteStartTableArray();
+        }
+        else
+        {
+            writer.WriteStartArray();
+        }
+
         foreach (var element in value)
         {
             WriteElement(writer, element);
         }
-        writer.WriteEndArray();
+
+        if (writeTableArray)
+        {
+            writer.WriteEndTableArray();
+        }
+        else
+        {
+            writer.WriteEndArray();
+        }
     }
 
     public override ImmutableHashSet<TElement>? Read(TomlReader reader)
@@ -781,6 +1029,17 @@ internal sealed class TomlImmutableHashSetTypeInfo<TElement> : TomlTypeInfo<Immu
         var resolved = TomlTypeInfoResolverPipeline.Resolve(Options, typeof(TElement));
         _elementTypeInfo = resolved;
         _typedElementTypeInfo = resolved as TomlTypeInfo<TElement>;
+    }
+
+    private bool ShouldWriteTableArray(TomlWriter writer, int count)
+    {
+        if (count == 0 || !writer.CanWriteTableArrayValue)
+        {
+            return false;
+        }
+
+        EnsureElementTypeInfo();
+        return _elementTypeInfo!.WritesTable;
     }
 
     private void WriteElement(TomlWriter writer, TElement element)
@@ -826,6 +1085,8 @@ internal sealed class TomlDictionaryTypeInfo<TDictionary, TValue> : TomlTypeInfo
         : base(options)
     {
     }
+
+    public override bool WritesTable => true;
 
     public override void Write(TomlWriter writer, TDictionary value)
     {

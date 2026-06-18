@@ -50,4 +50,14 @@ public class NewApiAttributeContractTests
 
         Assert.That(exportedTypes, Is.EqualTo(new[] { "Tomlyn.Serialization.TomlPropertyNameAttribute" }));
     }
+
+    [Test]
+    public void FormattingAttributes_RejectInvalidEnumValues()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new TomlTableArrayStyleAttribute((TomlTableArrayStyle)42));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new TomlInlineTableAttribute((TomlInlineTablePolicy)42));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new TomlStringStyleAttribute((TomlStringStyle)42));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new TomlMappingOrderAttribute((TomlMappingOrderPolicy)42));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new TomlDottedKeyHandlingAttribute((TomlDottedKeyHandling)42));
+    }
 }

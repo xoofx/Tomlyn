@@ -10,12 +10,16 @@ namespace Tomlyn.Serialization.Internal;
 internal sealed class TomlConverterTypeInfo<T> : TomlTypeInfo<T>
 {
     private readonly TomlConverter<T> _converter;
+    private readonly bool _writesTable;
 
-    public TomlConverterTypeInfo(TomlSerializerOptions options, TomlConverter<T> converter)
+    public TomlConverterTypeInfo(TomlSerializerOptions options, TomlConverter<T> converter, bool writesTable = false)
         : base(options)
     {
         _converter = converter ?? throw new ArgumentNullException(nameof(converter));
+        _writesTable = writesTable;
     }
+
+    public override bool WritesTable => _writesTable;
 
     public override void Write(TomlWriter writer, T value)
     {
@@ -34,13 +38,17 @@ internal sealed class TomlUntypedConverterTypeInfo<T> : TomlTypeInfo<T>
 {
     private readonly TomlConverter _converter;
     private readonly Type _typeToConvert;
+    private readonly bool _writesTable;
 
-    public TomlUntypedConverterTypeInfo(TomlSerializerOptions options, TomlConverter converter)
+    public TomlUntypedConverterTypeInfo(TomlSerializerOptions options, TomlConverter converter, bool writesTable = false)
         : base(options)
     {
         _converter = converter ?? throw new ArgumentNullException(nameof(converter));
         _typeToConvert = typeof(T);
+        _writesTable = writesTable;
     }
+
+    public override bool WritesTable => _writesTable;
 
     public override void Write(TomlWriter writer, T value)
     {

@@ -57,9 +57,11 @@ internal static class TomlModelTextWriter
             // 1) scalar/array/inline-table key-values
             foreach (var pair in table)
             {
+                var propertyMetadata = GetPropertyMetadata(table.PropertiesMetadata, pair.Key);
+                var tableArrayStyle = propertyMetadata?.TableArrayStyle ?? _options.TableArrayStyle;
                 if (pair.Value is TomlTableArray tableArray)
                 {
-                    if (_options.TableArrayStyle == TomlTableArrayStyle.InlineArrayOfTables &&
+                    if (tableArrayStyle == TomlTableArrayStyle.InlineArrayOfTables &&
                         IsInlineableTableArray(tableArray, depth + 1))
                     {
                         WriteTableArrayInline(pair.Key, tableArray, table.PropertiesMetadata, depth);
@@ -69,7 +71,7 @@ internal static class TomlModelTextWriter
                     continue;
                 }
 
-                if (pair.Value is TomlTable subTable && !ShouldInlineTable(subTable, depth + 1))
+                if (pair.Value is TomlTable subTable && !ShouldInlineTable(subTable, depth + 1, propertyMetadata?.InlineTablePolicy))
                 {
                     continue;
                 }
@@ -80,7 +82,8 @@ internal static class TomlModelTextWriter
             // 2) named tables
             foreach (var pair in table)
             {
-                if (pair.Value is TomlTable subTable && !ShouldInlineTable(subTable, depth + 1))
+                var propertyMetadata = GetPropertyMetadata(table.PropertiesMetadata, pair.Key);
+                if (pair.Value is TomlTable subTable && !ShouldInlineTable(subTable, depth + 1, propertyMetadata?.InlineTablePolicy))
                 {
                     path.Add(pair.Key);
                     WriteTableBody(subTable, path, HeaderKind.Table, depth + 1);
@@ -96,7 +99,9 @@ internal static class TomlModelTextWriter
                     continue;
                 }
 
-                if (_options.TableArrayStyle == TomlTableArrayStyle.InlineArrayOfTables &&
+                var propertyMetadata = GetPropertyMetadata(table.PropertiesMetadata, pair.Key);
+                var tableArrayStyle = propertyMetadata?.TableArrayStyle ?? _options.TableArrayStyle;
+                if (tableArrayStyle == TomlTableArrayStyle.InlineArrayOfTables &&
                     IsInlineableTableArray(tableArray, depth + 1))
                 {
                     continue;
@@ -130,20 +135,29 @@ internal static class TomlModelTextWriter
             _writer.Write(" = ");
 
             var displayKind = TomlPropertyDisplayKind.Default;
-            if (table.PropertiesMetadata is { } metadata &&
-                metadata.TryGetProperty(key, out var propertyMetadata) &&
-                propertyMetadata is not null)
+            var propertyMetadata = GetPropertyMetadata(table.PropertiesMetadata, key);
+            if (propertyMetadata is not null)
             {
                 displayKind = propertyMetadata.DisplayKind;
             }
 
-            WriteValue(value, displayKind, depth);
+            WriteValue(value, displayKind, depth, propertyMetadata);
             WriteTrailingTrivia(table.PropertiesMetadata, key);
             WriteNewLine();
             WriteTrailingTriviaAfterEndOfLine(table.PropertiesMetadata, key);
         }
 
-        private bool ShouldInlineTable(TomlTable table, int depth)
+        private static TomlPropertyMetadata? GetPropertyMetadata(TomlPropertiesMetadata? metadata, string key)
+        {
+            if (metadata is not null && metadata.TryGetProperty(key, out var propertyMetadata))
+            {
+                return propertyMetadata;
+            }
+
+            return null;
+        }
+
+        private bool ShouldInlineTable(TomlTable table, int depth, TomlInlineTablePolicy? policyOverride = null)
         {
             ValidateDepth(depth);
             if (table.Kind == ObjectKind.InlineTable)
@@ -151,7 +165,7 @@ internal static class TomlModelTextWriter
                 return true;
             }
 
-            return _options.InlineTablePolicy switch
+            return (policyOverride ?? _options.InlineTablePolicy) switch
             {
                 TomlInlineTablePolicy.Always => IsInlineableTable(table, maxMemberCount: int.MaxValue, depth),
                 TomlInlineTablePolicy.WhenSmall => IsInlineableTable(table, maxMemberCount: 4, depth),
@@ -292,7 +306,7 @@ internal static class TomlModelTextWriter
             _writer.Write("}");
         }
 
-        private void WriteValue(object value, TomlPropertyDisplayKind displayKind, int depth)
+        private void WriteValue(object value, TomlPropertyDisplayKind displayKind, int depth, TomlPropertyMetadata? propertyMetadata = null)
         {
             if (value is null)
             {
@@ -302,7 +316,7 @@ internal static class TomlModelTextWriter
             switch (value)
             {
                 case string s:
-                    WriteString(s, displayKind);
+                    WriteString(s, displayKind, propertyMetadata);
                     return;
                 case bool b:
                     _writer.Write(b ? "true" : "false");
@@ -421,7 +435,7 @@ internal static class TomlModelTextWriter
                 case TomlArray array:
                     WriteArray(array, depth + 1);
                     return;
-                case TomlTable inlineTable when ShouldInlineTable(inlineTable, depth + 1):
+                case TomlTable inlineTable when ShouldInlineTable(inlineTable, depth + 1, propertyMetadata?.InlineTablePolicy):
                     WriteInlineTable(inlineTable, depth + 1);
                     return;
                 case TomlTable:
@@ -431,7 +445,7 @@ internal static class TomlModelTextWriter
                 default:
                     if (value is Enum enumValue)
                     {
-                        WriteString(enumValue.ToString(), displayKind);
+                        WriteString(enumValue.ToString(), displayKind, propertyMetadata);
                         return;
                     }
 
@@ -608,14 +622,34 @@ internal static class TomlModelTextWriter
             _writer.Write(name);
         }
 
-        private void WriteString(string value, TomlPropertyDisplayKind displayKind)
+        private void WriteString(string value, TomlPropertyDisplayKind displayKind, TomlPropertyMetadata? propertyMetadata)
         {
+            var preferences = _options.StringStylePreferences;
+            var allowHexEscapes = propertyMetadata?.AllowHexEscapes ?? preferences.AllowHexEscapes;
+            if (displayKind == TomlPropertyDisplayKind.Default)
+            {
+                var style = propertyMetadata?.StringStyle ?? preferences.DefaultStyle;
+                var preferLiteralWhenNoEscapes = propertyMetadata?.PreferLiteralWhenNoEscapes ?? preferences.PreferLiteralWhenNoEscapes;
+                if (preferLiteralWhenNoEscapes && style == TomlStringStyle.Basic && IsSafeStringLiteral(value))
+                {
+                    style = TomlStringStyle.Literal;
+                }
+
+                displayKind = style switch
+                {
+                    TomlStringStyle.Literal => TomlPropertyDisplayKind.StringLiteral,
+                    TomlStringStyle.MultilineBasic => TomlPropertyDisplayKind.StringMulti,
+                    TomlStringStyle.MultilineLiteral => TomlPropertyDisplayKind.StringLiteralMulti,
+                    _ => TomlPropertyDisplayKind.Default,
+                };
+            }
+
             switch (displayKind)
             {
                 case TomlPropertyDisplayKind.StringMulti:
                 {
                     _writer.Write("\"\"\"");
-                    WriteEscapedBasicStringContent(value, allowNewLinesAndTabs: true);
+                    WriteEscapedBasicStringContent(value, allowNewLinesAndTabs: true, allowHexEscapes);
                     _writer.Write("\"\"\"");
                     return;
                 }
@@ -640,11 +674,11 @@ internal static class TomlModelTextWriter
             }
 
             _writer.Write('\"');
-            WriteEscapedBasicStringContent(value, allowNewLinesAndTabs: false);
+            WriteEscapedBasicStringContent(value, allowNewLinesAndTabs: false, allowHexEscapes);
             _writer.Write('\"');
         }
 
-        private void WriteEscapedBasicStringContent(string value, bool allowNewLinesAndTabs)
+        private void WriteEscapedBasicStringContent(string value, bool allowNewLinesAndTabs, bool allowHexEscapes = true)
         {
             if (!RequiresEscaping(value, allowNewLinesAndTabs))
             {
@@ -704,6 +738,11 @@ internal static class TomlModelTextWriter
                             _writer.Write("\\\\");
                             continue;
                         default:
+                            if (!allowHexEscapes)
+                            {
+                                throw new TomlException("The string contains a control character that requires a hexadecimal escape, but hexadecimal escapes are disabled.");
+                            }
+
                             _writer.Write("\\u");
                             WriteHex4((ushort)c);
                             continue;

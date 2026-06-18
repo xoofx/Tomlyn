@@ -50,11 +50,33 @@ public sealed class SingleOrArraySettableCollectionHolder
     public List<string> RuntimeIdentifiers { get; set; } = new() { "existing" };
 }
 
+public sealed class TableArrayCollectionHolder
+{
+    public TableArrayItem[] Foo { get; set; } = [];
+
+    public List<TableArrayItem> Bars { get; set; } = new();
+
+    public int[] Values { get; set; } = [];
+}
+
+public sealed class TableArrayStyleOverrideHolder
+{
+    [TomlTableArrayStyle(TomlTableArrayStyle.InlineArrayOfTables)]
+    public TableArrayItem[] Foo { get; set; } = [];
+}
+
+public sealed class TableArrayItem
+{
+    public string Name { get; set; } = string.Empty;
+}
+
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [TomlSerializable(typeof(GeneratedCollectionHolder))]
 [TomlSerializable(typeof(DottedKeyDictionaryHolder))]
 [TomlSerializable(typeof(SingleOrArrayCollectionHolder))]
 [TomlSerializable(typeof(SingleOrArraySettableCollectionHolder))]
+[TomlSerializable(typeof(TableArrayCollectionHolder))]
+[TomlSerializable(typeof(TableArrayStyleOverrideHolder))]
 internal partial class TestTomlCollectionsContext : TomlSerializerContext
 {
 }
@@ -112,6 +134,87 @@ public class NewApiCollectionTests
         Assert.That(roundtrip.EnumerableValues, Is.EqualTo(new[] { 6L, 7L }));
         Assert.That(roundtrip.ReadOnlyValues, Is.EqualTo(new[] { 8L, 9L }));
         Assert.That(roundtrip.Map, Is.EquivalentTo(new Dictionary<string, long> { ["x"] = 1, ["y"] = 2 }));
+    }
+
+    [Test]
+    public void Reflection_SerializesObjectCollectionsAsTableArrays()
+    {
+        var value = new TableArrayCollectionHolder
+        {
+            Foo = [new TableArrayItem { Name = "one" }, new TableArrayItem { Name = "two" }],
+            Bars = new List<TableArrayItem> { new() { Name = "three" } },
+            Values = [1, 2],
+        };
+
+        var toml = TomlSerializer.Serialize(value);
+
+        Assert.That(toml, Does.Contain("[[Foo]]"));
+        Assert.That(toml, Does.Contain("[[Bars]]"));
+        Assert.That(toml, Does.Contain("Values = [1, 2]"));
+        Assert.That(toml.IndexOf("Values = [1, 2]", System.StringComparison.Ordinal), Is.LessThan(toml.IndexOf("[[Foo]]", System.StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public void GeneratedContext_SerializesObjectCollectionsAsTableArrays()
+    {
+        var context = TestTomlCollectionsContext.Default;
+        var value = new TableArrayCollectionHolder
+        {
+            Foo = [new TableArrayItem { Name = "one" }, new TableArrayItem { Name = "two" }],
+            Bars = new List<TableArrayItem> { new() { Name = "three" } },
+            Values = [1, 2],
+        };
+
+        var toml = TomlSerializer.Serialize(value, context.TableArrayCollectionHolder);
+
+        Assert.That(toml, Does.Contain("[[foo]]"));
+        Assert.That(toml, Does.Contain("[[bars]]"));
+        Assert.That(toml, Does.Contain("values = [1, 2]"));
+        Assert.That(toml.IndexOf("values = [1, 2]", System.StringComparison.Ordinal), Is.LessThan(toml.IndexOf("[[foo]]", System.StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public void EmptyObjectCollection_RemainsArray()
+    {
+        var toml = TomlSerializer.Serialize(new TableArrayCollectionHolder { Foo = [], Bars = [] });
+
+        Assert.That(toml, Does.Contain("Foo = []"));
+        Assert.That(toml, Does.Contain("Bars = []"));
+    }
+
+    [Test]
+    public void PropertyTableArrayStyleOverride_UsesInlineArrayOfTables()
+    {
+        var value = new TableArrayStyleOverrideHolder
+        {
+            Foo = [new TableArrayItem { Name = "one" }],
+        };
+
+        var reflectionToml = TomlSerializer.Serialize(value);
+        var generatedToml = TomlSerializer.Serialize(value, TestTomlCollectionsContext.Default.TableArrayStyleOverrideHolder);
+
+        Assert.That(reflectionToml, Does.Contain("Foo = ["));
+        Assert.That(reflectionToml, Does.Not.Contain("[[Foo]]"));
+        Assert.That(generatedToml, Does.Contain("foo = ["));
+        Assert.That(generatedToml, Does.Not.Contain("[[foo]]"));
+    }
+
+    [Test]
+    public void GlobalInlineArrayOfTablesStyle_AppliesToTypedObjectCollections()
+    {
+        var options = new TomlSerializerOptions
+        {
+            TableArrayStyle = TomlTableArrayStyle.InlineArrayOfTables,
+        };
+        var value = new TableArrayCollectionHolder
+        {
+            Foo = [new TableArrayItem { Name = "one" }],
+        };
+
+        var toml = TomlSerializer.Serialize(value, options);
+
+        Assert.That(toml, Does.Contain("Foo = ["));
+        Assert.That(toml, Does.Not.Contain("[[Foo]]"));
     }
 
     [Test]

@@ -115,6 +115,167 @@ public sealed class TomlSingleOrArrayAttribute : TomlAttribute
 }
 
 /// <summary>
+/// Overrides array-of-tables formatting for a collection member.
+/// </summary>
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = false)]
+public sealed class TomlTableArrayStyleAttribute : TomlAttribute
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TomlTableArrayStyleAttribute"/> class.
+    /// </summary>
+    /// <param name="style">The array-of-tables style.</param>
+    public TomlTableArrayStyleAttribute(TomlTableArrayStyle style)
+    {
+        if (style is not TomlTableArrayStyle.Headers and not TomlTableArrayStyle.InlineArrayOfTables)
+        {
+            throw new ArgumentOutOfRangeException(nameof(style), style, "Invalid TOML table array style.");
+        }
+
+        Style = style;
+    }
+
+    /// <summary>
+    /// Gets the array-of-tables style.
+    /// </summary>
+    public TomlTableArrayStyle Style { get; }
+}
+
+/// <summary>
+/// Overrides inline table formatting for a member.
+/// </summary>
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = false)]
+public sealed class TomlInlineTableAttribute : TomlAttribute
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TomlInlineTableAttribute"/> class.
+    /// </summary>
+    /// <param name="policy">The inline table policy.</param>
+    public TomlInlineTableAttribute(TomlInlineTablePolicy policy)
+    {
+        if (policy is not TomlInlineTablePolicy.Never and not TomlInlineTablePolicy.WhenSmall and not TomlInlineTablePolicy.Always)
+        {
+            throw new ArgumentOutOfRangeException(nameof(policy), policy, "Invalid TOML inline table policy.");
+        }
+
+        Policy = policy;
+    }
+
+    /// <summary>
+    /// Gets the inline table policy.
+    /// </summary>
+    public TomlInlineTablePolicy Policy { get; }
+}
+
+/// <summary>
+/// Represents an optional boolean formatting preference on an attribute.
+/// </summary>
+public enum TomlBooleanPreference
+{
+    /// <summary>
+    /// Use the value from the broader serializer options scope.
+    /// </summary>
+    Unspecified = 0,
+
+    /// <summary>
+    /// The preference is enabled.
+    /// </summary>
+    True = 1,
+
+    /// <summary>
+    /// The preference is disabled.
+    /// </summary>
+    False = 2,
+}
+
+/// <summary>
+/// Overrides string formatting for a string member.
+/// </summary>
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = false)]
+public sealed class TomlStringStyleAttribute : TomlAttribute
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TomlStringStyleAttribute"/> class.
+    /// </summary>
+    /// <param name="style">The preferred string style.</param>
+    public TomlStringStyleAttribute(TomlStringStyle style)
+    {
+        if (style is not TomlStringStyle.Basic and not TomlStringStyle.Literal and not TomlStringStyle.MultilineBasic and not TomlStringStyle.MultilineLiteral)
+        {
+            throw new ArgumentOutOfRangeException(nameof(style), style, "Invalid TOML string style.");
+        }
+
+        Style = style;
+    }
+
+    /// <summary>
+    /// Gets the preferred string style.
+    /// </summary>
+    public TomlStringStyle Style { get; }
+
+    /// <summary>
+    /// Gets or sets whether literal strings should be preferred when no escaping is required.
+    /// </summary>
+    public TomlBooleanPreference PreferLiteralWhenNoEscapes { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether hexadecimal escapes may be emitted for control characters.
+    /// </summary>
+    public TomlBooleanPreference AllowHexEscapes { get; set; }
+}
+
+/// <summary>
+/// Overrides member ordering for a TOML-serializable type.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = false, Inherited = true)]
+public sealed class TomlMappingOrderAttribute : TomlAttribute
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TomlMappingOrderAttribute"/> class.
+    /// </summary>
+    /// <param name="policy">The mapping order policy.</param>
+    public TomlMappingOrderAttribute(TomlMappingOrderPolicy policy)
+    {
+        if (policy is not TomlMappingOrderPolicy.Declaration and not TomlMappingOrderPolicy.Alphabetical and not TomlMappingOrderPolicy.OrderThenDeclaration and not TomlMappingOrderPolicy.OrderThenAlphabetical)
+        {
+            throw new ArgumentOutOfRangeException(nameof(policy), policy, "Invalid TOML mapping order policy.");
+        }
+
+        Policy = policy;
+    }
+
+    /// <summary>
+    /// Gets the mapping order policy.
+    /// </summary>
+    public TomlMappingOrderPolicy Policy { get; }
+}
+
+/// <summary>
+/// Overrides dotted-key handling for member names declared on a TOML-serializable type.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = false, Inherited = true)]
+public sealed class TomlDottedKeyHandlingAttribute : TomlAttribute
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TomlDottedKeyHandlingAttribute"/> class.
+    /// </summary>
+    /// <param name="handling">The dotted-key handling behavior.</param>
+    public TomlDottedKeyHandlingAttribute(TomlDottedKeyHandling handling)
+    {
+        if (handling is not TomlDottedKeyHandling.Literal and not TomlDottedKeyHandling.Expand)
+        {
+            throw new ArgumentOutOfRangeException(nameof(handling), handling, "Invalid TOML dotted key handling.");
+        }
+
+        Handling = handling;
+    }
+
+    /// <summary>
+    /// Gets the dotted-key handling behavior.
+    /// </summary>
+    public TomlDottedKeyHandling Handling { get; }
+}
+
+/// <summary>
 /// Specifies a custom <see cref="TomlConverter"/> to use when serializing or deserializing a member or type.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Enum | AttributeTargets.Interface |

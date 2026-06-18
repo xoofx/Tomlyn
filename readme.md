@@ -16,6 +16,7 @@ Tomlyn is a high-performance .NET [TOML](https://toml.io/en/) 1.1 parser, round-
 - **Cross-project polymorphism**: register derived types at runtime or on a source-generated context when base and derived types live in different assemblies
 - **`System.Text.Json` attribute interop**: reuse `[JsonPropertyName]`, `[JsonIgnore]`, `[JsonRequired]`, `[JsonConstructor]`, `[JsonObjectCreationHandling]`, and polymorphism attributes
 - **Flexible collection input**: opt a collection member into accepting either a single TOML value or an array via `[TomlSingleOrArray]`
+- **TOML formatting attributes**: opt members/types into table-array, inline-table, string, mapping-order, and dotted-key formatting policies
 - **Allocation-free parsing pipeline**: incremental `TomlLexer` → `TomlParser` with precise spans for errors
 - **Low-level access**: full lexer/parser API plus a lossless, trivia-preserving syntax tree (`SyntaxParser` → `DocumentSyntax`)
 - **Reflection control**: reflection-based POCO mapping is available, but can be disabled for NativeAOT via a feature switch / MSBuild property

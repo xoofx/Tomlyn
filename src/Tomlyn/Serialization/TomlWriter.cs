@@ -24,6 +24,7 @@ public sealed class TomlWriter
     private object? _root;
     private string? _pendingPropertyName;
     private bool _pendingPropertyNameIsLiteral;
+    private TomlDottedKeyHandling? _pendingPropertyDottedKeyHandling;
     private bool _documentStarted;
     private bool _documentEnded;
 
@@ -50,6 +51,8 @@ public sealed class TomlWriter
     internal object? RootValue => _root;
 
     internal TomlTable? CurrentTable => _stack.Count > 0 && _stack.Peek() is TomlTable table ? table : null;
+
+    internal bool CanWriteTableArrayValue => _stack.Count > 0 && _stack.Peek() is TomlTable && _pendingPropertyName is not null;
 
     internal void TryAttachMetadata(object instance)
     {
@@ -190,12 +193,20 @@ public sealed class TomlWriter
         WritePropertyNameCore(name, isLiteral: false);
     }
 
+    internal void WritePropertyName(string name, TomlDottedKeyHandling? dottedKeyHandling)
+    {
+        WritePropertyNameCore(name, isLiteral: false, dottedKeyHandling);
+    }
+
     internal void WritePropertyNameLiteral(string name)
     {
         WritePropertyNameCore(name, isLiteral: true);
     }
 
     private void WritePropertyNameCore(string name, bool isLiteral)
+        => WritePropertyNameCore(name, isLiteral, dottedKeyHandling: null);
+
+    private void WritePropertyNameCore(string name, bool isLiteral, TomlDottedKeyHandling? dottedKeyHandling)
     {
         ArgumentGuard.ThrowIfNull(name, nameof(name));
         if (_stack.Count == 0 || _stack.Peek() is not TomlTable)
@@ -205,6 +216,7 @@ public sealed class TomlWriter
 
         _pendingPropertyName = name;
         _pendingPropertyNameIsLiteral = isLiteral;
+        _pendingPropertyDottedKeyHandling = dottedKeyHandling;
     }
 
     /// <summary>
@@ -330,9 +342,10 @@ public sealed class TomlWriter
                 throw new InvalidOperationException("A property name must be written before writing a value into a table.");
             }
 
-            WriteTableValue(table, _pendingPropertyName, value, _pendingPropertyNameIsLiteral);
+            WriteTableValue(table, _pendingPropertyName, value, _pendingPropertyNameIsLiteral, _pendingPropertyDottedKeyHandling);
             _pendingPropertyName = null;
             _pendingPropertyNameIsLiteral = false;
+            _pendingPropertyDottedKeyHandling = null;
             return;
         }
 
@@ -356,9 +369,30 @@ public sealed class TomlWriter
         throw new InvalidOperationException($"Unsupported container type `{parent.GetType().FullName}`.");
     }
 
-    private void WriteTableValue(TomlTable table, string propertyName, object value, bool isLiteralPropertyName)
+    internal void ApplyPropertyMetadata(string propertyName, TomlPropertyMetadata metadata)
     {
-        if (isLiteralPropertyName || Options.DottedKeyHandling != TomlDottedKeyHandling.Expand || propertyName.IndexOf('.') < 0)
+        ArgumentGuard.ThrowIfNull(propertyName, nameof(propertyName));
+        ArgumentGuard.ThrowIfNull(metadata, nameof(metadata));
+        if (CurrentTable is not { } table)
+        {
+            throw new InvalidOperationException("Property metadata can only be applied inside a table.");
+        }
+
+        table.PropertiesMetadata ??= new TomlPropertiesMetadata();
+        if (table.PropertiesMetadata.TryGetProperty(propertyName, out var existing) && existing is not null)
+        {
+            existing.MergeFormattingFrom(metadata);
+        }
+        else
+        {
+            table.PropertiesMetadata.SetProperty(propertyName, metadata);
+        }
+    }
+
+    private void WriteTableValue(TomlTable table, string propertyName, object value, bool isLiteralPropertyName, TomlDottedKeyHandling? dottedKeyHandling)
+    {
+        var effectiveDottedKeyHandling = dottedKeyHandling ?? Options.DottedKeyHandling;
+        if (isLiteralPropertyName || effectiveDottedKeyHandling != TomlDottedKeyHandling.Expand || propertyName.IndexOf('.') < 0)
         {
             table[propertyName] = value;
             return;

@@ -409,7 +409,7 @@ public sealed record TomlStringStylePreferences
     public TomlStringStyle DefaultStyle { get; init; } = TomlStringStyle.Basic;
 
     /// <summary>If true, prefer literal strings when no escaping is required.</summary>
-    public bool PreferLiteralWhenNoEscapes { get; init; } = true;
+    public bool PreferLiteralWhenNoEscapes { get; init; }
 
     /// <summary>If true, allow emitting <c>\\xHH</c> escapes for control characters.</summary>
     public bool AllowHexEscapes { get; init; } = true;
