@@ -397,6 +397,18 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.Append("    public static ").Append(model.TypeName).AppendLine(" Default { get; } = new(CreateDefaultOptions(), _generated: true);");
         builder.AppendLine();
 
+        builder.Append("    /// <summary>Initializes a new instance of the <see cref=\"").Append(model.TypeName).AppendLine("\"/> class.</summary>");
+        builder.Append("    /// <remarks>Uses the options configured by <see cref=\"global::Tomlyn.Serialization.TomlSourceGenerationOptionsAttribute\"/>, equivalent to <see cref=\"Default\"/>.</remarks>");
+        builder.AppendLine();
+        builder.Append("    public ").Append(model.TypeName).AppendLine("() : base(CreateDefaultOptions()) { }");
+        builder.AppendLine();
+
+        builder.Append("    /// <summary>Initializes a new instance of the <see cref=\"").Append(model.TypeName).AppendLine("\"/> class with the specified options.</summary>");
+        builder.Append("    /// <param name=\"options\">The options to use for serialization and deserialization.</param>");
+        builder.AppendLine();
+        builder.Append("    public ").Append(model.TypeName).AppendLine("(global::Tomlyn.TomlSerializerOptions options) : base(options) { }");
+        builder.AppendLine();
+
         EmitCreateDefaultOptions(builder, model);
 
         foreach (var type in ordered)

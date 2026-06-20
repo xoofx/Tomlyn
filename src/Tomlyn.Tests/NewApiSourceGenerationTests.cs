@@ -609,6 +609,33 @@ public class NewApiSourceGenerationTests
     }
 
     [Test]
+    public void GeneratedContext_ParameterlessConstructor_BehavesLikeDefault()
+    {
+        var context = new TestTomlSerializerContext();
+        var person = TomlSerializer.Deserialize("name = \"Ada\"\nage = 37", context.GeneratedPerson);
+
+        Assert.That(person, Is.Not.Null);
+        Assert.That(person!.Name, Is.EqualTo("Ada"));
+        Assert.That(person.Age, Is.EqualTo(37));
+    }
+
+    [Test]
+    public void GeneratedContext_OptionsConstructor_UsesSuppliedOptions()
+    {
+        var options = new TomlSerializerOptions { PropertyNameCaseInsensitive = true };
+        var context = new TestTomlSerializerContext(options);
+
+        // The supplied options flow through to the base context (Default would be false here).
+        Assert.That(context.Options.PropertyNameCaseInsensitive, Is.True);
+
+        // ...and the options-constructed context still produces working source-generated metadata.
+        var person = TomlSerializer.Deserialize("name = \"Ada\"\nage = 37", context.GeneratedPerson);
+        Assert.That(person, Is.Not.Null);
+        Assert.That(person!.Name, Is.EqualTo("Ada"));
+        Assert.That(person.Age, Is.EqualTo(37));
+    }
+
+    [Test]
     public void GeneratedContext_CanUseCustomTypeInfoPropertyName()
     {
         var context = TestTomlSerializerContextCustomPropertyName.Default;
