@@ -3,6 +3,7 @@
 // See license.txt file in the project root for full license information.
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
@@ -48,6 +49,10 @@ internal sealed class TomlSingleOrArrayCollectionHelper
     public static T[] CreateSingleElementArray<T>(T element) => new[] { element };
 
     public static List<T> CreateSingleElementList<T>(T element) => new() { element };
+
+    public static TCollection CreateSingleElementCollection<TCollection, TElement>(TElement element)
+        where TCollection : ICollection<TElement>, new()
+        => new() { element };
 
     public static HashSet<T> CreateSingleElementHashSet<T>(T element) => new() { element };
 
@@ -149,45 +154,87 @@ internal sealed class TomlSingleOrArrayCollectionHelper
             return (CollectionHandler?)Activator.CreateInstance(typeof(ArrayHandler<>).MakeGenericType(type.GetElementType()!));
         }
 
-        if (!type.IsGenericType)
+        if (type.IsGenericType)
         {
-            return null;
+            var genericDefinition = type.GetGenericTypeDefinition();
+            var elementType = type.GetGenericArguments()[0];
+
+            if (genericDefinition == typeof(List<>) ||
+                genericDefinition == typeof(IEnumerable<>) ||
+                genericDefinition == typeof(ICollection<>) ||
+                genericDefinition == typeof(IReadOnlyCollection<>) ||
+                genericDefinition == typeof(IList<>) ||
+                genericDefinition == typeof(IReadOnlyList<>))
+            {
+                return (CollectionHandler?)Activator.CreateInstance(typeof(ListHandler<>).MakeGenericType(elementType));
+            }
+
+            if (genericDefinition == typeof(HashSet<>) || genericDefinition == typeof(ISet<>))
+            {
+                return (CollectionHandler?)Activator.CreateInstance(typeof(HashSetHandler<>).MakeGenericType(elementType));
+            }
+
+            if (genericDefinition == typeof(ImmutableArray<>))
+            {
+                return (CollectionHandler?)Activator.CreateInstance(typeof(ImmutableArrayHandler<>).MakeGenericType(elementType));
+            }
+
+            if (genericDefinition == typeof(ImmutableList<>))
+            {
+                return (CollectionHandler?)Activator.CreateInstance(typeof(ImmutableListHandler<>).MakeGenericType(elementType));
+            }
+
+            if (genericDefinition == typeof(ImmutableHashSet<>))
+            {
+                return (CollectionHandler?)Activator.CreateInstance(typeof(ImmutableHashSetHandler<>).MakeGenericType(elementType));
+            }
         }
 
-        var genericDefinition = type.GetGenericTypeDefinition();
-        var elementType = type.GetGenericArguments()[0];
-
-        if (genericDefinition == typeof(List<>) ||
-            genericDefinition == typeof(IEnumerable<>) ||
-            genericDefinition == typeof(ICollection<>) ||
-            genericDefinition == typeof(IReadOnlyCollection<>) ||
-            genericDefinition == typeof(IList<>) ||
-            genericDefinition == typeof(IReadOnlyList<>))
+        if (TryGetMutableCollectionElementType(type, out var collectionElementType))
         {
-            return (CollectionHandler?)Activator.CreateInstance(typeof(ListHandler<>).MakeGenericType(elementType));
-        }
-
-        if (genericDefinition == typeof(HashSet<>) || genericDefinition == typeof(ISet<>))
-        {
-            return (CollectionHandler?)Activator.CreateInstance(typeof(HashSetHandler<>).MakeGenericType(elementType));
-        }
-
-        if (genericDefinition == typeof(ImmutableArray<>))
-        {
-            return (CollectionHandler?)Activator.CreateInstance(typeof(ImmutableArrayHandler<>).MakeGenericType(elementType));
-        }
-
-        if (genericDefinition == typeof(ImmutableList<>))
-        {
-            return (CollectionHandler?)Activator.CreateInstance(typeof(ImmutableListHandler<>).MakeGenericType(elementType));
-        }
-
-        if (genericDefinition == typeof(ImmutableHashSet<>))
-        {
-            return (CollectionHandler?)Activator.CreateInstance(typeof(ImmutableHashSetHandler<>).MakeGenericType(elementType));
+            return (CollectionHandler?)Activator.CreateInstance(typeof(MutableCollectionHandler<,>).MakeGenericType(type, collectionElementType));
         }
 
         return null;
+    }
+
+    private static bool TryGetMutableCollectionElementType(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type,
+        [NotNullWhen(true)] out Type? elementType)
+    {
+        elementType = null;
+
+        if (type.IsInterface || type.IsAbstract || typeof(IDictionary).IsAssignableFrom(type) || type.GetConstructor(Type.EmptyTypes) is null)
+        {
+            return false;
+        }
+
+        Type? matchedElementType = null;
+        foreach (var interfaceType in type.GetInterfaces())
+        {
+            if (interfaceType.IsGenericType &&
+                (interfaceType.GetGenericTypeDefinition() == typeof(IDictionary<,>) ||
+                 interfaceType.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>)))
+            {
+                return false;
+            }
+
+            if (!interfaceType.IsGenericType || interfaceType.GetGenericTypeDefinition() != typeof(ICollection<>))
+            {
+                continue;
+            }
+
+            var currentElementType = interfaceType.GetGenericArguments()[0];
+            if (matchedElementType is not null && matchedElementType != currentElementType)
+            {
+                return false;
+            }
+
+            matchedElementType = currentElementType;
+        }
+
+        elementType = matchedElementType;
+        return elementType is not null;
     }
 
     private abstract class CollectionHandler
@@ -232,6 +279,39 @@ internal sealed class TomlSingleOrArrayCollectionHelper
         public override object CreateSingleElementCollection(object? element)
         {
             return new List<T> { (T)element! };
+        }
+
+        public override bool CanPopulate(object existingValue) => existingValue is ICollection<T>;
+
+        public override object AddSingleElement(object existingValue, object? element)
+        {
+            var collection = existingValue as ICollection<T>
+                ?? throw new InvalidOperationException($"Existing collection '{existingValue.GetType().FullName}' does not support population.");
+            collection.Add((T)element!);
+            return existingValue;
+        }
+
+        public override object AddCollection(object existingValue, object incomingCollection)
+        {
+            var collection = existingValue as ICollection<T>
+                ?? throw new InvalidOperationException($"Existing collection '{existingValue.GetType().FullName}' does not support population.");
+            foreach (var item in (IEnumerable<T>)incomingCollection)
+            {
+                collection.Add(item);
+            }
+
+            return existingValue;
+        }
+    }
+
+    private sealed class MutableCollectionHandler<TCollection, T> : CollectionHandler
+        where TCollection : ICollection<T>, new()
+    {
+        public override Type ElementType => typeof(T);
+
+        public override object CreateSingleElementCollection(object? element)
+        {
+            return new TCollection { (T)element! };
         }
 
         public override bool CanPopulate(object existingValue) => existingValue is ICollection<T>;

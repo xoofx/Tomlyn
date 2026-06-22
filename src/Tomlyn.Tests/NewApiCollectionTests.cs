@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -19,6 +20,17 @@ public sealed class GeneratedCollectionHolder
     public IReadOnlyList<long> ReadOnlyValues { get; set; } = new List<long>();
 
     public IDictionary<string, long> Map { get; set; } = new Dictionary<string, long>();
+}
+
+public sealed class ObservableCollectionHolder
+{
+    public ObservableCollection<string> Global { get; set; } = new();
+}
+
+public sealed class SingleOrArrayObservableCollectionHolder
+{
+    [TomlSingleOrArray]
+    public ObservableCollection<string> Global { get; set; } = new() { "existing" };
 }
 
 public sealed class DottedKeyDictionaryHolder
@@ -72,6 +84,8 @@ public sealed class TableArrayItem
 
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [TomlSerializable(typeof(GeneratedCollectionHolder))]
+[TomlSerializable(typeof(ObservableCollectionHolder))]
+[TomlSerializable(typeof(SingleOrArrayObservableCollectionHolder))]
 [TomlSerializable(typeof(DottedKeyDictionaryHolder))]
 [TomlSerializable(typeof(SingleOrArrayCollectionHolder))]
 [TomlSerializable(typeof(SingleOrArraySettableCollectionHolder))]
@@ -134,6 +148,39 @@ public class NewApiCollectionTests
         Assert.That(roundtrip.EnumerableValues, Is.EqualTo(new[] { 6L, 7L }));
         Assert.That(roundtrip.ReadOnlyValues, Is.EqualTo(new[] { 8L, 9L }));
         Assert.That(roundtrip.Map, Is.EquivalentTo(new Dictionary<string, long> { ["x"] = 1, ["y"] = 2 }));
+    }
+
+    [Test]
+    public void Reflection_CanRoundtripObservableCollection()
+    {
+        var value = new ObservableCollectionHolder
+        {
+            Global = new ObservableCollection<string> { "Hello, World!" },
+        };
+
+        var toml = TomlSerializer.Serialize(value);
+        var roundtrip = TomlSerializer.Deserialize<ObservableCollectionHolder>(toml);
+
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.Global, Is.InstanceOf<ObservableCollection<string>>());
+        Assert.That(roundtrip.Global, Is.EqualTo(new[] { "Hello, World!" }));
+    }
+
+    [Test]
+    public void GeneratedContext_CanRoundtripObservableCollection()
+    {
+        var context = TestTomlCollectionsContext.Default;
+        var value = new ObservableCollectionHolder
+        {
+            Global = new ObservableCollection<string> { "Hello, World!" },
+        };
+
+        var toml = TomlSerializer.Serialize(value, context.ObservableCollectionHolder);
+        var roundtrip = TomlSerializer.Deserialize(toml, context.ObservableCollectionHolder);
+
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.Global, Is.InstanceOf<ObservableCollection<string>>());
+        Assert.That(roundtrip.Global, Is.EqualTo(new[] { "Hello, World!" }));
     }
 
     [Test]
@@ -352,6 +399,27 @@ public class NewApiCollectionTests
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.RuntimeIdentifiers, Is.EqualTo(new[] { "test" }));
+    }
+
+    [Test]
+    public void Reflection_ObservableCollection_WithTomlSingleOrArray_ReplacesOnSingleValue()
+    {
+        var result = TomlSerializer.Deserialize<SingleOrArrayObservableCollectionHolder>("Global = \"test\"\n");
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Global, Is.InstanceOf<ObservableCollection<string>>());
+        Assert.That(result.Global, Is.EqualTo(new[] { "test" }));
+    }
+
+    [Test]
+    public void GeneratedContext_ObservableCollection_WithTomlSingleOrArray_ReplacesOnSingleValue()
+    {
+        var context = TestTomlCollectionsContext.Default;
+        var result = TomlSerializer.Deserialize("global = \"test\"\n", context.SingleOrArrayObservableCollectionHolder);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Global, Is.InstanceOf<ObservableCollection<string>>());
+        Assert.That(result.Global, Is.EqualTo(new[] { "test" }));
     }
 
     private static string CreateItemsToml(int itemCount)

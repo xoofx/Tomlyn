@@ -601,6 +601,14 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     .Append(enumerableElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
                     .AppendLine(">(this);");
             }
+            else if (kind == SequenceKind.MutableCollection)
+            {
+                builder.Append("        return CreateSourceGeneratedMutableCollectionTypeInfo<")
+                    .Append(typeName)
+                    .Append(", ")
+                    .Append(enumerableElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                    .AppendLine(">(this);");
+            }
             else if (kind == SequenceKind.HashSet)
             {
                 builder.Append("        return CreateSourceGeneratedHashSetTypeInfo<")
@@ -2027,7 +2035,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
     private static bool CanPopulateSingleOrArraySequence(SequenceKind kind)
     {
-        return kind is SequenceKind.List or SequenceKind.ListBackedEnumerable or SequenceKind.HashSet or SequenceKind.HashSetBackedEnumerable;
+        return kind is SequenceKind.List or SequenceKind.ListBackedEnumerable or SequenceKind.MutableCollection or SequenceKind.HashSet or SequenceKind.HashSetBackedEnumerable;
     }
 
     private static string? GetSingleOrArrayCreateExpression(ITypeSymbol collectionType)
@@ -2037,6 +2045,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             return null;
         }
 
+        var collectionTypeName = collectionType.ToDisplayString(FullyQualifiedNullableFormat);
         var elementTypeName = elementType.ToDisplayString(FullyQualifiedNullableFormat);
         var readElementExpression = "_context." + GetTypeInfoPropertyName(elementType) + ".Read(reader)!";
 
@@ -2048,6 +2057,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         return kind switch
         {
             SequenceKind.List or SequenceKind.ListBackedEnumerable => "CreateSingleElementList<" + elementTypeName + ">(" + readElementExpression + ")",
+            SequenceKind.MutableCollection => "CreateSingleElementCollection<" + collectionTypeName + ", " + elementTypeName + ">(" + readElementExpression + ")",
             SequenceKind.HashSet or SequenceKind.HashSetBackedEnumerable => "CreateSingleElementHashSet<" + elementTypeName + ">(" + readElementExpression + ")",
             SequenceKind.ImmutableArray => "CreateSingleElementImmutableArray<" + elementTypeName + ">(" + readElementExpression + ")",
             SequenceKind.ImmutableList => "CreateSingleElementImmutableList<" + elementTypeName + ">(" + readElementExpression + ")",
@@ -4408,11 +4418,12 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
     {
         List = 0,
         ListBackedEnumerable = 1,
-        HashSet = 2,
-        HashSetBackedEnumerable = 3,
-        ImmutableArray = 4,
-        ImmutableList = 5,
-        ImmutableHashSet = 6,
+        MutableCollection = 2,
+        HashSet = 3,
+        HashSetBackedEnumerable = 4,
+        ImmutableArray = 5,
+        ImmutableList = 6,
+        ImmutableHashSet = 7,
     }
 
     private static bool TryGetSequenceElementType(ITypeSymbol type, out ITypeSymbol elementType, out SequenceKind kind)
@@ -4420,64 +4431,155 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         elementType = null!;
         kind = default;
 
-        if (type is not INamedTypeSymbol named || !named.IsGenericType)
+        if (type is not INamedTypeSymbol named)
         {
             return false;
         }
 
-        var constructedFrom = named.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        if (constructedFrom == "global::System.Collections.Generic.List<T>")
+        if (IsDictionaryLikeType(named))
         {
-            elementType = named.TypeArguments[0];
-            kind = SequenceKind.List;
+            return false;
+        }
+
+        if (named.IsGenericType)
+        {
+            var constructedFrom = named.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            if (constructedFrom == "global::System.Collections.Generic.List<T>")
+            {
+                elementType = named.TypeArguments[0];
+                kind = SequenceKind.List;
+                return true;
+            }
+
+            if (constructedFrom == "global::System.Collections.Generic.HashSet<T>")
+            {
+                elementType = named.TypeArguments[0];
+                kind = SequenceKind.HashSet;
+                return true;
+            }
+
+            if (constructedFrom == "global::System.Collections.Generic.ISet<T>")
+            {
+                elementType = named.TypeArguments[0];
+                kind = SequenceKind.HashSetBackedEnumerable;
+                return true;
+            }
+
+            if (constructedFrom == "global::System.Collections.Immutable.ImmutableArray<T>")
+            {
+                elementType = named.TypeArguments[0];
+                kind = SequenceKind.ImmutableArray;
+                return true;
+            }
+
+            if (constructedFrom == "global::System.Collections.Immutable.ImmutableList<T>")
+            {
+                elementType = named.TypeArguments[0];
+                kind = SequenceKind.ImmutableList;
+                return true;
+            }
+
+            if (constructedFrom == "global::System.Collections.Immutable.ImmutableHashSet<T>")
+            {
+                elementType = named.TypeArguments[0];
+                kind = SequenceKind.ImmutableHashSet;
+                return true;
+            }
+
+            if (constructedFrom is
+                "global::System.Collections.Generic.IEnumerable<T>" or
+                "global::System.Collections.Generic.ICollection<T>" or
+                "global::System.Collections.Generic.IReadOnlyCollection<T>" or
+                "global::System.Collections.Generic.IList<T>" or
+                "global::System.Collections.Generic.IReadOnlyList<T>")
+            {
+                elementType = named.TypeArguments[0];
+                kind = SequenceKind.ListBackedEnumerable;
+                return true;
+            }
+        }
+
+        if (TryGetMutableCollectionElementType(named, out elementType))
+        {
+            kind = SequenceKind.MutableCollection;
             return true;
         }
 
-        if (constructedFrom == "global::System.Collections.Generic.HashSet<T>")
+        return false;
+    }
+
+    private static bool TryGetMutableCollectionElementType(INamedTypeSymbol type, out ITypeSymbol elementType)
+    {
+        elementType = null!;
+
+        if (type.TypeKind != TypeKind.Class || type.IsAbstract || !HasPublicParameterlessConstructor(type))
         {
-            elementType = named.TypeArguments[0];
-            kind = SequenceKind.HashSet;
+            return false;
+        }
+
+        ITypeSymbol? matchedElementType = null;
+        foreach (var interfaceType in type.AllInterfaces)
+        {
+            if (!interfaceType.IsGenericType ||
+                interfaceType.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) != "global::System.Collections.Generic.ICollection<T>")
+            {
+                continue;
+            }
+
+            var currentElementType = interfaceType.TypeArguments[0];
+            if (matchedElementType is not null && !SymbolEqualityComparer.Default.Equals(matchedElementType, currentElementType))
+            {
+                return false;
+            }
+
+            matchedElementType = currentElementType;
+        }
+
+        if (matchedElementType is null)
+        {
+            return false;
+        }
+
+        elementType = matchedElementType;
+        return true;
+    }
+
+    private static bool HasPublicParameterlessConstructor(INamedTypeSymbol type)
+    {
+        foreach (var constructor in type.InstanceConstructors)
+        {
+            if (!constructor.IsStatic &&
+                constructor.DeclaredAccessibility == Accessibility.Public &&
+                constructor.Parameters.Length == 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsDictionaryLikeType(INamedTypeSymbol type)
+    {
+        if (TryGetDictionaryKeyValueTypes(type, out _, out _))
+        {
             return true;
         }
 
-        if (constructedFrom == "global::System.Collections.Generic.ISet<T>")
+        foreach (var interfaceType in type.AllInterfaces)
         {
-            elementType = named.TypeArguments[0];
-            kind = SequenceKind.HashSetBackedEnumerable;
-            return true;
-        }
+            if (!interfaceType.IsGenericType)
+            {
+                continue;
+            }
 
-        if (constructedFrom == "global::System.Collections.Immutable.ImmutableArray<T>")
-        {
-            elementType = named.TypeArguments[0];
-            kind = SequenceKind.ImmutableArray;
-            return true;
-        }
-
-        if (constructedFrom == "global::System.Collections.Immutable.ImmutableList<T>")
-        {
-            elementType = named.TypeArguments[0];
-            kind = SequenceKind.ImmutableList;
-            return true;
-        }
-
-        if (constructedFrom == "global::System.Collections.Immutable.ImmutableHashSet<T>")
-        {
-            elementType = named.TypeArguments[0];
-            kind = SequenceKind.ImmutableHashSet;
-            return true;
-        }
-
-        if (constructedFrom is
-            "global::System.Collections.Generic.IEnumerable<T>" or
-            "global::System.Collections.Generic.ICollection<T>" or
-            "global::System.Collections.Generic.IReadOnlyCollection<T>" or
-            "global::System.Collections.Generic.IList<T>" or
-            "global::System.Collections.Generic.IReadOnlyList<T>")
-        {
-            elementType = named.TypeArguments[0];
-            kind = SequenceKind.ListBackedEnumerable;
-            return true;
+            var constructedFrom = interfaceType.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            if (constructedFrom is
+                "global::System.Collections.Generic.IDictionary<TKey, TValue>" or
+                "global::System.Collections.Generic.IReadOnlyDictionary<TKey, TValue>")
+            {
+                return true;
+            }
         }
 
         return false;

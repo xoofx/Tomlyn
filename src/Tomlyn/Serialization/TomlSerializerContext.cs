@@ -246,6 +246,17 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     protected static List<T> CreateSingleElementList<T>(T element) => TomlSingleOrArrayCollectionHelper.CreateSingleElementList(element);
 
     /// <summary>
+    /// Creates a mutable collection with a single element for source-generated <see cref="TomlSingleOrArrayAttribute"/> handling.
+    /// </summary>
+    /// <typeparam name="TCollection">The collection type.</typeparam>
+    /// <typeparam name="TElement">The collection element type.</typeparam>
+    /// <param name="element">The element to place in the collection.</param>
+    /// <returns>A collection containing <paramref name="element"/>.</returns>
+    protected static TCollection CreateSingleElementCollection<TCollection, TElement>(TElement element)
+        where TCollection : ICollection<TElement>, new()
+        => TomlSingleOrArrayCollectionHelper.CreateSingleElementCollection<TCollection, TElement>(element);
+
+    /// <summary>
     /// Creates a hash set with a single element for source-generated <see cref="TomlSingleOrArrayAttribute"/> handling.
     /// </summary>
     /// <typeparam name="T">The collection element type.</typeparam>
@@ -483,6 +494,19 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     {
         ArgumentGuard.ThrowIfNull(context, nameof(context));
         return new TomlSourceGeneratedListBackedEnumerableTypeInfo<TEnumerable, TElement>(context);
+    }
+
+    /// <summary>
+    /// Creates metadata for a mutable collection type using source-generated resolution for nested elements.
+    /// </summary>
+    /// <remarks>
+    /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
+    /// </remarks>
+    protected static TomlTypeInfo<TCollection> CreateSourceGeneratedMutableCollectionTypeInfo<TCollection, TElement>(TomlSerializerContext context)
+        where TCollection : ICollection<TElement>, new()
+    {
+        ArgumentGuard.ThrowIfNull(context, nameof(context));
+        return new TomlSourceGeneratedMutableCollectionTypeInfo<TCollection, TElement>(context);
     }
 
     /// <summary>

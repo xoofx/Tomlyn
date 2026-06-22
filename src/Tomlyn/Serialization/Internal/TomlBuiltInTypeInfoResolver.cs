@@ -3,6 +3,7 @@
 // See license.txt file in the project root for full license information.
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
@@ -98,84 +99,127 @@ internal static class TomlBuiltInTypeInfoResolver
             return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
         }
 
-        if (!type.IsGenericType)
+        if (type.IsGenericType)
         {
-            return null;
-        }
+            var genericDefinition = type.GetGenericTypeDefinition();
+            var args = type.GetGenericArguments();
 
-        var genericDefinition = type.GetGenericTypeDefinition();
-        var args = type.GetGenericArguments();
-
-        if (genericDefinition == typeof(List<>))
-        {
-            var typeInfoType = typeof(TomlListTypeInfo<>).MakeGenericType(args[0]);
-            return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
-        }
-
-        if (genericDefinition == typeof(HashSet<>))
-        {
-            var typeInfoType = typeof(TomlHashSetTypeInfo<>).MakeGenericType(args[0]);
-            return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
-        }
-
-        if (genericDefinition == typeof(ISet<>))
-        {
-            var typeInfoType = typeof(TomlHashSetBackedEnumerableTypeInfo<,>).MakeGenericType(type, args[0]);
-            return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
-        }
-
-        if (genericDefinition == typeof(ImmutableArray<>))
-        {
-            var typeInfoType = typeof(TomlImmutableArrayTypeInfo<>).MakeGenericType(args[0]);
-            return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
-        }
-
-        if (genericDefinition == typeof(ImmutableList<>))
-        {
-            var typeInfoType = typeof(TomlImmutableListTypeInfo<>).MakeGenericType(args[0]);
-            return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
-        }
-
-        if (genericDefinition == typeof(ImmutableHashSet<>))
-        {
-            var typeInfoType = typeof(TomlImmutableHashSetTypeInfo<>).MakeGenericType(args[0]);
-            return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
-        }
-
-        if (genericDefinition == typeof(Dictionary<,>))
-        {
-            if (args[0] != typeof(string))
+            if (genericDefinition == typeof(List<>))
             {
-                return null;
+                var typeInfoType = typeof(TomlListTypeInfo<>).MakeGenericType(args[0]);
+                return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
             }
 
-            var typeInfoType = typeof(TomlDictionaryTypeInfo<,>).MakeGenericType(type, args[1]);
-            return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
-        }
-
-        if (genericDefinition == typeof(IDictionary<,>) ||
-            genericDefinition == typeof(IReadOnlyDictionary<,>))
-        {
-            if (args[0] != typeof(string))
+            if (genericDefinition == typeof(HashSet<>))
             {
-                return null;
+                var typeInfoType = typeof(TomlHashSetTypeInfo<>).MakeGenericType(args[0]);
+                return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
             }
 
-            var typeInfoType = typeof(TomlDictionaryTypeInfo<,>).MakeGenericType(type, args[1]);
-            return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
+            if (genericDefinition == typeof(ISet<>))
+            {
+                var typeInfoType = typeof(TomlHashSetBackedEnumerableTypeInfo<,>).MakeGenericType(type, args[0]);
+                return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
+            }
+
+            if (genericDefinition == typeof(ImmutableArray<>))
+            {
+                var typeInfoType = typeof(TomlImmutableArrayTypeInfo<>).MakeGenericType(args[0]);
+                return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
+            }
+
+            if (genericDefinition == typeof(ImmutableList<>))
+            {
+                var typeInfoType = typeof(TomlImmutableListTypeInfo<>).MakeGenericType(args[0]);
+                return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
+            }
+
+            if (genericDefinition == typeof(ImmutableHashSet<>))
+            {
+                var typeInfoType = typeof(TomlImmutableHashSetTypeInfo<>).MakeGenericType(args[0]);
+                return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
+            }
+
+            if (genericDefinition == typeof(Dictionary<,>))
+            {
+                if (args[0] != typeof(string))
+                {
+                    return null;
+                }
+
+                var typeInfoType = typeof(TomlDictionaryTypeInfo<,>).MakeGenericType(type, args[1]);
+                return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
+            }
+
+            if (genericDefinition == typeof(IDictionary<,>) ||
+                genericDefinition == typeof(IReadOnlyDictionary<,>))
+            {
+                if (args[0] != typeof(string))
+                {
+                    return null;
+                }
+
+                var typeInfoType = typeof(TomlDictionaryTypeInfo<,>).MakeGenericType(type, args[1]);
+                return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
+            }
+
+            if (genericDefinition == typeof(IEnumerable<>) ||
+                genericDefinition == typeof(ICollection<>) ||
+                genericDefinition == typeof(IReadOnlyCollection<>) ||
+                genericDefinition == typeof(IList<>) ||
+                genericDefinition == typeof(IReadOnlyList<>))
+            {
+                var typeInfoType = typeof(TomlListBackedEnumerableTypeInfo<,>).MakeGenericType(type, args[0]);
+                return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
+            }
         }
 
-        if (genericDefinition == typeof(IEnumerable<>) ||
-            genericDefinition == typeof(ICollection<>) ||
-            genericDefinition == typeof(IReadOnlyCollection<>) ||
-            genericDefinition == typeof(IList<>) ||
-            genericDefinition == typeof(IReadOnlyList<>))
+        if (TryGetMutableCollectionElementType(type, out var collectionElementType))
         {
-            var typeInfoType = typeof(TomlListBackedEnumerableTypeInfo<,>).MakeGenericType(type, args[0]);
+            var typeInfoType = typeof(TomlMutableCollectionTypeInfo<,>).MakeGenericType(type, collectionElementType);
             return (TomlTypeInfo?)Activator.CreateInstance(typeInfoType, options);
         }
 
         return null;
+    }
+
+    private static bool TryGetMutableCollectionElementType(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type,
+        [NotNullWhen(true)] out Type? elementType)
+    {
+        elementType = null;
+
+        if (type.IsInterface || type.IsAbstract || typeof(IDictionary).IsAssignableFrom(type) || type.GetConstructor(Type.EmptyTypes) is null)
+        {
+            return false;
+        }
+
+        Type? matchedElementType = null;
+        foreach (var interfaceType in type.GetInterfaces())
+        {
+            if (interfaceType.IsGenericType &&
+                (interfaceType.GetGenericTypeDefinition() == typeof(IDictionary<,>) ||
+                 interfaceType.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>)))
+            {
+                return false;
+            }
+
+            if (!interfaceType.IsGenericType || interfaceType.GetGenericTypeDefinition() != typeof(ICollection<>))
+            {
+                continue;
+            }
+
+            var currentElementType = interfaceType.GetGenericArguments()[0];
+            if (matchedElementType is not null && matchedElementType != currentElementType)
+            {
+                return false;
+            }
+
+            matchedElementType = currentElementType;
+        }
+
+        elementType = matchedElementType;
+        return elementType is not null;
     }
 
     private sealed class BuiltInUntypedTomlTypeInfo : TomlTypeInfo
