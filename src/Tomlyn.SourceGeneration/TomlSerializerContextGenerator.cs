@@ -420,7 +420,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         foreach (var type in ordered)
         {
-            if (TryGetPocoShape(context, model, type, out var poco))
+            if (!HasStaticOptionsConverter(model.Options, type) && TryGetPocoShape(context, model, type, out var poco))
             {
                 EmitPocoTypeInfo(builder, model, type, poco);
             }
@@ -547,6 +547,9 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             : propertyName;
         var propertyAccessibility = string.Equals(publicPropertyName, propertyName, StringComparison.Ordinal) ? "public" : "private";
         var typeName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var usesJsonStringEnumConverter = type.TypeKind == TypeKind.Enum && HasJsonStringEnumConverterAttribute(type);
+        ITypeSymbol? staticOptionsConverterType = null;
+        var usesStaticOptionsConverter = !usesJsonStringEnumConverter && TryGetStaticOptionsConverterType(model.Options, type, out staticOptionsConverterType);
 
         builder.Append("    private TomlTypeInfo<").Append(typeName).Append(">? _").Append(propertyName).AppendLine(";");
         builder.Append("    ").Append(propertyAccessibility).Append(" TomlTypeInfo<").Append(typeName).Append("> ").Append(propertyName).AppendLine();
@@ -561,10 +564,17 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         builder.Append("    private TomlTypeInfo<").Append(typeName).Append("> Create").Append(propertyName).AppendLine("()");
         builder.AppendLine("    {");
-
-        if (IsBuiltInType(type))
+        if (usesStaticOptionsConverter)
         {
-            if (type.TypeKind == TypeKind.Enum && HasJsonStringEnumConverterAttribute(type))
+            builder.Append("        return CreateConverterTypeInfo<")
+                .Append(typeName)
+                .Append(">(Options, new ")
+                .Append(staticOptionsConverterType!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                .AppendLine("());");
+        }
+        else if (IsBuiltInType(type))
+        {
+            if (usesJsonStringEnumConverter)
             {
                 builder.Append("        return CreateStringEnumTypeInfo<").Append(typeName).AppendLine(">(Options);");
             }
@@ -2880,9 +2890,14 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
             list.Add(current);
 
+            if (HasStaticOptionsConverter(model.Options, current))
+            {
+                continue;
+            }
+
             if (TryGetNullableUnderlyingType(current, out var nullableUnderlyingType))
             {
-                if (IsSupportedMemberType(nullableUnderlyingType, derivedTypeMappings))
+                if (IsSupportedMemberType(nullableUnderlyingType, model.Options, derivedTypeMappings))
                 {
                     queue.Enqueue(nullableUnderlyingType);
                 }
@@ -2892,7 +2907,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
             if (TryGetArrayElementType(current, out var arrayElementType))
             {
-                if (IsSupportedMemberType(arrayElementType, derivedTypeMappings))
+                if (IsSupportedMemberType(arrayElementType, model.Options, derivedTypeMappings))
                 {
                     queue.Enqueue(arrayElementType);
                 }
@@ -2902,7 +2917,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
             if (TryGetSequenceElementType(current, out var enumerableElementType, out _))
             {
-                if (IsSupportedMemberType(enumerableElementType, derivedTypeMappings))
+                if (IsSupportedMemberType(enumerableElementType, model.Options, derivedTypeMappings))
                 {
                     queue.Enqueue(enumerableElementType);
                 }
@@ -2912,7 +2927,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
             if (TryGetDictionaryValueType(current, out var dictionaryValueType))
             {
-                if (IsSupportedMemberType(dictionaryValueType, derivedTypeMappings))
+                if (IsSupportedMemberType(dictionaryValueType, model.Options, derivedTypeMappings))
                 {
                     queue.Enqueue(dictionaryValueType);
                 }
@@ -2936,7 +2951,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                         continue;
                     }
 
-                    if (!IsSupportedMemberType(member.Type, derivedTypeMappings))
+                    if (!IsSupportedMemberType(member.Type, model.Options, derivedTypeMappings))
                     {
                         context.ReportDiagnostic(Diagnostic.Create(
                             UnsupportedMemberType,
@@ -2954,7 +2969,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 {
                     foreach (var parameter in ctor.Parameters)
                     {
-                        if (!IsSupportedMemberType(parameter.ParameterType, derivedTypeMappings))
+                        if (!IsSupportedMemberType(parameter.ParameterType, model.Options, derivedTypeMappings))
                         {
                             context.ReportDiagnostic(Diagnostic.Create(
                                 UnsupportedMemberType,
@@ -2971,7 +2986,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
                 if (poco.ExtensionData is { } extensionData)
                 {
-                    if (!IsSupportedMemberType(extensionData.ValueType, derivedTypeMappings))
+                    if (!IsSupportedMemberType(extensionData.ValueType, model.Options, derivedTypeMappings))
                     {
                         context.ReportDiagnostic(Diagnostic.Create(
                             UnsupportedMemberType,
@@ -2991,7 +3006,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             {
                 foreach (var derived in polymorphic.DerivedTypes)
                 {
-                    if (!IsSupportedMemberType(derived.Type, derivedTypeMappings))
+                    if (!IsSupportedMemberType(derived.Type, model.Options, derivedTypeMappings))
                     {
                         context.ReportDiagnostic(Diagnostic.Create(
                             InvalidPolymorphismConfiguration,
@@ -3072,11 +3087,16 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         return false;
     }
 
-    private static bool IsSupportedMemberType(ITypeSymbol type, ImmutableArray<DerivedTypeMappingModel> derivedTypeMappings)
+    private static bool IsSupportedMemberType(ITypeSymbol type, SourceGenOptions options, ImmutableArray<DerivedTypeMappingModel> derivedTypeMappings)
     {
+        if (HasStaticOptionsConverter(options, type))
+        {
+            return true;
+        }
+
         if (TryGetNullableUnderlyingType(type, out var nullableUnderlyingType))
         {
-            return IsSupportedMemberType(nullableUnderlyingType, derivedTypeMappings);
+            return IsSupportedMemberType(nullableUnderlyingType, options, derivedTypeMappings);
         }
 
         // v1 generator milestone: built-in scalars/containers and POCOs.
@@ -3087,12 +3107,12 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         if (TryGetArrayElementType(type, out var arrayElementType))
         {
-            return IsSupportedMemberType(arrayElementType, derivedTypeMappings);
+            return IsSupportedMemberType(arrayElementType, options, derivedTypeMappings);
         }
 
         if (TryGetSequenceElementType(type, out var enumerableElementType, out _))
         {
-            return IsSupportedMemberType(enumerableElementType, derivedTypeMappings);
+            return IsSupportedMemberType(enumerableElementType, options, derivedTypeMappings);
         }
 
         if (TryGetDictionaryKeyValueTypes(type, out var dictKeyType, out var dictValueType))
@@ -3102,7 +3122,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 return false;
             }
 
-            return IsSupportedMemberType(dictValueType, derivedTypeMappings);
+            return IsSupportedMemberType(dictValueType, options, derivedTypeMappings);
         }
 
         if (type is INamedTypeSymbol named)
@@ -5418,6 +5438,38 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             model.ContextSymbol.ToDisplayString(),
             $"{optionName} has unsupported value {(value.Value).ToString(CultureInfo.InvariantCulture)}."));
         clear(null);
+    }
+
+    private static bool HasStaticOptionsConverter(SourceGenOptions options, ITypeSymbol type)
+        => TryGetStaticOptionsConverterType(options, type, out _);
+
+    private static bool TryGetStaticOptionsConverterType(SourceGenOptions options, ITypeSymbol type, out ITypeSymbol converterType)
+    {
+        if (!options.ConverterTypes.IsDefaultOrEmpty)
+        {
+            foreach (var candidate in options.ConverterTypes)
+            {
+                if (candidate is not INamedTypeSymbol named)
+                {
+                    continue;
+                }
+
+                for (var current = named.BaseType; current is not null; current = current.BaseType)
+                {
+                    if (current.IsGenericType &&
+                        current.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::Tomlyn.Serialization.TomlConverter<T>" &&
+                        current.TypeArguments.Length == 1 &&
+                        SymbolEqualityComparer.Default.Equals(current.TypeArguments[0], type))
+                    {
+                        converterType = candidate;
+                        return true;
+                    }
+                }
+            }
+        }
+
+        converterType = null!;
+        return false;
     }
 
     private static bool DerivesFrom(INamedTypeSymbol symbol, string baseTypeMetadataName)

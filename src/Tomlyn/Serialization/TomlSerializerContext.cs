@@ -201,6 +201,20 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     }
 
     /// <summary>
+    /// Creates metadata for a type handled by a source-generation converter option.
+    /// </summary>
+    /// <typeparam name="T">The type handled by the converter.</typeparam>
+    /// <param name="options">The serializer options.</param>
+    /// <param name="converter">The converter instance.</param>
+    /// <returns>Converter-based TOML metadata.</returns>
+    protected static TomlTypeInfo<T> CreateConverterTypeInfo<T>(TomlSerializerOptions options, TomlConverter<T> converter)
+    {
+        ArgumentGuard.ThrowIfNull(options, nameof(options));
+        ArgumentGuard.ThrowIfNull(converter, nameof(converter));
+        return new TomlConverterTypeInfo<T>(options, converter);
+    }
+
+    /// <summary>
     /// Determines whether an existing collection can be populated for source-generated <see cref="TomlSingleOrArrayAttribute"/> handling.
     /// </summary>
     /// <typeparam name="T">The collection element type.</typeparam>

@@ -58,6 +58,16 @@ public sealed class GeneratedOptionsPerson
     public long Age { get; set; }
 }
 
+public sealed class GeneratedConvertedScalar
+{
+    public string Text { get; set; } = "";
+}
+
+public sealed class GeneratedConvertedScalarHolder
+{
+    public GeneratedConvertedScalar Value { get; set; } = new();
+}
+
 public sealed class GeneratedOrderedPerson
 {
     [JsonPropertyOrder(-10)]
@@ -313,6 +323,20 @@ public sealed class GeneratedOptionsConverter : TomlConverter<string>
     public override void Write(TomlWriter writer, string value) => writer.WriteStringValue(value.ToUpperInvariant());
 }
 
+public sealed class GeneratedConvertedScalarConverter : TomlConverter<GeneratedConvertedScalar>
+{
+    public override GeneratedConvertedScalar? Read(TomlReader reader) => new() { Text = reader.GetString()! };
+
+    public override void Write(TomlWriter writer, GeneratedConvertedScalar value) => writer.WriteStringValue(value.Text);
+}
+
+public sealed class ThrowingGeneratedConverterFactory : TomlConverterFactory
+{
+    public override bool CanConvert(Type typeToConvert) => throw new InvalidOperationException("Source-generated converter resolution should be static.");
+
+    public override TomlConverter CreateConverter(Type typeToConvert, TomlSerializerOptions options) => throw new InvalidOperationException("Source-generated converter resolution should be static.");
+}
+
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [TomlSerializable(typeof(GeneratedPerson))]
 internal partial class TestTomlSerializerContext : TomlSerializerContext
@@ -368,6 +392,12 @@ internal partial class TestTomlSerializerContextOverriddenMembers : TomlSerializ
     Converters = [typeof(GeneratedOptionsConverter)])]
 [TomlSerializable(typeof(GeneratedOptionsPerson))]
 internal partial class TestTomlSerializerContextWithOptions : TomlSerializerContext
+{
+}
+
+[TomlSourceGenerationOptions(Converters = [typeof(ThrowingGeneratedConverterFactory), typeof(GeneratedConvertedScalarConverter)])]
+[TomlSerializable(typeof(GeneratedConvertedScalarHolder))]
+internal partial class TestTomlSerializerContextWithConverter : TomlSerializerContext
 {
 }
 
@@ -1012,6 +1042,30 @@ public class NewApiSourceGenerationTests
         Assert.That(options.TableArrayStyle, Is.EqualTo(TomlTableArrayStyle.InlineArrayOfTables));
         Assert.That(options.Converters, Has.Count.EqualTo(1));
         Assert.That(options.Converters[0], Is.InstanceOf<GeneratedOptionsConverter>());
+    }
+
+    [Test]
+    public void GeneratedContext_UsesTomlSourceGenerationOptionsConverters_ForNestedTypes()
+    {
+        var context = TestTomlSerializerContextWithConverter.Default;
+        var toml = "Value = \"hello\"";
+
+        var fromContext = TomlSerializer.Deserialize<GeneratedConvertedScalarHolder>(toml, context);
+        var fromTypeInfo = TomlSerializer.Deserialize(toml, context.GeneratedConvertedScalarHolder);
+        var fromResolverOptions = TomlSerializer.Deserialize<GeneratedConvertedScalarHolder>(
+            toml,
+            new TomlSerializerOptions { TypeInfoResolver = context });
+        var roundtripToml = TomlSerializer.Serialize(
+            new GeneratedConvertedScalarHolder { Value = new GeneratedConvertedScalar { Text = "world" } },
+            context.GeneratedConvertedScalarHolder);
+
+        Assert.That(fromContext, Is.Not.Null);
+        Assert.That(fromContext!.Value.Text, Is.EqualTo("hello"));
+        Assert.That(fromTypeInfo, Is.Not.Null);
+        Assert.That(fromTypeInfo!.Value.Text, Is.EqualTo("hello"));
+        Assert.That(fromResolverOptions, Is.Not.Null);
+        Assert.That(fromResolverOptions!.Value.Text, Is.EqualTo("hello"));
+        Assert.That(roundtripToml, Does.Contain("Value = \"world\""));
     }
 
     [Test]
