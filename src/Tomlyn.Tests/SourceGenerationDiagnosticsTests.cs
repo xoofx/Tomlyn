@@ -122,6 +122,8 @@ public sealed class SourceGenerationDiagnosticsTests
         Assert.That(generatedSource, Does.Not.Contain("Options.MappingOrder"));
         Assert.That(generatedSource, Does.Not.Contain("Options.DictionaryKeyPolicy"));
         Assert.That(generatedSource, Does.Not.Contain("Options.PreferredObjectCreationHandling"));
+        Assert.That(generatedSource, Does.Not.Contain("if (Options."));
+        Assert.That(generatedSource, Does.Not.Contain("switch (Options."));
     }
 
     [Test]

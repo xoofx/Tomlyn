@@ -68,6 +68,33 @@ public sealed class GeneratedConvertedScalarHolder
     public GeneratedConvertedScalar Value { get; set; } = new();
 }
 
+public sealed class GeneratedTransitiveConfig
+{
+    public GeneratedTransitiveBar? Foo { get; set; }
+
+    public IReadOnlyList<GeneratedTransitiveBar> Bars { get; set; } = [];
+
+    public List<List<GeneratedTransitiveBaz>> Matrix { get; set; } = [];
+
+    public Dictionary<string, GeneratedTransitiveBaz> BazByName { get; set; } = [];
+
+    public object Dynamic { get; set; } = new TomlArray();
+
+    public List<object> DynamicList { get; set; } = [];
+
+    public Dictionary<string, object> DynamicMap { get; set; } = [];
+}
+
+public sealed class GeneratedTransitiveBar
+{
+    public GeneratedTransitiveBaz? Baz { get; set; }
+}
+
+public sealed class GeneratedTransitiveBaz
+{
+    public string Value { get; set; } = "";
+}
+
 public sealed class GeneratedOrderedPerson
 {
     [JsonPropertyOrder(-10)]
@@ -398,6 +425,12 @@ internal partial class TestTomlSerializerContextWithOptions : TomlSerializerCont
 [TomlSourceGenerationOptions(Converters = [typeof(ThrowingGeneratedConverterFactory), typeof(GeneratedConvertedScalarConverter)])]
 [TomlSerializable(typeof(GeneratedConvertedScalarHolder))]
 internal partial class TestTomlSerializerContextWithConverter : TomlSerializerContext
+{
+}
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[TomlSerializable(typeof(GeneratedTransitiveConfig))]
+internal partial class TestTomlSerializerContextTransitive : TomlSerializerContext
 {
 }
 
@@ -1066,6 +1099,58 @@ public class NewApiSourceGenerationTests
         Assert.That(fromResolverOptions, Is.Not.Null);
         Assert.That(fromResolverOptions!.Value.Text, Is.EqualTo("hello"));
         Assert.That(roundtripToml, Does.Contain("Value = \"world\""));
+    }
+
+    [Test]
+    public void GeneratedContext_GeneratesTransitiveMemberTypes()
+    {
+        var context = TestTomlSerializerContextTransitive.Default;
+        var value = new GeneratedTransitiveConfig
+        {
+            Foo = new GeneratedTransitiveBar
+            {
+                Baz = new GeneratedTransitiveBaz { Value = "nested" },
+            },
+            Bars =
+            [
+                new GeneratedTransitiveBar
+                {
+                    Baz = new GeneratedTransitiveBaz { Value = "collection" },
+                },
+            ],
+            Matrix =
+            [
+                [new GeneratedTransitiveBaz { Value = "a" }],
+                [new GeneratedTransitiveBaz { Value = "b" }],
+            ],
+            BazByName =
+            {
+                ["first"] = new GeneratedTransitiveBaz { Value = "dictionary" },
+            },
+            Dynamic = new TomlArray { "node" },
+            DynamicList = [1, "two"],
+            DynamicMap =
+            {
+                ["answer"] = 3,
+                ["items"] = new TomlArray { "x", 4 },
+            },
+        };
+
+        var toml = TomlSerializer.Serialize(value, context.GeneratedTransitiveConfig);
+        var roundtrip = TomlSerializer.Deserialize(toml, context.GeneratedTransitiveConfig);
+
+        Assert.That(context.GetTypeInfo(typeof(GeneratedTransitiveBar), context.Options), Is.Not.Null);
+        Assert.That(context.GetTypeInfo(typeof(GeneratedTransitiveBaz), context.Options), Is.Not.Null);
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.Foo?.Baz?.Value, Is.EqualTo("nested"));
+        Assert.That(roundtrip.Bars[0].Baz?.Value, Is.EqualTo("collection"));
+        Assert.That(roundtrip.Matrix[1][0].Value, Is.EqualTo("b"));
+        Assert.That(roundtrip.BazByName["first"].Value, Is.EqualTo("dictionary"));
+        Assert.That(roundtrip.Dynamic, Is.TypeOf<TomlArray>());
+        Assert.That((TomlArray)roundtrip.Dynamic, Is.EqualTo(new TomlArray { "node" }));
+        Assert.That(roundtrip.DynamicList, Is.EqualTo(new object[] { 1L, "two" }));
+        Assert.That(roundtrip.DynamicMap["answer"], Is.EqualTo(3L));
+        Assert.That(roundtrip.DynamicMap["items"], Is.EqualTo(new TomlArray { "x", 4L }));
     }
 
     [Test]
