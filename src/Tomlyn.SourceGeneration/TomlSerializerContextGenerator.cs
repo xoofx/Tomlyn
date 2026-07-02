@@ -117,6 +117,8 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
     private const string TomlOnDeserializingMetadataName = "Tomlyn.Serialization.ITomlOnDeserializing";
     private const string TomlOnDeserializedMetadataName = "Tomlyn.Serialization.ITomlOnDeserialized";
     private const string SetsRequiredMembersAttributeMetadataName = "System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute";
+    private const string GeneratedCodeTool = "Tomlyn.SourceGeneration";
+    private static readonly string GeneratedCodeVersion = typeof(TomlSerializerContextGenerator).Assembly.GetName().Version?.ToString() ?? "0.0.0.0";
 
     private static readonly SymbolDisplayFormat FullyQualifiedNullableFormat =
         SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
@@ -388,6 +390,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             builder.AppendLine();
         }
 
+        AppendGeneratedTypeAttributes(builder, string.Empty);
         builder.Append("partial class ").Append(model.TypeName).AppendLine();
         builder.AppendLine("{");
 
@@ -469,6 +472,17 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.AppendLine("}");
 
         context.AddSource($"{model.TypeName}.TomlSerializerContext.g.cs", builder.ToString());
+    }
+
+    private static void AppendGeneratedTypeAttributes(StringBuilder builder, string indent)
+    {
+        builder.Append(indent)
+            .Append("[global::System.CodeDom.Compiler.GeneratedCode(\"")
+            .Append(EscapeStringLiteral(GeneratedCodeTool))
+            .Append("\", \"")
+            .Append(EscapeStringLiteral(GeneratedCodeVersion))
+            .AppendLine("\")]");
+        builder.Append(indent).AppendLine("[global::System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]");
     }
 
     private static void EmitCreateDefaultOptions(StringBuilder builder, ContextModel model)
@@ -763,6 +777,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         var callsOnDeserialized = ImplementsInterface(type, TomlOnDeserializedMetadataName);
 
         builder.AppendLine();
+        AppendGeneratedTypeAttributes(builder, "    ");
         builder.Append("    private sealed class __TomlTypeInfo_").Append(propertyName).Append(" : TomlTypeInfo<").Append(typeName).AppendLine(">");
         builder.AppendLine("    {");
         builder.Append("        private readonly ").Append(model.TypeName).AppendLine(" _context;");
