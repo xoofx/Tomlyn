@@ -113,6 +113,34 @@ public sealed class GeneratedMappedNumberSquare : GeneratedMappedNumberShape
     public double Side { get; set; }
 }
 
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[TomlSerializable(typeof(GeneratedMappedNode))]
+[TomlSerializable(typeof(GeneratedMappedNodeHolder))]
+[TomlDerivedTypeMapping(typeof(IGeneratedMappedNode), typeof(GeneratedMappedNode), "node")]
+internal partial class GeneratedMappedNodeContext : TomlSerializerContext
+{
+}
+
+[TomlPolymorphic(TypeDiscriminatorPropertyName = "kind")]
+public interface IGeneratedMappedNode
+{
+    string Name { get; }
+
+    int Level { get; }
+}
+
+public sealed class GeneratedMappedNode : IGeneratedMappedNode
+{
+    public string Name { get; set; } = "";
+
+    public int Level { get; set; }
+}
+
+public sealed class GeneratedMappedNodeHolder
+{
+    public IGeneratedMappedNode? Value { get; set; }
+}
+
 public sealed class CrossProjectSourceGenerationTests
 {
     [Test]
@@ -231,5 +259,44 @@ public sealed class CrossProjectSourceGenerationTests
         Assert.That(toml, Does.Contain("type = \"1\""));
         Assert.That(roundtrip, Is.TypeOf<GeneratedMappedNumberSquare>());
         Assert.That(((GeneratedMappedNumberSquare)roundtrip!).Side, Is.EqualTo(3.0));
+    }
+
+    [Test]
+    public void GeneratedContext_ContextMappingsSupportInterfaceRootTypes()
+    {
+        var context = GeneratedMappedNodeContext.Default;
+        IGeneratedMappedNode value = new GeneratedMappedNode { Name = "Root", Level = 4 };
+
+        var toml = TomlSerializer.Serialize(value, typeof(IGeneratedMappedNode), context);
+        var roundtrip = (IGeneratedMappedNode?)TomlSerializer.Deserialize(toml, typeof(IGeneratedMappedNode), context);
+
+        Assert.That(context.GetTypeInfo(typeof(IGeneratedMappedNode), context.Options), Is.Not.Null);
+        Assert.That(toml, Does.Contain("kind = \"node\""));
+        Assert.That(toml, Does.Contain("name = \"Root\""));
+        Assert.That(toml, Does.Contain("level = 4"));
+        Assert.That(roundtrip, Is.TypeOf<GeneratedMappedNode>());
+        Assert.That(roundtrip!.Name, Is.EqualTo("Root"));
+        Assert.That(roundtrip.Level, Is.EqualTo(4));
+    }
+
+    [Test]
+    public void GeneratedContext_ContextMappingsSupportInterfaceMemberTypes()
+    {
+        var context = GeneratedMappedNodeContext.Default;
+        var holder = new GeneratedMappedNodeHolder
+        {
+            Value = new GeneratedMappedNode { Name = "Child", Level = 3 },
+        };
+
+        var toml = TomlSerializer.Serialize(holder, context.GeneratedMappedNodeHolder);
+        var roundtrip = TomlSerializer.Deserialize(toml, context.GeneratedMappedNodeHolder);
+
+        Assert.That(toml, Does.Contain("kind = \"node\""));
+        Assert.That(toml, Does.Contain("name = \"Child\""));
+        Assert.That(toml, Does.Contain("level = 3"));
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.Value, Is.TypeOf<GeneratedMappedNode>());
+        Assert.That(roundtrip.Value!.Name, Is.EqualTo("Child"));
+        Assert.That(roundtrip.Value.Level, Is.EqualTo(3));
     }
 }
