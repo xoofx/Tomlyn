@@ -68,6 +68,13 @@ public sealed class GeneratedConvertedScalarHolder
     public GeneratedConvertedScalar Value { get; set; } = new();
 }
 
+public sealed class GeneratedRuntimeConverterHolder
+{
+    public Guid Id { get; set; }
+
+    public Guid? OptionalId { get; set; }
+}
+
 public sealed class GeneratedTransitiveConfig
 {
     public GeneratedTransitiveBar? Foo { get; set; }
@@ -357,6 +364,59 @@ public sealed class GeneratedConvertedScalarConverter : TomlConverter<GeneratedC
     public override void Write(TomlWriter writer, GeneratedConvertedScalar value) => writer.WriteStringValue(value.Text);
 }
 
+public sealed class RuntimeGuidConverter(string wireValue, Guid value) : TomlConverter<Guid>
+{
+    private readonly Guid _value = value;
+
+    public override Guid Read(TomlReader reader)
+    {
+        Assert.That(reader.GetString(), Is.EqualTo(wireValue));
+        return _value;
+    }
+
+    public override void Write(TomlWriter writer, Guid value)
+    {
+        Assert.That(value, Is.EqualTo(_value));
+        writer.WriteStringValue(wireValue);
+    }
+}
+
+public sealed class RuntimeNullableGuidConverter(string wireValue, Guid value) : TomlConverter<Guid?>
+{
+    private readonly Guid _value = value;
+
+    public override Guid? Read(TomlReader reader)
+    {
+        Assert.That(reader.GetString(), Is.EqualTo(wireValue));
+        return _value;
+    }
+
+    public override void Write(TomlWriter writer, Guid? value)
+    {
+        Assert.That(value, Is.EqualTo(_value));
+        writer.WriteStringValue(wireValue);
+    }
+}
+
+public sealed class CountingRuntimeGuidConverterFactory(string wireValue, Guid value) : TomlConverterFactory
+{
+    public int CanConvertCount { get; private set; }
+
+    public int CreateConverterCount { get; private set; }
+
+    public override bool CanConvert(Type typeToConvert)
+    {
+        CanConvertCount++;
+        return typeToConvert == typeof(Guid);
+    }
+
+    public override TomlConverter CreateConverter(Type typeToConvert, TomlSerializerOptions options)
+    {
+        CreateConverterCount++;
+        return new RuntimeGuidConverter(wireValue, value);
+    }
+}
+
 public sealed class ThrowingGeneratedConverterFactory : TomlConverterFactory
 {
     public override bool CanConvert(Type typeToConvert) => throw new InvalidOperationException("Source-generated converter resolution should be static.");
@@ -366,6 +426,7 @@ public sealed class ThrowingGeneratedConverterFactory : TomlConverterFactory
 
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [TomlSerializable(typeof(GeneratedPerson))]
+[TomlSerializable(typeof(GeneratedRuntimeConverterHolder))]
 internal partial class TestTomlSerializerContext : TomlSerializerContext
 {
 }
@@ -1099,6 +1160,59 @@ public class NewApiSourceGenerationTests
         Assert.That(fromResolverOptions, Is.Not.Null);
         Assert.That(fromResolverOptions!.Value.Text, Is.EqualTo("hello"));
         Assert.That(roundtripToml, Does.Contain("Value = \"world\""));
+    }
+
+    [Test]
+    public void GeneratedContext_UsesRuntimeConverters_ForGeneratedMembers()
+    {
+        var id = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var optionalId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var context = TestTomlSerializerContext.Default;
+        var options = context.Options with
+        {
+            Converters =
+            [
+                new RuntimeGuidConverter("ref:id", id),
+                new RuntimeNullableGuidConverter("ref:optional-id", optionalId),
+            ],
+        };
+
+        var value = TomlSerializer.Deserialize<GeneratedRuntimeConverterHolder>(
+            "id = \"ref:id\"\noptionalId = \"ref:optional-id\"",
+            options);
+        var toml = TomlSerializer.Serialize(
+            new GeneratedRuntimeConverterHolder { Id = id, OptionalId = optionalId },
+            options);
+
+        Assert.That(value, Is.Not.Null);
+        Assert.That(value!.Id, Is.EqualTo(id));
+        Assert.That(value.OptionalId, Is.EqualTo(optionalId));
+        Assert.That(toml, Does.Contain("id = \"ref:id\""));
+        Assert.That(toml, Does.Contain("optionalId = \"ref:optional-id\""));
+    }
+
+    [Test]
+    public void GeneratedContext_ResolvesRuntimeConverters_WhenTypeInfoIsInitialized()
+    {
+        var id = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var factory = new CountingRuntimeGuidConverterFactory("ref:id", id);
+        var context = TestTomlSerializerContext.Default;
+        var options = context.Options with { Converters = [factory] };
+
+        var typeInfo = (TomlTypeInfo<GeneratedRuntimeConverterHolder>)context.GetTypeInfo(typeof(GeneratedRuntimeConverterHolder), options)!;
+        var canConvertCount = factory.CanConvertCount;
+        var createConverterCount = factory.CreateConverterCount;
+
+        var toml = TomlSerializer.Serialize(new GeneratedRuntimeConverterHolder { Id = id }, typeInfo);
+        var value = TomlSerializer.Deserialize("id = \"ref:id\"", typeInfo);
+
+        Assert.That(canConvertCount, Is.GreaterThan(0));
+        Assert.That(createConverterCount, Is.GreaterThan(0));
+        Assert.That(factory.CanConvertCount, Is.EqualTo(canConvertCount));
+        Assert.That(factory.CreateConverterCount, Is.EqualTo(createConverterCount));
+        Assert.That(toml, Does.Contain("id = \"ref:id\""));
+        Assert.That(value, Is.Not.Null);
+        Assert.That(value!.Id, Is.EqualTo(id));
     }
 
     [Test]

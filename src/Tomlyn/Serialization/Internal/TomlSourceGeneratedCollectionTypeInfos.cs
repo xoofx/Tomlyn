@@ -15,8 +15,8 @@ internal sealed class TomlSourceGeneratedArrayTypeInfo<TElement> : TomlTypeInfo<
     private TomlTypeInfo? _elementTypeInfo;
     private TomlTypeInfo<TElement>? _typedElementTypeInfo;
 
-    public TomlSourceGeneratedArrayTypeInfo(TomlSerializerContext context)
-        : base(context.Options)
+    public TomlSourceGeneratedArrayTypeInfo(TomlSerializerContext context, TomlSerializerOptions? options = null)
+        : base(options ?? context.Options)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
@@ -84,8 +84,7 @@ internal sealed class TomlSourceGeneratedArrayTypeInfo<TElement> : TomlTypeInfo<
             return;
         }
 
-        var fromConverters = TomlTypeInfoResolverPipeline.TryResolveFromConverters(Options, typeof(TElement));
-        var resolved = fromConverters ?? _context.GetTypeInfo(typeof(TElement), Options);
+        var resolved = _context.GetTypeInfo(typeof(TElement), Options);
         if (resolved is null)
         {
             throw new InvalidOperationException(
@@ -144,8 +143,8 @@ internal sealed class TomlSourceGeneratedListTypeInfo<TElement> : TomlTypeInfo<L
     private TomlTypeInfo? _elementTypeInfo;
     private TomlTypeInfo<TElement>? _typedElementTypeInfo;
 
-    public TomlSourceGeneratedListTypeInfo(TomlSerializerContext context)
-        : base(context.Options)
+    public TomlSourceGeneratedListTypeInfo(TomlSerializerContext context, TomlSerializerOptions? options = null)
+        : base(options ?? context.Options)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
@@ -229,8 +228,7 @@ internal sealed class TomlSourceGeneratedListTypeInfo<TElement> : TomlTypeInfo<L
             return;
         }
 
-        var fromConverters = TomlTypeInfoResolverPipeline.TryResolveFromConverters(Options, typeof(TElement));
-        var resolved = fromConverters ?? _context.GetTypeInfo(typeof(TElement), Options);
+        var resolved = _context.GetTypeInfo(typeof(TElement), Options);
         if (resolved is null)
         {
             throw new InvalidOperationException(
@@ -290,8 +288,8 @@ internal sealed class TomlSourceGeneratedListBackedEnumerableTypeInfo<TEnumerabl
     private TomlTypeInfo? _elementTypeInfo;
     private TomlTypeInfo<TElement>? _typedElementTypeInfo;
 
-    public TomlSourceGeneratedListBackedEnumerableTypeInfo(TomlSerializerContext context)
-        : base(context.Options)
+    public TomlSourceGeneratedListBackedEnumerableTypeInfo(TomlSerializerContext context, TomlSerializerOptions? options = null)
+        : base(options ?? context.Options)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
@@ -377,8 +375,7 @@ internal sealed class TomlSourceGeneratedListBackedEnumerableTypeInfo<TEnumerabl
             return;
         }
 
-        var fromConverters = TomlTypeInfoResolverPipeline.TryResolveFromConverters(Options, typeof(TElement));
-        var resolved = fromConverters ?? _context.GetTypeInfo(typeof(TElement), Options);
+        var resolved = _context.GetTypeInfo(typeof(TElement), Options);
         if (resolved is null)
         {
             throw new InvalidOperationException(
@@ -455,8 +452,8 @@ internal sealed class TomlSourceGeneratedMutableCollectionTypeInfo<TCollection, 
     private TomlTypeInfo? _elementTypeInfo;
     private TomlTypeInfo<TElement>? _typedElementTypeInfo;
 
-    public TomlSourceGeneratedMutableCollectionTypeInfo(TomlSerializerContext context)
-        : base(context.Options)
+    public TomlSourceGeneratedMutableCollectionTypeInfo(TomlSerializerContext context, TomlSerializerOptions? options = null)
+        : base(options ?? context.Options)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
@@ -540,8 +537,7 @@ internal sealed class TomlSourceGeneratedMutableCollectionTypeInfo<TCollection, 
             return;
         }
 
-        var fromConverters = TomlTypeInfoResolverPipeline.TryResolveFromConverters(Options, typeof(TElement));
-        var resolved = fromConverters ?? _context.GetTypeInfo(typeof(TElement), Options);
+        var resolved = _context.GetTypeInfo(typeof(TElement), Options);
         if (resolved is null)
         {
             throw new InvalidOperationException(
@@ -601,8 +597,8 @@ internal sealed class TomlSourceGeneratedDictionaryTypeInfo<TDictionary, TValue>
     private TomlTypeInfo? _valueTypeInfo;
     private TomlTypeInfo<TValue>? _typedValueTypeInfo;
 
-    public TomlSourceGeneratedDictionaryTypeInfo(TomlSerializerContext context)
-        : base(context.Options)
+    public TomlSourceGeneratedDictionaryTypeInfo(TomlSerializerContext context, TomlSerializerOptions? options = null)
+        : base(options ?? context.Options)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
@@ -745,8 +741,7 @@ internal sealed class TomlSourceGeneratedDictionaryTypeInfo<TDictionary, TValue>
             return;
         }
 
-        var fromConverters = TomlTypeInfoResolverPipeline.TryResolveFromConverters(Options, typeof(TValue));
-        var resolved = fromConverters ?? _context.GetTypeInfo(typeof(TValue), Options);
+        var resolved = _context.GetTypeInfo(typeof(TValue), Options);
         if (resolved is null)
         {
             throw new InvalidOperationException(
@@ -808,8 +803,8 @@ internal sealed class TomlSourceGeneratedHashSetTypeInfo<TElement> : TomlTypeInf
     private TomlTypeInfo? _elementTypeInfo;
     private TomlTypeInfo<TElement>? _typedElementTypeInfo;
 
-    public TomlSourceGeneratedHashSetTypeInfo(TomlSerializerContext context)
-        : base(context.Options)
+    public TomlSourceGeneratedHashSetTypeInfo(TomlSerializerContext context, TomlSerializerOptions? options = null)
+        : base(options ?? context.Options)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
@@ -893,8 +888,7 @@ internal sealed class TomlSourceGeneratedHashSetTypeInfo<TElement> : TomlTypeInf
             return;
         }
 
-        var fromConverters = TomlTypeInfoResolverPipeline.TryResolveFromConverters(Options, typeof(TElement));
-        var resolved = fromConverters ?? _context.GetTypeInfo(typeof(TElement), Options);
+        var resolved = _context.GetTypeInfo(typeof(TElement), Options);
         if (resolved is null)
         {
             throw new InvalidOperationException(
@@ -954,8 +948,8 @@ internal sealed class TomlSourceGeneratedHashSetBackedEnumerableTypeInfo<TEnumer
     private TomlTypeInfo? _elementTypeInfo;
     private TomlTypeInfo<TElement>? _typedElementTypeInfo;
 
-    public TomlSourceGeneratedHashSetBackedEnumerableTypeInfo(TomlSerializerContext context)
-        : base(context.Options)
+    public TomlSourceGeneratedHashSetBackedEnumerableTypeInfo(TomlSerializerContext context, TomlSerializerOptions? options = null)
+        : base(options ?? context.Options)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
@@ -1041,8 +1035,7 @@ internal sealed class TomlSourceGeneratedHashSetBackedEnumerableTypeInfo<TEnumer
             return;
         }
 
-        var fromConverters = TomlTypeInfoResolverPipeline.TryResolveFromConverters(Options, typeof(TElement));
-        var resolved = fromConverters ?? _context.GetTypeInfo(typeof(TElement), Options);
+        var resolved = _context.GetTypeInfo(typeof(TElement), Options);
         if (resolved is null)
         {
             throw new InvalidOperationException(
@@ -1118,8 +1111,8 @@ internal sealed class TomlSourceGeneratedImmutableArrayTypeInfo<TElement> : Toml
     private TomlTypeInfo? _elementTypeInfo;
     private TomlTypeInfo<TElement>? _typedElementTypeInfo;
 
-    public TomlSourceGeneratedImmutableArrayTypeInfo(TomlSerializerContext context)
-        : base(context.Options)
+    public TomlSourceGeneratedImmutableArrayTypeInfo(TomlSerializerContext context, TomlSerializerOptions? options = null)
+        : base(options ?? context.Options)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
@@ -1184,8 +1177,7 @@ internal sealed class TomlSourceGeneratedImmutableArrayTypeInfo<TElement> : Toml
             return;
         }
 
-        var fromConverters = TomlTypeInfoResolverPipeline.TryResolveFromConverters(Options, typeof(TElement));
-        var resolved = fromConverters ?? _context.GetTypeInfo(typeof(TElement), Options);
+        var resolved = _context.GetTypeInfo(typeof(TElement), Options);
         if (resolved is null)
         {
             throw new InvalidOperationException(
@@ -1244,8 +1236,8 @@ internal sealed class TomlSourceGeneratedImmutableListTypeInfo<TElement> : TomlT
     private TomlTypeInfo? _elementTypeInfo;
     private TomlTypeInfo<TElement>? _typedElementTypeInfo;
 
-    public TomlSourceGeneratedImmutableListTypeInfo(TomlSerializerContext context)
-        : base(context.Options)
+    public TomlSourceGeneratedImmutableListTypeInfo(TomlSerializerContext context, TomlSerializerOptions? options = null)
+        : base(options ?? context.Options)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
@@ -1306,8 +1298,7 @@ internal sealed class TomlSourceGeneratedImmutableListTypeInfo<TElement> : TomlT
             return;
         }
 
-        var fromConverters = TomlTypeInfoResolverPipeline.TryResolveFromConverters(Options, typeof(TElement));
-        var resolved = fromConverters ?? _context.GetTypeInfo(typeof(TElement), Options);
+        var resolved = _context.GetTypeInfo(typeof(TElement), Options);
         if (resolved is null)
         {
             throw new InvalidOperationException(
@@ -1366,8 +1357,8 @@ internal sealed class TomlSourceGeneratedImmutableHashSetTypeInfo<TElement> : To
     private TomlTypeInfo? _elementTypeInfo;
     private TomlTypeInfo<TElement>? _typedElementTypeInfo;
 
-    public TomlSourceGeneratedImmutableHashSetTypeInfo(TomlSerializerContext context)
-        : base(context.Options)
+    public TomlSourceGeneratedImmutableHashSetTypeInfo(TomlSerializerContext context, TomlSerializerOptions? options = null)
+        : base(options ?? context.Options)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
@@ -1428,8 +1419,7 @@ internal sealed class TomlSourceGeneratedImmutableHashSetTypeInfo<TElement> : To
             return;
         }
 
-        var fromConverters = TomlTypeInfoResolverPipeline.TryResolveFromConverters(Options, typeof(TElement));
-        var resolved = fromConverters ?? _context.GetTypeInfo(typeof(TElement), Options);
+        var resolved = _context.GetTypeInfo(typeof(TElement), Options);
         if (resolved is null)
         {
             throw new InvalidOperationException(

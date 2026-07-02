@@ -62,6 +62,20 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     public abstract TomlTypeInfo? GetTypeInfo(Type type, TomlSerializerOptions options);
 
     /// <summary>
+    /// Resolves converter-based metadata for a runtime converter registered on <paramref name="options" />.
+    /// </summary>
+    /// <param name="options">The options that may contain runtime converters.</param>
+    /// <param name="type">The type to resolve.</param>
+    /// <param name="ignoredConverterTypes">Converter types supplied by source-generation options that should not be treated as runtime overrides.</param>
+    /// <returns>Converter-based metadata, or <see langword="null" /> when no runtime converter matches.</returns>
+    protected static TomlTypeInfo? ResolveRuntimeConverterTypeInfo(TomlSerializerOptions options, Type type, Type[]? ignoredConverterTypes)
+    {
+        ArgumentGuard.ThrowIfNull(options, nameof(options));
+        ArgumentGuard.ThrowIfNull(type, nameof(type));
+        return TomlTypeInfoResolverPipeline.TryResolveFromConverters(options, type, ignoredConverterTypes);
+    }
+
+    /// <summary>
     /// Resolves built-in type metadata for a known scalar/container type.
     /// </summary>
     /// <remarks>
@@ -308,18 +322,21 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     /// <remarks>
     /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
     /// </remarks>
-    protected static TomlTypeInfo<T?> CreateSourceGeneratedNullableTypeInfo<T>(TomlSerializerContext context)
+    protected static TomlTypeInfo<T?> CreateSourceGeneratedNullableTypeInfo<T>(TomlSerializerContext context, TomlSerializerOptions? options = null)
         where T : struct
     {
         ArgumentGuard.ThrowIfNull(context, nameof(context));
+        options ??= context.Options;
 
-        var inner = context.GetTypeInfo(typeof(T), context.Options);
+        var inner = context.GetTypeInfo(typeof(T), options);
         if (inner is null)
         {
             throw new TomlException($"No TOML metadata is available for type '{typeof(T).FullName}'.");
         }
 
-        return new TomlNullableTypeInfo<T>(context.Options, inner);
+        return inner is TomlTypeInfo<T>
+            ? new TomlNullableTypeInfo<T>(options, inner)
+            : new TomlNullableTypeInfoWithUntypedInner<T>(options, inner);
     }
 
     /// <summary>
@@ -339,10 +356,10 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     /// <remarks>
     /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
     /// </remarks>
-    protected static TomlTypeInfo<TElement[]> CreateSourceGeneratedArrayTypeInfo<TElement>(TomlSerializerContext context)
+    protected static TomlTypeInfo<TElement[]> CreateSourceGeneratedArrayTypeInfo<TElement>(TomlSerializerContext context, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(context, nameof(context));
-        return new TomlSourceGeneratedArrayTypeInfo<TElement>(context);
+        return new TomlSourceGeneratedArrayTypeInfo<TElement>(context, options);
     }
 
     /// <summary>
@@ -362,10 +379,10 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     /// <remarks>
     /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
     /// </remarks>
-    protected static TomlTypeInfo<List<TElement>> CreateSourceGeneratedListTypeInfo<TElement>(TomlSerializerContext context)
+    protected static TomlTypeInfo<List<TElement>> CreateSourceGeneratedListTypeInfo<TElement>(TomlSerializerContext context, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(context, nameof(context));
-        return new TomlSourceGeneratedListTypeInfo<TElement>(context);
+        return new TomlSourceGeneratedListTypeInfo<TElement>(context, options);
     }
 
     /// <summary>
@@ -385,10 +402,10 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     /// <remarks>
     /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
     /// </remarks>
-    protected static TomlTypeInfo<HashSet<TElement>> CreateSourceGeneratedHashSetTypeInfo<TElement>(TomlSerializerContext context)
+    protected static TomlTypeInfo<HashSet<TElement>> CreateSourceGeneratedHashSetTypeInfo<TElement>(TomlSerializerContext context, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(context, nameof(context));
-        return new TomlSourceGeneratedHashSetTypeInfo<TElement>(context);
+        return new TomlSourceGeneratedHashSetTypeInfo<TElement>(context, options);
     }
 
     /// <summary>
@@ -409,11 +426,11 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     /// <remarks>
     /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
     /// </remarks>
-    protected static TomlTypeInfo<TEnumerable> CreateSourceGeneratedHashSetBackedEnumerableTypeInfo<TEnumerable, TElement>(TomlSerializerContext context)
+    protected static TomlTypeInfo<TEnumerable> CreateSourceGeneratedHashSetBackedEnumerableTypeInfo<TEnumerable, TElement>(TomlSerializerContext context, TomlSerializerOptions? options = null)
         where TEnumerable : IEnumerable<TElement>
     {
         ArgumentGuard.ThrowIfNull(context, nameof(context));
-        return new TomlSourceGeneratedHashSetBackedEnumerableTypeInfo<TEnumerable, TElement>(context);
+        return new TomlSourceGeneratedHashSetBackedEnumerableTypeInfo<TEnumerable, TElement>(context, options);
     }
 
     /// <summary>
@@ -433,10 +450,10 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     /// <remarks>
     /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
     /// </remarks>
-    protected static TomlTypeInfo<ImmutableArray<TElement>> CreateSourceGeneratedImmutableArrayTypeInfo<TElement>(TomlSerializerContext context)
+    protected static TomlTypeInfo<ImmutableArray<TElement>> CreateSourceGeneratedImmutableArrayTypeInfo<TElement>(TomlSerializerContext context, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(context, nameof(context));
-        return new TomlSourceGeneratedImmutableArrayTypeInfo<TElement>(context);
+        return new TomlSourceGeneratedImmutableArrayTypeInfo<TElement>(context, options);
     }
 
     /// <summary>
@@ -456,10 +473,10 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     /// <remarks>
     /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
     /// </remarks>
-    protected static TomlTypeInfo<ImmutableList<TElement>> CreateSourceGeneratedImmutableListTypeInfo<TElement>(TomlSerializerContext context)
+    protected static TomlTypeInfo<ImmutableList<TElement>> CreateSourceGeneratedImmutableListTypeInfo<TElement>(TomlSerializerContext context, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(context, nameof(context));
-        return new TomlSourceGeneratedImmutableListTypeInfo<TElement>(context);
+        return new TomlSourceGeneratedImmutableListTypeInfo<TElement>(context, options);
     }
 
     /// <summary>
@@ -479,10 +496,10 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     /// <remarks>
     /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
     /// </remarks>
-    protected static TomlTypeInfo<ImmutableHashSet<TElement>> CreateSourceGeneratedImmutableHashSetTypeInfo<TElement>(TomlSerializerContext context)
+    protected static TomlTypeInfo<ImmutableHashSet<TElement>> CreateSourceGeneratedImmutableHashSetTypeInfo<TElement>(TomlSerializerContext context, TomlSerializerOptions? options = null)
     {
         ArgumentGuard.ThrowIfNull(context, nameof(context));
-        return new TomlSourceGeneratedImmutableHashSetTypeInfo<TElement>(context);
+        return new TomlSourceGeneratedImmutableHashSetTypeInfo<TElement>(context, options);
     }
 
     /// <summary>
@@ -503,11 +520,11 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     /// <remarks>
     /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
     /// </remarks>
-    protected static TomlTypeInfo<TEnumerable> CreateSourceGeneratedListBackedEnumerableTypeInfo<TEnumerable, TElement>(TomlSerializerContext context)
+    protected static TomlTypeInfo<TEnumerable> CreateSourceGeneratedListBackedEnumerableTypeInfo<TEnumerable, TElement>(TomlSerializerContext context, TomlSerializerOptions? options = null)
         where TEnumerable : IEnumerable<TElement>
     {
         ArgumentGuard.ThrowIfNull(context, nameof(context));
-        return new TomlSourceGeneratedListBackedEnumerableTypeInfo<TEnumerable, TElement>(context);
+        return new TomlSourceGeneratedListBackedEnumerableTypeInfo<TEnumerable, TElement>(context, options);
     }
 
     /// <summary>
@@ -516,11 +533,11 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     /// <remarks>
     /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
     /// </remarks>
-    protected static TomlTypeInfo<TCollection> CreateSourceGeneratedMutableCollectionTypeInfo<TCollection, TElement>(TomlSerializerContext context)
+    protected static TomlTypeInfo<TCollection> CreateSourceGeneratedMutableCollectionTypeInfo<TCollection, TElement>(TomlSerializerContext context, TomlSerializerOptions? options = null)
         where TCollection : ICollection<TElement>, new()
     {
         ArgumentGuard.ThrowIfNull(context, nameof(context));
-        return new TomlSourceGeneratedMutableCollectionTypeInfo<TCollection, TElement>(context);
+        return new TomlSourceGeneratedMutableCollectionTypeInfo<TCollection, TElement>(context, options);
     }
 
     /// <summary>
@@ -541,10 +558,10 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
     /// <remarks>
     /// This method avoids reflection-based metadata resolution, making it compatible with trimming and NativeAOT.
     /// </remarks>
-    protected static TomlTypeInfo<TDictionary> CreateSourceGeneratedDictionaryTypeInfo<TDictionary, TValue>(TomlSerializerContext context)
+    protected static TomlTypeInfo<TDictionary> CreateSourceGeneratedDictionaryTypeInfo<TDictionary, TValue>(TomlSerializerContext context, TomlSerializerOptions? options = null)
         where TDictionary : IEnumerable<KeyValuePair<string, TValue>>
     {
         ArgumentGuard.ThrowIfNull(context, nameof(context));
-        return new TomlSourceGeneratedDictionaryTypeInfo<TDictionary, TValue>(context);
+        return new TomlSourceGeneratedDictionaryTypeInfo<TDictionary, TValue>(context, options);
     }
 }

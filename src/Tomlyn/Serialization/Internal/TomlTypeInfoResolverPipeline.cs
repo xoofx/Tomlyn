@@ -258,6 +258,9 @@ internal static class TomlTypeInfoResolverPipeline
     }
 
     internal static TomlTypeInfo? TryResolveFromConverters(TomlSerializerOptions options, Type type)
+        => TryResolveFromConverters(options, type, ignoredConverterTypes: null);
+
+    internal static TomlTypeInfo? TryResolveFromConverters(TomlSerializerOptions options, Type type, IReadOnlyList<Type>? ignoredConverterTypes)
     {
         var converters = options.Converters;
         if (converters.Count == 0)
@@ -268,6 +271,11 @@ internal static class TomlTypeInfoResolverPipeline
         for (var i = 0; i < converters.Count; i++)
         {
             var converter = converters[i];
+            if (ShouldIgnoreConverter(converter, ignoredConverterTypes))
+            {
+                continue;
+            }
+
             if (!converter.CanConvert(type))
             {
                 continue;
@@ -299,6 +307,25 @@ internal static class TomlTypeInfoResolverPipeline
         }
 
         return null;
+    }
+
+    private static bool ShouldIgnoreConverter(TomlConverter converter, IReadOnlyList<Type>? ignoredConverterTypes)
+    {
+        if (ignoredConverterTypes is null || ignoredConverterTypes.Count == 0)
+        {
+            return false;
+        }
+
+        var converterType = converter.GetType();
+        for (var i = 0; i < ignoredConverterTypes.Count; i++)
+        {
+            if (converterType == ignoredConverterTypes[i])
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]

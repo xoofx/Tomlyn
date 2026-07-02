@@ -397,6 +397,19 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.Append("    public static ").Append(model.TypeName).AppendLine(" Default { get; } = new(CreateDefaultOptions(), _generated: true);");
         builder.AppendLine();
 
+        if (!model.Options.ConverterTypes.IsDefaultOrEmpty)
+        {
+            builder.AppendLine("    private static readonly Type[] s_sourceGenerationConverterTypes =");
+            builder.AppendLine("    [");
+            foreach (var converterType in model.Options.ConverterTypes)
+            {
+                builder.Append("        typeof(").Append(converterType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)).AppendLine("),");
+            }
+
+            builder.AppendLine("    ];");
+            builder.AppendLine();
+        }
+
         EmitCreateDefaultOptions(builder, model);
 
         foreach (var type in ordered)
@@ -407,6 +420,33 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.AppendLine();
         builder.AppendLine("    public override TomlTypeInfo? GetTypeInfo(Type type, TomlSerializerOptions options)");
         builder.AppendLine("    {");
+        builder.AppendLine("        if (type is null) throw new global::System.ArgumentNullException(nameof(type));");
+        builder.AppendLine("        if (options is null) throw new global::System.ArgumentNullException(nameof(options));");
+        builder.AppendLine();
+        builder.AppendLine("        if (!global::System.Object.ReferenceEquals(options, Options))");
+        builder.AppendLine("        {");
+        builder.AppendLine("            if (!global::System.Object.ReferenceEquals(options.TypeInfoResolver, this))");
+        builder.AppendLine("            {");
+        builder.AppendLine("                throw new global::System.InvalidOperationException(");
+        builder.AppendLine("                    $\"The provided {nameof(global::Tomlyn.TomlSerializerOptions)} instance does not match the options associated with the context '{GetType()}'. \" +");
+        builder.AppendLine("                    $\"Use overloads that accept a {nameof(global::Tomlyn.Serialization.TomlSerializerContext)} or a {nameof(global::Tomlyn.TomlTypeInfo)} directly.\");");
+        builder.AppendLine("            }");
+        builder.AppendLine();
+        builder.Append("            var __runtimeTypeInfo = ResolveRuntimeConverterTypeInfo(options, type, ")
+            .Append(model.Options.ConverterTypes.IsDefaultOrEmpty ? "null" : "s_sourceGenerationConverterTypes")
+            .AppendLine(");");
+        builder.AppendLine("            if (__runtimeTypeInfo is not null) return __runtimeTypeInfo;");
+        foreach (var type in ordered)
+        {
+            builder.Append("        if (type == typeof(")
+                .Append(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                .Append(")) return Create")
+                .Append(GetTypeInfoPropertyName(type))
+                .AppendLine("(options);");
+        }
+        builder.AppendLine("            return null;");
+        builder.AppendLine("        }");
+        builder.AppendLine();
         foreach (var type in ordered)
         {
             builder.Append("        if (type == typeof(")
@@ -553,7 +593,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         builder.Append("    private TomlTypeInfo<").Append(typeName).Append(">? _").Append(propertyName).AppendLine(";");
         builder.Append("    ").Append(propertyAccessibility).Append(" TomlTypeInfo<").Append(typeName).Append("> ").Append(propertyName).AppendLine();
-        builder.Append("        => _").Append(propertyName).Append(" ??= Create").Append(propertyName).AppendLine("();");
+        builder.Append("        => _").Append(propertyName).Append(" ??= Create").Append(propertyName).AppendLine("(Options);");
         builder.AppendLine();
 
         if (!string.Equals(publicPropertyName, propertyName, StringComparison.Ordinal))
@@ -562,13 +602,13 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             builder.AppendLine();
         }
 
-        builder.Append("    private TomlTypeInfo<").Append(typeName).Append("> Create").Append(propertyName).AppendLine("()");
+        builder.Append("    private TomlTypeInfo<").Append(typeName).Append("> Create").Append(propertyName).AppendLine("(TomlSerializerOptions options)");
         builder.AppendLine("    {");
         if (usesStaticOptionsConverter)
         {
             builder.Append("        return CreateConverterTypeInfo<")
                 .Append(typeName)
-                .Append(">(Options, new ")
+                .Append(">(options, new ")
                 .Append(staticOptionsConverterType!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
                 .AppendLine("());");
         }
@@ -576,24 +616,24 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         {
             if (usesJsonStringEnumConverter)
             {
-                builder.Append("        return CreateStringEnumTypeInfo<").Append(typeName).AppendLine(">(Options);");
+                builder.Append("        return CreateStringEnumTypeInfo<").Append(typeName).AppendLine(">(options);");
             }
             else
             {
-                builder.Append("        return GetBuiltInTypeInfo<").Append(typeName).AppendLine(">(Options);");
+                builder.Append("        return GetBuiltInTypeInfo<").Append(typeName).AppendLine(">(options);");
             }
         }
         else if (TryGetNullableUnderlyingType(type, out var nullableUnderlyingType))
         {
             builder.Append("        return CreateSourceGeneratedNullableTypeInfo<")
                 .Append(nullableUnderlyingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
-                .AppendLine(">(this);");
+                .AppendLine(">(this, options);");
         }
         else if (TryGetArrayElementType(type, out var arrayElementType))
         {
             builder.Append("        return CreateSourceGeneratedArrayTypeInfo<")
                 .Append(arrayElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
-                .AppendLine(">(this);");
+                .AppendLine(">(this, options);");
         }
         else if (TryGetSequenceElementType(type, out var enumerableElementType, out var kind))
         {
@@ -601,7 +641,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             {
                 builder.Append("        return CreateSourceGeneratedListTypeInfo<")
                     .Append(enumerableElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
-                    .AppendLine(">(this);");
+                    .AppendLine(">(this, options);");
             }
             else if (kind == SequenceKind.ListBackedEnumerable)
             {
@@ -609,7 +649,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     .Append(typeName)
                     .Append(", ")
                     .Append(enumerableElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
-                    .AppendLine(">(this);");
+                    .AppendLine(">(this, options);");
             }
             else if (kind == SequenceKind.MutableCollection)
             {
@@ -617,13 +657,13 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     .Append(typeName)
                     .Append(", ")
                     .Append(enumerableElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
-                    .AppendLine(">(this);");
+                    .AppendLine(">(this, options);");
             }
             else if (kind == SequenceKind.HashSet)
             {
                 builder.Append("        return CreateSourceGeneratedHashSetTypeInfo<")
                     .Append(enumerableElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
-                    .AppendLine(">(this);");
+                    .AppendLine(">(this, options);");
             }
             else if (kind == SequenceKind.HashSetBackedEnumerable)
             {
@@ -631,25 +671,25 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     .Append(typeName)
                     .Append(", ")
                     .Append(enumerableElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
-                    .AppendLine(">(this);");
+                    .AppendLine(">(this, options);");
             }
             else if (kind == SequenceKind.ImmutableArray)
             {
                 builder.Append("        return CreateSourceGeneratedImmutableArrayTypeInfo<")
                     .Append(enumerableElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
-                    .AppendLine(">(this);");
+                    .AppendLine(">(this, options);");
             }
             else if (kind == SequenceKind.ImmutableList)
             {
                 builder.Append("        return CreateSourceGeneratedImmutableListTypeInfo<")
                     .Append(enumerableElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
-                    .AppendLine(">(this);");
+                    .AppendLine(">(this, options);");
             }
             else if (kind == SequenceKind.ImmutableHashSet)
             {
                 builder.Append("        return CreateSourceGeneratedImmutableHashSetTypeInfo<")
                     .Append(enumerableElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
-                    .AppendLine(">(this);");
+                    .AppendLine(">(this, options);");
             }
             else
             {
@@ -662,14 +702,14 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 .Append(typeName)
                 .Append(", ")
                 .Append(dictionaryValueType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
-                .AppendLine(">(this);");
+                .AppendLine(">(this, options);");
         }
         else if (TryGetPolymorphicShape(context, model, derivedTypeMappings, type, out var polymorphic, reportDiagnostics: false))
         {
             builder.Append("        global::Tomlyn.TomlTypeInfo<").Append(typeName).AppendLine(">? __baseTypeInfo = null;");
             if (TryGetPocoShape(context, model, type, out _))
             {
-                builder.Append("        __baseTypeInfo = new __TomlTypeInfo_").Append(propertyName).AppendLine("(this);");
+                builder.Append("        __baseTypeInfo = new __TomlTypeInfo_").Append(propertyName).AppendLine("(this, options);");
             }
 
             builder.AppendLine("        var __derivedTypeInfoByDiscriminator = new global::System.Collections.Generic.Dictionary<string, global::Tomlyn.TomlTypeInfo>(global::System.StringComparer.Ordinal)");
@@ -677,7 +717,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             foreach (var derived in polymorphic.DerivedTypes)
             {
                 if (derived.Discriminator is null) continue; // skip default derived type in dictionary
-                builder.Append("            [\"").Append(EscapeStringLiteral(derived.Discriminator)).Append("\"] = ").Append(GetTypeInfoPropertyName(derived.Type)).AppendLine(",");
+                builder.Append("            [\"").Append(EscapeStringLiteral(derived.Discriminator)).Append("\"] = Create").Append(GetTypeInfoPropertyName(derived.Type)).AppendLine("(options),");
             }
             builder.AppendLine("        };");
 
@@ -686,7 +726,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 : "\"" + EscapeStringLiteral(polymorphic.DiscriminatorPropertyName) + "\"";
 
             var defaultDerivedTypeExpression = polymorphic.DefaultDerivedType is not null
-                ? GetTypeInfoPropertyName(polymorphic.DefaultDerivedType)
+                ? "Create" + GetTypeInfoPropertyName(polymorphic.DefaultDerivedType) + "(options)"
                 : "null";
 
             var unknownHandlingExpression = polymorphic.UnknownDerivedTypeHandlingOverride is { } handlingValue
@@ -695,7 +735,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
             builder.Append("        return new global::Tomlyn.Serialization.TomlPolymorphicTypeInfo<")
                 .Append(typeName)
-                .Append(">(Options, __baseTypeInfo, ")
+                .Append(">(options, __baseTypeInfo, ")
                 .Append(discriminatorExpression)
                 .Append(", __derivedTypeInfoByDiscriminator, ")
                 .Append(defaultDerivedTypeExpression)
@@ -705,7 +745,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
         else
         {
-            builder.Append("        return new __TomlTypeInfo_").Append(propertyName).AppendLine("(this);");
+            builder.Append("        return new __TomlTypeInfo_").Append(propertyName).AppendLine("(this, options);");
         }
 
         builder.AppendLine("    }");
@@ -726,10 +766,43 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.Append("    private sealed class __TomlTypeInfo_").Append(propertyName).Append(" : TomlTypeInfo<").Append(typeName).AppendLine(">");
         builder.AppendLine("    {");
         builder.Append("        private readonly ").Append(model.TypeName).AppendLine(" _context;");
+        builder.AppendLine("        private readonly global::System.Collections.Generic.Dictionary<global::System.Type, TomlTypeInfo>? _typeInfoCache;");
         builder.AppendLine();
-        builder.Append("        public __TomlTypeInfo_").Append(propertyName).Append("(").Append(model.TypeName).AppendLine(" context) : base(context.Options)");
+        builder.Append("        public __TomlTypeInfo_").Append(propertyName).Append("(").Append(model.TypeName).AppendLine(" context, TomlSerializerOptions options) : base(options)");
         builder.AppendLine("        {");
         builder.AppendLine("            _context = context;");
+        builder.AppendLine("            if (!global::System.Object.ReferenceEquals(options, context.Options))");
+        builder.AppendLine("            {");
+        builder.AppendLine("                _typeInfoCache = new global::System.Collections.Generic.Dictionary<global::System.Type, TomlTypeInfo>();");
+        foreach (var memberType in GetPocoRuntimeResolvedTypes(poco))
+        {
+            builder.Append("                InitializeTypeInfo<").Append(memberType.ToDisplayString(FullyQualifiedNullableFormat)).AppendLine(">();");
+        }
+        builder.AppendLine("            }");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        private TomlTypeInfo GetTypeInfo<T>(TomlTypeInfo generatedTypeInfo)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            var type = typeof(T);");
+        builder.AppendLine("            if (_typeInfoCache is null)");
+        builder.AppendLine("            {");
+        builder.AppendLine("                return generatedTypeInfo;");
+        builder.AppendLine("            }");
+        builder.AppendLine();
+        builder.AppendLine("            if (_typeInfoCache.TryGetValue(type, out var cached))");
+        builder.AppendLine("            {");
+        builder.AppendLine("                return cached;");
+        builder.AppendLine("            }");
+        builder.AppendLine();
+        builder.AppendLine("            var resolved = _context.GetTypeInfo(type, Options) ?? throw new global::System.InvalidOperationException($\"No generated metadata is available for type '{type.FullName}' in the provided context.\");");
+        builder.AppendLine("            _typeInfoCache[type] = resolved;");
+        builder.AppendLine("            return resolved;");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        private void InitializeTypeInfo<T>()");
+        builder.AppendLine("        {");
+        builder.AppendLine("            var type = typeof(T);");
+        builder.AppendLine("            _typeInfoCache![type] = _context.GetTypeInfo(type, Options) ?? throw new global::System.InvalidOperationException($\"No generated metadata is available for type '{type.FullName}' in the provided context.\");");
         builder.AppendLine("        }");
         builder.AppendLine();
         builder.AppendLine("        public override bool WritesTable => true;");
@@ -825,7 +898,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             }
             builder.AppendLine("                    if (__usedKeys is not null && __usedKeys.Contains(__key)) throw new TomlException($\"Extension data key '{__key}' conflicts with an existing member key.\");");
             builder.AppendLine("                    writer.WritePropertyName(__key);");
-            builder.Append("                    _context.").Append(extensionValueTypeInfo).Append(".Write(writer, ").Append(writeValueArgument).AppendLine(");");
+            builder.Append("                    ").Append(GetTypeInfoAccess(extensionDataWrite.ValueType)).Append(".Write(writer, ").Append(writeValueArgument).AppendLine(");");
             builder.AppendLine("                }");
             builder.AppendLine("            }");
         }
@@ -1182,7 +1255,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             }
             else
             {
-                builder.Append("                        __arg").Append(i.ToString(CultureInfo.InvariantCulture)).Append(" = _context.").Append(GetTypeInfoPropertyName(parameter.ParameterType)).AppendLine(".Read(reader)!;");
+                builder.Append("                        __arg").Append(i.ToString(CultureInfo.InvariantCulture)).Append(" = ").Append(GetTypeInfoReadExpression(parameter.ParameterType)).AppendLine(";");
             }
 
             if (parameter.LinkedMemberIndex >= 0 && parameter.LinkedMemberIndex < poco.Members.Length)
@@ -1283,7 +1356,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             }
             else
             {
-                builder.Append("                        __memberValue").Append(i.ToString(CultureInfo.InvariantCulture)).Append(" = _context.").Append(GetTypeInfoPropertyName(member.Type)).AppendLine(".Read(reader)!;");
+                builder.Append("                        __memberValue").Append(i.ToString(CultureInfo.InvariantCulture)).Append(" = ").Append(GetTypeInfoReadExpression(member.Type)).AppendLine(";");
             }
             builder.Append("                        __memberSeen").Append(i.ToString(CultureInfo.InvariantCulture)).AppendLine(" = true;");
             builder.AppendLine("                        continue;");
@@ -1293,7 +1366,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         if (extensionData is not null)
         {
             builder.AppendLine("                    if (__extensionData is null) __extensionData = new();");
-            builder.Append("                    __extensionData[name] = _context.").Append(GetTypeInfoPropertyName(extensionData.ValueType)).AppendLine(".Read(reader)!;");
+            builder.Append("                    __extensionData[name] = ").Append(GetTypeInfoReadExpression(extensionData.ValueType)).AppendLine(";");
             builder.AppendLine("                    continue;");
         }
 
@@ -1395,7 +1468,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     }
                     else
                     {
-                        builder.Append("                                    __arg").Append(action.Index.ToString(CultureInfo.InvariantCulture)).Append(" = _context.").Append(GetTypeInfoPropertyName(parameter.ParameterType)).AppendLine(".Read(reader)!;");
+                        builder.Append("                                    __arg").Append(action.Index.ToString(CultureInfo.InvariantCulture)).Append(" = ").Append(GetTypeInfoReadExpression(parameter.ParameterType)).AppendLine(";");
                     }
 
                     if (parameter.LinkedMemberIndex >= 0 && parameter.LinkedMemberIndex < poco.Members.Length)
@@ -1496,7 +1569,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                         }
                         else
                         {
-                            builder.Append("                                    __memberValue").Append(action.Index.ToString(CultureInfo.InvariantCulture)).Append(" = _context.").Append(GetTypeInfoPropertyName(member.Type)).AppendLine(".Read(reader)!;");
+                            builder.Append("                                    __memberValue").Append(action.Index.ToString(CultureInfo.InvariantCulture)).Append(" = ").Append(GetTypeInfoReadExpression(member.Type)).AppendLine(";");
                         }
                         builder.Append("                                    __memberSeen").Append(action.Index.ToString(CultureInfo.InvariantCulture)).AppendLine(" = true;");
                         builder.AppendLine("                                    continue;");
@@ -1519,7 +1592,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             builder.AppendLine("                        var name = reader.PropertyName!;");
             builder.AppendLine("                        reader.Read();");
             builder.AppendLine("                        if (__extensionData is null) __extensionData = new();");
-            builder.Append("                        __extensionData[name] = _context.").Append(GetTypeInfoPropertyName(extensionData.ValueType)).AppendLine(".Read(reader)!;");
+            builder.Append("                        __extensionData[name] = ").Append(GetTypeInfoReadExpression(extensionData.ValueType)).AppendLine(";");
             builder.AppendLine("                        continue;");
             builder.AppendLine("                    }");
         }
@@ -2057,7 +2130,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         var collectionTypeName = collectionType.ToDisplayString(FullyQualifiedNullableFormat);
         var elementTypeName = elementType.ToDisplayString(FullyQualifiedNullableFormat);
-        var readElementExpression = "_context." + GetTypeInfoPropertyName(elementType) + ".Read(reader)!";
+        var readElementExpression = GetTypeInfoReadExpression(elementType);
 
         if (isArray)
         {
@@ -2095,7 +2168,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         var elementTypeName = elementType.ToDisplayString(FullyQualifiedNullableFormat);
-        var readElementExpression = "_context." + GetTypeInfoPropertyName(elementType) + ".Read(reader)!";
+        var readElementExpression = GetTypeInfoReadExpression(elementType);
         return "AddSingleElementToSingleOrArrayCollection<" + elementTypeName + ">(" + existingExpression + ", " + readElementExpression + ")";
     }
 
@@ -2117,7 +2190,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
         builder.Append(indent).AppendLine("if (reader.TokenType == TomlTokenType.StartArray)");
         builder.Append(indent).AppendLine("{");
-        builder.Append(indent).Append("    ").Append(targetExpression).Append(" = _context.").Append(GetTypeInfoPropertyName(collectionType)).AppendLine(".Read(reader)!;");
+        builder.Append(indent).Append("    ").Append(targetExpression).Append(" = ").Append(GetTypeInfoReadExpression(collectionType)).AppendLine(";");
         builder.Append(indent).AppendLine("}");
         builder.Append(indent).AppendLine("else");
         builder.Append(indent).AppendLine("{");
@@ -2139,7 +2212,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         var typeName = type.ToDisplayString(FullyQualifiedNullableFormat);
         builder.Append(indent).Append("if (reader.TokenType == TomlTokenType.StartTable && reader.CurrentSpan is null && ").Append(existingExpression).AppendLine(" is not null)");
         builder.Append(indent).AppendLine("{");
-        builder.Append(indent).Append("    var __tableExtension = _context.").Append(GetTypeInfoPropertyName(type)).Append(".ReadInto(reader, ").Append(existingExpression).AppendLine(");");
+        builder.Append(indent).Append("    var __tableExtension = ").Append(GetTypeInfoAccess(type)).Append(".ReadInto(reader, ").Append(existingExpression).AppendLine(");");
         builder.Append(indent).Append("    ").Append(targetExpression).Append(" = (").Append(typeName).AppendLine(")__tableExtension!;");
         builder.Append(indent).AppendLine("    continue;");
         builder.Append(indent).AppendLine("}");
@@ -2151,7 +2224,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         var memberTypeName = member.Type.ToDisplayString(FullyQualifiedNullableFormat);
         builder.Append(indent).Append("if (reader.TokenType == TomlTokenType.StartTable && reader.CurrentSpan is null && ").Append(memberAccess).AppendLine(" is not null)");
         builder.Append(indent).AppendLine("{");
-        builder.Append(indent).Append("    var __tableExtension = _context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".ReadInto(reader, ").Append(memberAccess).AppendLine(");");
+        builder.Append(indent).Append("    var __tableExtension = ").Append(GetTypeInfoAccess(member.Type)).Append(".ReadInto(reader, ").Append(memberAccess).AppendLine(");");
         builder.Append(indent).Append("    if (!object.ReferenceEquals(").Append(memberAccess).Append(", __tableExtension))").AppendLine();
         builder.Append(indent).AppendLine("    {");
         builder.Append(indent).Append("        throw new TomlException($\"Member '").Append(EscapeStringLiteral(member.MemberName))
@@ -2183,7 +2256,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         {
             builder.Append(indent).Append("        if (").Append(canPopulateExpression).AppendLine(")");
             builder.Append(indent).AppendLine("        {");
-            builder.Append(indent).Append("            var __populated = _context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".ReadInto(reader, ").Append(memberAccess).AppendLine(");");
+            builder.Append(indent).Append("            var __populated = ").Append(GetTypeInfoAccess(member.Type)).Append(".ReadInto(reader, ").Append(memberAccess).AppendLine(");");
             if (member.CanSet)
             {
                 builder.Append(indent).Append("            ").Append(memberAccess).Append(" = (").Append(memberTypeName).AppendLine(")__populated!;");
@@ -2210,7 +2283,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
         else
         {
-            builder.Append(indent).Append("            ").Append(memberAccess).Append(" = _context.").Append(GetTypeInfoPropertyName(member.Type)).AppendLine(".Read(reader)!;");
+            builder.Append(indent).Append("            ").Append(memberAccess).Append(" = ").Append(GetTypeInfoReadExpression(member.Type)).AppendLine(";");
         }
 
         if (canPopulateExpression is not null)
@@ -2227,7 +2300,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
         else
         {
-            builder.Append(indent).Append("        ").Append(memberAccess).Append(" = _context.").Append(GetTypeInfoPropertyName(member.Type)).AppendLine(".Read(reader)!;");
+            builder.Append(indent).Append("        ").Append(memberAccess).Append(" = ").Append(GetTypeInfoReadExpression(member.Type)).AppendLine(";");
         }
         builder.Append(indent).AppendLine("    }");
         builder.Append(indent).AppendLine("}");
@@ -2295,7 +2368,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         var memberTypeName = member.Type.ToDisplayString(FullyQualifiedNullableFormat);
-        var typeInfoPropertyName = GetTypeInfoPropertyName(member.Type);
+        var typeInfoAccess = GetTypeInfoAccess(member.Type);
         var populateCondition = GetPopulateConditionExpression(member, options);
         var existingLocal = "__existing" + index.ToString(CultureInfo.InvariantCulture);
         var populatedLocal = "__populated" + index.ToString(CultureInfo.InvariantCulture);
@@ -2312,7 +2385,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             }
             else
             {
-                builder.Append(indent).Append(memberAccess).Append(" = _context.").Append(typeInfoPropertyName).AppendLine(".Read(reader)!;");
+                builder.Append(indent).Append(memberAccess).Append(" = ").Append(GetTypeInfoReadExpression(member.Type)).AppendLine(";");
             }
 
             return;
@@ -2354,7 +2427,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 }
                 else
                 {
-                    builder.Append(branchIndent).Append("    ").Append(memberAccess).Append(" = _context.").Append(typeInfoPropertyName).AppendLine(".Read(reader)!;");
+                    builder.Append(branchIndent).Append("    ").Append(memberAccess).Append(" = ").Append(GetTypeInfoReadExpression(member.Type)).AppendLine(";");
                 }
                 builder.Append(branchIndent).AppendLine("}");
                 builder.Append(branchIndent).AppendLine("else");
@@ -2364,7 +2437,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             var populateIndent = CanBeNull(member.Type)
                 ? (populateCondition == "true" ? indent + "    " : indent + "        ")
                 : (populateCondition == "true" ? indent : indent + "    ");
-            builder.Append(populateIndent).Append("var ").Append(populatedLocal).Append(" = _context.").Append(typeInfoPropertyName).Append(".ReadInto(reader, ").Append(existingLocal).AppendLine(");");
+            builder.Append(populateIndent).Append("var ").Append(populatedLocal).Append(" = ").Append(typeInfoAccess).Append(".ReadInto(reader, ").Append(existingLocal).AppendLine(");");
             if (member.CanSet)
             {
                 builder.Append(populateIndent).Append(memberAccess).Append(" = (").Append(memberTypeName).Append(")").Append(populatedLocal).AppendLine("!;");
@@ -2406,7 +2479,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
         else
         {
-            builder.Append(indent).Append("    ").Append(memberAccess).Append(" = _context.").Append(typeInfoPropertyName).AppendLine(".Read(reader)!;");
+            builder.Append(indent).Append("    ").Append(memberAccess).Append(" = ").Append(GetTypeInfoReadExpression(member.Type)).AppendLine(";");
         }
         builder.Append(indent).AppendLine("}");
     }
@@ -2520,14 +2593,13 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
 
             if (poco.ExtensionData is { } extensionData)
             {
-                var extensionValueTypeInfo = GetTypeInfoPropertyName(extensionData.ValueType);
                 builder.Append("                    var __extensionData = value.").Append(extensionData.MemberName).AppendLine(";");
                 builder.AppendLine("                    if (__extensionData is null)");
                 builder.AppendLine("                    {");
                 builder.Append("                        __extensionData = ").Append(extensionData.CreateExpression).AppendLine(";");
                 builder.Append("                        value.").Append(extensionData.MemberName).AppendLine(" = __extensionData;");
                 builder.AppendLine("                    }");
-                builder.Append("                    __extensionData[name] = _context.").Append(extensionValueTypeInfo).AppendLine(".Read(reader)!;");
+                builder.Append("                    __extensionData[name] = ").Append(GetTypeInfoReadExpression(extensionData.ValueType)).AppendLine(";");
                 builder.AppendLine("                    continue;");
                 return;
             }
@@ -2669,7 +2741,6 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         builder.AppendLine("                    }");
         if (poco.ExtensionData is { } extensionDataRead)
         {
-            var extensionValueTypeInfo = GetTypeInfoPropertyName(extensionDataRead.ValueType);
             builder.AppendLine("                    {");
             builder.AppendLine("                        var name = reader.PropertyName!;");
             builder.AppendLine("                        reader.Read();");
@@ -2679,7 +2750,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             builder.Append("                            __extensionData = ").Append(extensionDataRead.CreateExpression).AppendLine(";");
             builder.Append("                            value.").Append(extensionDataRead.MemberName).AppendLine(" = __extensionData;");
             builder.AppendLine("                        }");
-            builder.Append("                        __extensionData[name] = _context.").Append(extensionValueTypeInfo).AppendLine(".Read(reader)!;");
+            builder.Append("                        __extensionData[name] = ").Append(GetTypeInfoReadExpression(extensionDataRead.ValueType)).AppendLine(";");
             builder.AppendLine("                        continue;");
             builder.AppendLine("                    }");
             return;
@@ -2734,7 +2805,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 {
                     builder.Append(writeIndent).Append(usedKeysVariable).Append("?.Add(\"").Append(serializedName).AppendLine("\");");
                 }
-                builder.Append(writeIndent).Append("_context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".Write(writer, ").Append(localName).AppendLine(");");
+                builder.Append(writeIndent).Append(GetTypeInfoAccess(member.Type)).Append(".Write(writer, ").Append(localName).AppendLine(");");
                 builder.Append(openIndent).AppendLine("}");
                 return;
             }
@@ -2744,7 +2815,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             {
                 builder.Append(openIndent).Append(usedKeysVariable).Append("?.Add(\"").Append(serializedName).AppendLine("\");");
             }
-            builder.Append(openIndent).Append("_context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".Write(writer, ").Append(localName).AppendLine(");");
+            builder.Append(openIndent).Append(GetTypeInfoAccess(member.Type)).Append(".Write(writer, ").Append(localName).AppendLine(");");
             return;
         }
 
@@ -2771,7 +2842,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             {
                 builder.Append(writeIndent).Append(usedKeysVariable).Append("?.Add(\"").Append(serializedName).AppendLine("\");");
             }
-            builder.Append(writeIndent).Append("_context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".Write(writer, ").Append(writeArgument).AppendLine(");");
+            builder.Append(writeIndent).Append(GetTypeInfoAccess(member.Type)).Append(".Write(writer, ").Append(writeArgument).AppendLine(");");
             builder.Append(openIndent).AppendLine("}");
             return;
         }
@@ -2782,7 +2853,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
             builder.Append(openIndent).Append(usedKeysVariable).Append("?.Add(\"").Append(serializedName).AppendLine("\");");
         }
 
-        builder.Append(openIndent).Append("_context.").Append(GetTypeInfoPropertyName(member.Type)).Append(".Write(writer, ").Append(writeArgument).AppendLine(");");
+        builder.Append(openIndent).Append(GetTypeInfoAccess(member.Type)).Append(".Write(writer, ").Append(writeArgument).AppendLine(");");
     }
 
     private static bool CanBeNull(ITypeSymbol type)
@@ -5061,6 +5132,49 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         return SanitizeIdentifier(type.Name);
+    }
+
+    private static string GetTypeInfoAccess(ITypeSymbol type)
+        => "GetTypeInfo<" + type.ToDisplayString(FullyQualifiedNullableFormat) + ">(_context." + GetTypeInfoPropertyName(type) + ")";
+
+    private static string GetTypeInfoReadExpression(ITypeSymbol type)
+        => "(" + type.ToDisplayString(FullyQualifiedNullableFormat) + ")" + GetTypeInfoAccess(type) + ".ReadAsObject(reader)!";
+
+    private static ImmutableArray<ITypeSymbol> GetPocoRuntimeResolvedTypes(PocoShape poco)
+    {
+        var types = ImmutableArray.CreateBuilder<ITypeSymbol>();
+        foreach (var member in poco.Members)
+        {
+            AddIfMissing(types, member.Type);
+        }
+
+        if (poco.ExtensionData is { } extensionData)
+        {
+            AddIfMissing(types, extensionData.ValueType);
+        }
+
+        if (poco.Constructor is { } constructor)
+        {
+            foreach (var parameter in constructor.Parameters)
+            {
+                AddIfMissing(types, parameter.ParameterType);
+            }
+        }
+
+        return types.ToImmutable();
+
+        static void AddIfMissing(ImmutableArray<ITypeSymbol>.Builder types, ITypeSymbol type)
+        {
+            foreach (var existing in types)
+            {
+                if (SymbolEqualityComparer.Default.Equals(existing, type))
+                {
+                    return;
+                }
+            }
+
+            types.Add(type);
+        }
     }
 
     private static bool TryGetCustomTypeInfoPropertyName(ContextModel model, ITypeSymbol type, out string propertyName)
