@@ -5,7 +5,6 @@
     <File Path="../.gitignore" />
     <File Path="../.gitmodules" />
     <File Path="../AGENTS.md" />
-    <File Path="../changelog.md" />
     <File Path="../license.txt" />
     <File Path="../readme.md" />
     <File Path="Directory.Packages.props" />

@@ -3,3 +3,6 @@ project = ["Tomlyn.slnx", "Tomlyn.Signed/Tomlyn.Signed.csproj"]
 [github]
 user = "xoofx"
 repo = "Tomlyn"
+[nuget]
+user = "xoofx"
+trusted_publishing = true
