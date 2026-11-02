@@ -21,7 +21,7 @@ internal static class TomlModelTextWriter
 
         var state = new State(writer, options);
         var path = new List<string>();
-        state.WriteTableBody(root, path, headerKind: HeaderKind.None, depth: 1);
+        state.WriteTableBody(root, path, headerKind: HeaderKind.None, headerMetadata: null, depth: 1);
     }
 
     private enum HeaderKind
@@ -46,12 +46,13 @@ internal static class TomlModelTextWriter
             _newLine = options.NewLine == TomlNewLineKind.CrLf ? "\r\n" : "\n";
         }
 
-        public void WriteTableBody(TomlTable table, List<string> path, HeaderKind headerKind, int depth)
+        public void WriteTableBody(TomlTable table, List<string> path, HeaderKind headerKind, TomlPropertiesMetadata? headerMetadata, int depth)
         {
             ValidateDepth(depth);
             if (headerKind != HeaderKind.None)
             {
-                WriteHeader(path, headerKind, table.PropertiesMetadata);
+                // The trivia of a header is stored with the key in the parent table metadata, not in the table itself.
+                WriteHeader(path, headerKind, headerMetadata);
             }
 
             // 1) scalar/array/inline-table key-values
@@ -86,7 +87,7 @@ internal static class TomlModelTextWriter
                 if (pair.Value is TomlTable subTable && !ShouldInlineTable(subTable, depth + 1, propertyMetadata?.InlineTablePolicy))
                 {
                     path.Add(pair.Key);
-                    WriteTableBody(subTable, path, HeaderKind.Table, depth + 1);
+                    WriteTableBody(subTable, path, HeaderKind.Table, table.PropertiesMetadata, depth + 1);
                     path.RemoveAt(path.Count - 1);
                 }
             }
@@ -108,12 +109,12 @@ internal static class TomlModelTextWriter
                 }
 
                 path.Add(pair.Key);
-                WriteTableArray(tableArray, path, depth + 1);
+                WriteTableArray(tableArray, path, table.PropertiesMetadata, depth + 1);
                 path.RemoveAt(path.Count - 1);
             }
         }
 
-        private void WriteTableArray(TomlTableArray tableArray, List<string> path, int depth)
+        private void WriteTableArray(TomlTableArray tableArray, List<string> path, TomlPropertiesMetadata? parentMetadata, int depth)
         {
             ValidateDepth(depth);
             for (var index = 0; index < tableArray.Count; index++)
@@ -123,7 +124,8 @@ internal static class TomlModelTextWriter
                     WriteNewLine();
                 }
 
-                WriteTableBody(tableArray[index], path, HeaderKind.TableArrayElement, depth + 1);
+                // The array key trivia only exists once, so it is written with the first element header.
+                WriteTableBody(tableArray[index], path, HeaderKind.TableArrayElement, index == 0 ? parentMetadata : null, depth + 1);
             }
         }
 
