@@ -351,6 +351,9 @@ public sealed class TomlParser
         private ExplicitFrame _pendingTableHeaderOpenFrame;
         private bool _pendingTableHeaderHasOpenFrame;
         private bool _pendingTableHeaderClosingsCompleted;
+        private int _pendingTableHeaderTriviaFrameIndex;
+        private TomlSyntaxTriviaMetadata[]? _pendingTableHeaderLeadingTrivia;
+        private TomlSyntaxTriviaMetadata[]? _pendingTableHeaderTrailingTrivia;
 
         // Pending document termination.
         private DocumentEndStage _pendingDocumentEndStage;
@@ -407,6 +410,9 @@ public sealed class TomlParser
             _pendingTableHeaderOpenFrame = default;
             _pendingTableHeaderHasOpenFrame = false;
             _pendingTableHeaderClosingsCompleted = false;
+            _pendingTableHeaderTriviaFrameIndex = -1;
+            _pendingTableHeaderLeadingTrivia = null;
+            _pendingTableHeaderTrailingTrivia = null;
             _pendingDocumentEndStage = DocumentEndStage.Containers;
             _pendingDocumentEndRootTableClosed = false;
             _pendingDocumentEndDocumentClosed = false;
@@ -806,11 +812,21 @@ public sealed class TomlParser
                     var openFrame = _pendingTableHeaderOpenFrame;
                     _pendingTableHeaderHasOpenFrame = false;
                     _pendingTableHeaderOpenEmitPropertyName = true;
+
+                    // A comment on the header line is attached as trailing trivia of the header value (table or array).
+                    TomlSyntaxTriviaMetadata[]? trailingTrivia = null;
+                    if (_pendingTableHeaderOpenIndex == _pendingTableHeaderTriviaFrameIndex)
+                    {
+                        trailingTrivia = _pendingTableHeaderTrailingTrivia;
+                        _pendingTableHeaderTrailingTrivia = null;
+                    }
+
                     _pendingTableHeaderOpenIndex++;
 
                     SetPendingEvent(openFrame.Kind == ExplicitFrameKind.Array
                         ? new TomlParseEvent(TomlParseEventKind.StartArray, span: null, propertyName: null, stringValue: null, data: 0)
-                        : new TomlParseEvent(TomlParseEventKind.StartTable, span: null, propertyName: null, stringValue: null, data: 0));
+                        : new TomlParseEvent(TomlParseEventKind.StartTable, span: null, propertyName: null, stringValue: null, data: 0),
+                        trailingTrivia: trailingTrivia);
                     _explicitFrames.Add(openFrame);
                     return true;
                 }
@@ -835,7 +851,16 @@ public sealed class TomlParser
                     _pendingTableHeaderHasOpenFrame = true;
                     _pendingTableHeaderOpenEmitPropertyName = false;
 
-                    var leadingTrivia = ExtractPendingTrivia();
+                    // Comments preceding the header belong to the key named by the header. They cannot be taken
+                    // from the pending trivia here, because consuming the header line already read the trivia
+                    // that precedes the first key/value of the table.
+                    TomlSyntaxTriviaMetadata[]? leadingTrivia = null;
+                    if (_pendingTableHeaderOpenIndex == _pendingTableHeaderTriviaFrameIndex)
+                    {
+                        leadingTrivia = _pendingTableHeaderLeadingTrivia;
+                        _pendingTableHeaderLeadingTrivia = null;
+                    }
+
                     SetPendingEvent(new TomlParseEvent(
                         TomlParseEventKind.PropertyName,
                         span: name.Span,
@@ -1148,6 +1173,10 @@ public sealed class TomlParser
 
         private void ParseTableHeader(bool isTableArray)
         {
+            // Capture the trivia before the header now: consuming the header line also reads the trivia
+            // that follows it, which belongs to the first key/value of the table.
+            var headerLeadingTrivia = ExtractPendingTrivia();
+
             Consume(isTableArray ? TokenKind.OpenBracketDouble : TokenKind.OpenBracket, LexerState.Key);
 
             _pathSegments.Clear();
@@ -1159,8 +1188,16 @@ public sealed class TomlParser
 
             Consume(isTableArray ? TokenKind.CloseBracketDouble : TokenKind.CloseBracket, LexerState.Key);
 
+            var headerTrailingTrivia = ExtractPendingTrivia();
+            string? headerNewLine = null;
+
             if (_token.Kind == TokenKind.NewLine)
             {
+                if (headerTrailingTrivia is not null)
+                {
+                    headerNewLine = _lexer.GetString(_token.Start.Offset, _token.End.Offset - _token.Start.Offset + 1) ?? "\n";
+                }
+
                 Consume(TokenKind.NewLine, LexerState.Key);
             }
             else if (_token.Kind != TokenKind.Eof)
@@ -1178,6 +1215,50 @@ public sealed class TomlParser
             _pendingTableHeaderHasOpenFrame = false;
             _pendingTableHeaderClosingsCompleted = false;
             _pendingOperation = PendingOperationKind.TableHeaderTransition;
+            AssignTableHeaderTrivia(prefixLength, headerLeadingTrivia, headerTrailingTrivia, headerNewLine);
+        }
+
+        private void AssignTableHeaderTrivia(int prefixLength, TomlSyntaxTriviaMetadata[]? leadingTrivia, TomlSyntaxTriviaMetadata[]? trailingTrivia, string? newLine)
+        {
+            _pendingTableHeaderTriviaFrameIndex = -1;
+            _pendingTableHeaderLeadingTrivia = null;
+            _pendingTableHeaderTrailingTrivia = null;
+
+            if (leadingTrivia is null && trailingTrivia is null)
+            {
+                return;
+            }
+
+            // The trivia goes to the last named frame opened by this header (e.g. `b` for `[a.b]`).
+            for (var i = _targetExplicitFrames.Count - 1; i >= prefixLength; i--)
+            {
+                if (_targetExplicitFrames[i].Kind != ExplicitFrameKind.TableArrayElement)
+                {
+                    _pendingTableHeaderTriviaFrameIndex = i;
+                    _pendingTableHeaderLeadingTrivia = leadingTrivia;
+                    _pendingTableHeaderTrailingTrivia = trailingTrivia;
+                    return;
+                }
+            }
+
+            // No property name is emitted for this header (e.g. a subsequent `[[array]]` element), so put the
+            // trivia back in source order and let the first key/value of the table pick it up as before.
+            var insertIndex = 0;
+            if (leadingTrivia is not null)
+            {
+                _pendingTrivia!.InsertRange(insertIndex, leadingTrivia);
+                insertIndex += leadingTrivia.Length;
+            }
+
+            if (trailingTrivia is not null)
+            {
+                _pendingTrivia!.InsertRange(insertIndex, trailingTrivia);
+                insertIndex += trailingTrivia.Length;
+                if (newLine is not null)
+                {
+                    _pendingTrivia.Insert(insertIndex, new TomlSyntaxTriviaMetadata(TokenKind.NewLine, newLine));
+                }
+            }
         }
 
         private void BeginKeyValueEntry(int implicitBaseIndex)
