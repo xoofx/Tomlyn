@@ -651,6 +651,7 @@ internal static class TomlModelTextWriter
                 case TomlPropertyDisplayKind.StringMulti:
                 {
                     _writer.Write("\"\"\"");
+                    WriteLeadingNewLineForMultilineString(value);
                     WriteEscapedBasicStringContent(value, allowNewLinesAndTabs: true, allowHexEscapes);
                     _writer.Write("\"\"\"");
                     return;
@@ -668,6 +669,7 @@ internal static class TomlModelTextWriter
                     if (IsSafeStringLiteralMulti(value))
                     {
                         _writer.Write("'''");
+                        WriteLeadingNewLineForMultilineString(value);
                         _writer.Write(value);
                         _writer.Write("'''");
                         return;
@@ -678,6 +680,16 @@ internal static class TomlModelTextWriter
             _writer.Write('\"');
             WriteEscapedBasicStringContent(value, allowNewLinesAndTabs: false, allowHexEscapes);
             _writer.Write('\"');
+        }
+
+        private void WriteLeadingNewLineForMultilineString(string value)
+        {
+            // A newline immediately following the opening delimiter of a multi-line string is trimmed
+            // by TOML parsers, so emit an extra one to preserve a leading newline in the value.
+            if (value.Length > 0 && (value[0] == '\n' || (value[0] == '\r' && value.Length > 1 && value[1] == '\n')))
+            {
+                WriteNewLine();
+            }
         }
 
         private void WriteEscapedBasicStringContent(string value, bool allowNewLinesAndTabs, bool allowHexEscapes = true)
