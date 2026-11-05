@@ -4,6 +4,7 @@
 
 using System;
 using NUnit.Framework;
+using Tomlyn.Helpers;
 using Tomlyn.Model;
 using Tomlyn.Serialization;
 
@@ -29,6 +30,37 @@ public class SerializationTests
 
         var result = TomlSerializer.Serialize(model, options).Trim();
         AssertHelper.AreEqualNormalizeNewLine("property = '''string\r\nwith\r\nnewlines'''", result);
+    }
+
+    [TestCase(TomlStringStyle.MultilineBasic, "\nstarts with a newline")]
+    [TestCase(TomlStringStyle.MultilineBasic, "\r\nstarts with a crlf")]
+    [TestCase(TomlStringStyle.MultilineLiteral, "\nstarts with a newline")]
+    [TestCase(TomlStringStyle.MultilineLiteral, "\r\nstarts with a crlf")]
+    public void TestMultilineStringStartingWithNewLineRoundtrips(TomlStringStyle style, string value)
+    {
+        var options = new TomlSerializerOptions
+        {
+            StringStylePreferences = new TomlStringStylePreferences { DefaultStyle = style }
+        };
+
+        var model = new TomlTable { ["property"] = value };
+
+        var toml = TomlSerializer.Serialize(model, options);
+        var result = TomlSerializer.Deserialize<TomlTable>(toml)!;
+
+        Assert.That(result["property"], Is.EqualTo(value));
+    }
+
+    [TestCase(TomlPropertyDisplayKind.StringMulti)]
+    [TestCase(TomlPropertyDisplayKind.StringLiteralMulti)]
+    public void TestFormatHelperMultilineStringStartingWithNewLineRoundtrips(TomlPropertyDisplayKind displayKind)
+    {
+        const string value = "\nstarts with a newline";
+
+        var toml = $"property = {TomlFormatHelper.ToString(value, displayKind)}";
+        var result = TomlSerializer.Deserialize<TomlTable>(toml)!;
+
+        Assert.That(result["property"], Is.EqualTo(value));
     }
 
     [Test]
