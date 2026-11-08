@@ -191,7 +191,7 @@ if (store.TryGetProperties(table, out var metadata) && metadata is not null)
 {
     if (metadata.TryGetProperty("title", out var prop) && prop is not null)
     {
-        // prop.LeadingTrivia  - comments before the key ("# Application title")
+        // prop.LeadingTrivia  - comments and blank lines before the key ("# Application title")
         // prop.TrailingTrivia - comments after the value
         // prop.Span           - source location (line, column, offset)
         // prop.DisplayKind    - how the value was written in the source
@@ -215,11 +215,13 @@ Each [`TomlPropertyMetadata`](xref:Tomlyn.Model.TomlPropertyMetadata) contains:
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `LeadingTrivia` | `List<`[`TomlSyntaxTriviaMetadata`](xref:Tomlyn.Model.TomlSyntaxTriviaMetadata)`>?` | Comments/whitespace before the key. |
+| `LeadingTrivia` | `List<`[`TomlSyntaxTriviaMetadata`](xref:Tomlyn.Model.TomlSyntaxTriviaMetadata)`>?` | Comments, whitespace and blank lines before the key (or table header). A blank line is a `NewLine` entry that does not end a comment. |
 | `TrailingTrivia` | `List<`[`TomlSyntaxTriviaMetadata`](xref:Tomlyn.Model.TomlSyntaxTriviaMetadata)`>?` | Comments/whitespace after the value. |
 | `TrailingTriviaAfterEndOfLine` | `List<`[`TomlSyntaxTriviaMetadata`](xref:Tomlyn.Model.TomlSyntaxTriviaMetadata)`>?` | Trivia after the end-of-line. |
 | `Span` | [`TomlSourceSpan`](xref:Tomlyn.Text.TomlSourceSpan) | Source location of the key-value pair. |
 | `DisplayKind` | [`TomlPropertyDisplayKind`](xref:Tomlyn.Model.TomlPropertyDisplayKind) | How the value appeared in the original source. |
+
+When the same options serialize the object again, this trivia is written back: comments and blank lines are kept, and every line ends with the configured [`NewLine`](xref:Tomlyn.TomlSerializerOptions.NewLine). Blank lines inside a multi-line array, and before the header of a subsequent `[[array]]` element (elements are always separated by one blank line), are not kept.
 
 > [!NOTE]
 > For full-fidelity syntax round-trip (preserving every character), prefer [`SyntaxParser`](xref:Tomlyn.Parsing.SyntaxParser) - see [Low-level APIs](low-level.md).

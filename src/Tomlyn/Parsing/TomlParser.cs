@@ -319,6 +319,9 @@ public sealed class TomlParser
         private readonly Lexer _lexer;
         private SyntaxTokenValue _token;
         private bool _initialized;
+        // True until a token other than a newline is consumed on the current line: a newline consumed while it is
+        // set ends a blank line.
+        private bool _atLineStart;
         private bool _terminatedDueToError;
 
         private readonly List<TomlSyntaxTriviaMetadata>? _pendingTrivia;
@@ -385,6 +388,7 @@ public sealed class TomlParser
             };
             _token = default;
             _initialized = false;
+            _atLineStart = true;
             _terminatedDueToError = false;
             _pendingTrivia = _captureTrivia ? new List<TomlSyntaxTriviaMetadata>(capacity: 8) : null;
             _pendingWhitespace = null;
@@ -619,15 +623,18 @@ public sealed class TomlParser
                 throw CreateException(CurrentSpan(), $"Expected `{expected.ToText() ?? expected.ToString()}` but was `{ToPrintable(_token)}`.");
             }
 
-            if (_captureTrivia && expected == TokenKind.NewLine && _pendingTrivia is { Count: > 0 })
+            if (_captureTrivia && expected == TokenKind.NewLine && _pendingTrivia is not null)
             {
-                var last = _pendingTrivia[_pendingTrivia.Count - 1];
-                if (last.Kind == TokenKind.Comment)
+                // Capture the newline ending a comment line, and the newline of a blank line between statements
+                // (blank lines inside a multi-line array are not trivia of a key or a header).
+                var endsComment = _pendingTrivia.Count > 0 && _pendingTrivia[_pendingTrivia.Count - 1].Kind == TokenKind.Comment;
+                if (endsComment || (_atLineStart && _containers.Count == 0))
                 {
                     _pendingTrivia.Add(new TomlSyntaxTriviaMetadata(TokenKind.NewLine, _lexer.GetString(_token.Start.Offset, _token.End.Offset - _token.Start.Offset + 1) ?? "\n"));
                 }
             }
 
+            _atLineStart = expected == TokenKind.NewLine;
             _lexer.State = nextState;
             NextToken();
         }
@@ -1246,8 +1253,18 @@ public sealed class TomlParser
             var insertIndex = 0;
             if (leadingTrivia is not null)
             {
-                _pendingTrivia!.InsertRange(insertIndex, leadingTrivia);
-                insertIndex += leadingTrivia.Length;
+                // That trivia is written after the header, and writers already separate array elements:
+                // drop the blank lines that preceded the header.
+                var skip = 0;
+                while (skip < leadingTrivia.Length && leadingTrivia[skip].Kind == TokenKind.NewLine)
+                {
+                    skip++;
+                }
+
+                for (var i = skip; i < leadingTrivia.Length; i++)
+                {
+                    _pendingTrivia!.Insert(insertIndex++, leadingTrivia[i]);
+                }
             }
 
             if (trailingTrivia is not null)

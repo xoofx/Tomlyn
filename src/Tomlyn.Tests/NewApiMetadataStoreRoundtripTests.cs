@@ -155,17 +155,122 @@ public class NewApiMetadataStoreRoundtripTests
         var model = TomlSerializer.Deserialize<Tomlyn.Model.TomlTable>(input, options)!;
         var toml = TomlSerializer.Serialize(model, options);
 
-        // The newline ending each comment is captured as trivia with the line ending of the input: it must be
-        // written with the configured newline like the other lines. (Blank lines are not captured as trivia.)
-        var expected = string.Join(expectedNewLine,
-            "# Top comment",
-            "Name = \"app\" # Name comment",
-            "# Server comment",
-            "[Server] # Server trailing comment",
-            "Host = \"localhost\"",
-            "[[Products]]",
-            "Name = \"Hammer\"",
-            "");
-        Assert.That(toml, Is.EqualTo(expected));
+        // Newlines ending comments and blank lines are captured as trivia with the line ending of the input:
+        // they must be written with the configured newline like the other lines.
+        Assert.That(toml, Is.EqualTo(input.Replace(inputNewLine, expectedNewLine)));
+    }
+
+    private const string DocumentWithBlankLines =
+        "\n" +
+        "# Top comment\n" +
+        "\n" +
+        "Name = \"app\"\n" +
+        "\n" +
+        "\n" +
+        "# Server comment\n" +
+        "\n" +
+        "# Server header comment\n" +
+        "[Server]\n" +
+        "Host = \"localhost\"\n" +
+        "\n" +
+        "Port = 8080\n" +
+        "\n" +
+        "[[Products]]\n" +
+        "Name = \"Hammer\"\n" +
+        "Sku = 1\n";
+
+    [Test]
+    public void MetadataStore_DeserializeThenSerialize_TomlTable_PreservesBlankLines()
+    {
+        var options = new TomlSerializerOptions { MetadataStore = new TomlMetadataStore() };
+
+        var model = TomlSerializer.Deserialize<Tomlyn.Model.TomlTable>(DocumentWithBlankLines, options)!;
+        var toml = TomlSerializer.Serialize(model, options);
+
+        Assert.That(toml, Is.EqualTo(DocumentWithBlankLines));
+    }
+
+    [Test]
+    public void MetadataStore_DeserializeThenSerialize_Poco_PreservesBlankLines()
+    {
+        var options = new TomlSerializerOptions { MetadataStore = new TomlMetadataStore() };
+
+        var config = TomlSerializer.Deserialize<Config>(DocumentWithBlankLines, options)!;
+        var toml = TomlSerializer.Serialize(config, options);
+
+        Assert.That(toml, Is.EqualTo(DocumentWithBlankLines));
+    }
+
+    [Test]
+    public void MetadataStore_DeserializeThenSerialize_WithoutMetadataStore_DoesNotWriteBlankLines()
+    {
+        var model = TomlSerializer.Deserialize<Tomlyn.Model.TomlTable>(DocumentWithBlankLines)!;
+        var toml = TomlSerializer.Serialize(model);
+
+        Assert.That(toml, Is.EqualTo("Name = \"app\"\n[Server]\nHost = \"localhost\"\nPort = 8080\n[[Products]]\nName = \"Hammer\"\nSku = 1\n"));
+    }
+
+    [Test]
+    public void MetadataStore_DeserializeThenSerialize_TableArrayElements_DoNotDoubleBlankLines()
+    {
+        const string input =
+            "[[Products]]\n" +
+            "Name = \"Hammer\"\n" +
+            "\n" +
+            "\n" +
+            "# Second product comment\n" +
+            "[[Products]]\n" +
+            "Name = \"Nail\"\n" +
+            "\n" +
+            "[[Products]]\n" +
+            "Name = \"Screw\"\n";
+        var options = new TomlSerializerOptions { MetadataStore = new TomlMetadataStore() };
+
+        var model = TomlSerializer.Deserialize<Tomlyn.Model.TomlTable>(input, options)!;
+        var toml = TomlSerializer.Serialize(model, options);
+
+        // The trivia of a subsequent array element goes after its header (as before), without the blank lines
+        // that preceded the header: the writer already separates the elements with a blank line.
+        Assert.That(toml, Is.EqualTo(
+            "[[Products]]\n" +
+            "Name = \"Hammer\"\n" +
+            "\n" +
+            "[[Products]]\n" +
+            "# Second product comment\n" +
+            "Name = \"Nail\"\n" +
+            "\n" +
+            "[[Products]]\n" +
+            "Name = \"Screw\"\n"));
+    }
+
+    [Test]
+    public void MetadataStore_DeserializeThenSerialize_BlankLinesInMultilineArray_AreNotTrivia()
+    {
+        const string input =
+            "Values = [\n" +
+            "  1,\n" +
+            "\n" +
+            "  2,\n" +
+            "]\n" +
+            "\n" +
+            "Name = \"app\"\n";
+        var options = new TomlSerializerOptions { MetadataStore = new TomlMetadataStore() };
+
+        var model = TomlSerializer.Deserialize<Tomlyn.Model.TomlTable>(input, options)!;
+        var toml = TomlSerializer.Serialize(model, options);
+
+        Assert.That(toml, Is.EqualTo("Values = [1, 2]\n\nName = \"app\"\n"));
+    }
+
+    [Test]
+    public void MetadataStore_BlankLineBeforeTableHeaders_DoesNotDoubleParsedBlankLine()
+    {
+        const string input = "a = 1\n\n[t]\nb = 2\n[u]\nc = 3\n";
+        var options = new TomlSerializerOptions { MetadataStore = new TomlMetadataStore(), BlankLineBeforeTableHeaders = true };
+
+        var model = TomlSerializer.Deserialize<Tomlyn.Model.TomlTable>(input, options)!;
+        var toml = TomlSerializer.Serialize(model, options);
+
+        Assert.That(toml, Is.EqualTo("a = 1\n\n[t]\nb = 2\n\n[u]\nc = 3\n"));
     }
 }

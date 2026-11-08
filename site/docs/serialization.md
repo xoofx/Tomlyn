@@ -123,7 +123,7 @@ var toml = TomlSerializer.Serialize(config, options);
 | [`ArrayLayout`](xref:Tomlyn.TomlSerializerOptions.ArrayLayout) | [`TomlArrayLayout`](xref:Tomlyn.TomlArrayLayout) | `Inline` | Array layout (`Inline` = `a = [1, 2]`, `Multiline` = one element per line). |
 | [`StringStylePreferences`](xref:Tomlyn.TomlSerializerOptions.StringStylePreferences) | [`TomlStringStylePreferences`](xref:Tomlyn.TomlStringStylePreferences) | *(see below)* | Controls string emission style (basic, literal, multiline). |
 | [`PolymorphismOptions`](xref:Tomlyn.TomlSerializerOptions.PolymorphismOptions) | [`TomlPolymorphismOptions`](xref:Tomlyn.TomlPolymorphismOptions) | *(see below)* | Polymorphism discriminator settings. |
-| [`MetadataStore`](xref:Tomlyn.TomlSerializerOptions.MetadataStore) | [`ITomlMetadataStore?`](xref:Tomlyn.Serialization.ITomlMetadataStore) | `null` | Captures trivia (comments, source spans) during deserialization. |
+| [`MetadataStore`](xref:Tomlyn.TomlSerializerOptions.MetadataStore) | [`ITomlMetadataStore?`](xref:Tomlyn.Serialization.ITomlMetadataStore) | `null` | Captures trivia (comments, blank lines, source spans) during deserialization and writes it back when serializing. |
 | [`SourceName`](xref:Tomlyn.TomlSerializerOptions.SourceName) | `string?` | `null` | File/path name included in [`TomlException`](xref:Tomlyn.TomlException) messages. |
 | [`TypeInfoResolver`](xref:Tomlyn.TomlSerializerOptions.TypeInfoResolver) | [`ITomlTypeInfoResolver?`](xref:Tomlyn.ITomlTypeInfoResolver) | `null` | Custom metadata resolver (advanced). |
 | [`Converters`](xref:Tomlyn.TomlSerializerOptions.Converters) | `IReadOnlyList<TomlConverter>` | empty | Custom converters for type mapping. |
