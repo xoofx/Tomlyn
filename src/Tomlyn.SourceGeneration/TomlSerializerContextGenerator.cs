@@ -281,6 +281,9 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         var options = new SourceGenOptions();
         var usesJsonSerializable = false;
 
+        // Options declared on base contexts apply first, so that the options of the context itself override them.
+        ApplyBaseContextSourceGenerationOptions(classSymbol, options);
+
         foreach (var attribute in classSymbol.GetAttributes())
         {
             if (IsTomlSerializableAttribute(attribute))
@@ -5299,6 +5302,39 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
 
         return builder.ToString();
+    }
+
+    /// <summary>
+    /// Applies the source generation options declared on the base classes of a context, from the most distant base to the
+    /// direct base, so that several contexts can share options declared once on a common base context.
+    /// </summary>
+    private static void ApplyBaseContextSourceGenerationOptions(INamedTypeSymbol contextSymbol, SourceGenOptions options)
+    {
+        var baseContexts = new Stack<INamedTypeSymbol>();
+        for (var current = contextSymbol.BaseType; current is not null; current = current.BaseType)
+        {
+            if (current.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::" + TomlSerializerContextMetadataName)
+            {
+                break;
+            }
+
+            baseContexts.Push(current);
+        }
+
+        while (baseContexts.Count != 0)
+        {
+            foreach (var attribute in baseContexts.Pop().GetAttributes())
+            {
+                if (IsJsonSourceGenerationOptionsAttribute(attribute))
+                {
+                    ApplyJsonSourceGenerationOptionsAttribute(attribute, options);
+                }
+                else if (IsTomlSourceGenerationOptionsAttribute(attribute))
+                {
+                    ApplyTomlSourceGenerationOptionsAttribute(attribute, options);
+                }
+            }
+        }
     }
 
     private static bool DerivesFromTomlSerializerContext(INamedTypeSymbol symbol)

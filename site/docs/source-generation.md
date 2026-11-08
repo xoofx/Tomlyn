@@ -99,6 +99,29 @@ internal partial class MyTomlContext : TomlSerializerContext { }
 
 `PreferredObjectCreationHandling` matches [`System.Text.Json`](xref:System.Text.Json): the default is [`Replace`](xref:System.Text.Json.Serialization.JsonObjectCreationHandling.Replace), and [`Populate`](xref:System.Text.Json.Serialization.JsonObjectCreationHandling.Populate) must be opted into explicitly when you want Tomlyn to reuse mutable read-only members during deserialization.
 
+### Sharing options across contexts
+
+To use the same options in several contexts, declare them once on an abstract base context and derive the contexts from it. The generated constructor of a context calls the base constructor that takes the options:
+
+```csharp
+[TomlSourceGenerationOptions(
+    DuplicateKeyHandling = TomlDuplicateKeyHandling.LastWins,
+    PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+public abstract class MyTomlContextBase : TomlSerializerContext
+{
+    protected MyTomlContextBase(TomlSerializerOptions options) : base(options) { }
+}
+
+[TomlSerializable(typeof(Foo))]
+public partial class FooContext : MyTomlContextBase { }
+
+[TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[TomlSerializable(typeof(Alice))]
+public partial class AliceContext : MyTomlContextBase { }
+```
+
+Options are applied from the most distant base class to the context itself, and each option set on a class overrides the same option of its base classes: here `AliceContext` uses camel case and still uses `LastWins`. An array option such as `Converters` is replaced, not merged.
+
 ### Registering converters at compile time
 
 ```csharp

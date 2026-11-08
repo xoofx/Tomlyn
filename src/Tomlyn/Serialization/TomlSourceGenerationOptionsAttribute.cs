@@ -10,7 +10,11 @@ namespace Tomlyn.Serialization;
 /// <summary>
 /// Specifies default source generation options for a <see cref="TomlSerializerContext"/>.
 /// </summary>
-[AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
+/// <remarks>
+/// Options declared on a base class of a context (typically an abstract class deriving from <see cref="TomlSerializerContext"/>)
+/// apply to every context deriving from it. Options declared on the context itself override them, property by property.
+/// </remarks>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = true)]
 public sealed class TomlSourceGenerationOptionsAttribute : TomlAttribute
 {
     /// <summary>Gets or sets a value indicating whether output should be indented.</summary>
