@@ -76,6 +76,8 @@ namespace Tomlyn.Text
             for (int i = 0; i < text.Length; i++)
             {
                 var c = text[i];
+                // Capture the start before a CRLF advances i, so the unescaped prefix doesn't include the '\r'.
+                var start = i;
 
                 string? str = null;
 
@@ -105,7 +107,7 @@ namespace Tomlyn.Text
                     if (builder == null)
                     {
                         builder = new StringBuilder(text.Length * 2);
-                        builder.Append(text.Substring(0, i));
+                        builder.Append(text.Substring(0, start));
                     }
                     builder.Append(str);
                 }
