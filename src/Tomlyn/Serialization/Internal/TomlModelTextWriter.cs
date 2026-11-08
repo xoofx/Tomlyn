@@ -960,13 +960,7 @@ internal static class TomlModelTextWriter
                 return;
             }
 
-            foreach (var trivia in propertyMetadata.LeadingTrivia)
-            {
-                if (trivia.Text is not null)
-                {
-                    _writer.Write(trivia.Text);
-                }
-            }
+            WriteTrivia(propertyMetadata.LeadingTrivia);
         }
 
         private void WriteTrailingTrivia(TomlPropertiesMetadata? metadata, string key)
@@ -976,13 +970,7 @@ internal static class TomlModelTextWriter
                 return;
             }
 
-            foreach (var trivia in propertyMetadata.TrailingTrivia)
-            {
-                if (trivia.Text is not null)
-                {
-                    _writer.Write(trivia.Text);
-                }
-            }
+            WriteTrivia(propertyMetadata.TrailingTrivia);
         }
 
         private void WriteTrailingTriviaAfterEndOfLine(TomlPropertiesMetadata? metadata, string key)
@@ -992,8 +980,21 @@ internal static class TomlModelTextWriter
                 return;
             }
 
-            foreach (var trivia in propertyMetadata.TrailingTriviaAfterEndOfLine)
+            WriteTrivia(propertyMetadata.TrailingTriviaAfterEndOfLine);
+        }
+
+        private void WriteTrivia(List<TomlSyntaxTriviaMetadata> trivias)
+        {
+            foreach (var trivia in trivias)
             {
+                if (trivia.Kind == TokenKind.NewLine)
+                {
+                    // The captured newline keeps the line ending of the parsed document: write the configured
+                    // one instead, so that a document does not mix line endings.
+                    WriteNewLine();
+                    continue;
+                }
+
                 if (trivia.Text is not null)
                 {
                     _writer.Write(trivia.Text);

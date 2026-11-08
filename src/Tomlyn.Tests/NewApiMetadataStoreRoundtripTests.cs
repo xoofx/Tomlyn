@@ -128,4 +128,44 @@ public class NewApiMetadataStoreRoundtripTests
         Assert.That(toml, Does.Contain("[[Products]] # Products trailing comment\nName = "));
         Assert.That(toml, Does.Contain("# Second product comment\n"));
     }
+
+    [TestCase("\r\n", TomlNewLineKind.Lf, "\n")]
+    [TestCase("\n", TomlNewLineKind.CrLf, "\r\n")]
+    [TestCase("\r\n", TomlNewLineKind.CrLf, "\r\n")]
+    public void MetadataStore_DeserializeThenSerialize_WritesTriviaWithConfiguredNewLine(string inputNewLine, TomlNewLineKind newLine, string expectedNewLine)
+    {
+        var options = new TomlSerializerOptions
+        {
+            MetadataStore = new TomlMetadataStore(),
+            NewLine = newLine,
+        };
+        var input = string.Join(inputNewLine,
+            "# Top comment",
+            "",
+            "Name = \"app\" # Name comment",
+            "",
+            "# Server comment",
+            "[Server] # Server trailing comment",
+            "Host = \"localhost\"",
+            "",
+            "[[Products]]",
+            "Name = \"Hammer\"",
+            "");
+
+        var model = TomlSerializer.Deserialize<Tomlyn.Model.TomlTable>(input, options)!;
+        var toml = TomlSerializer.Serialize(model, options);
+
+        // The newline ending each comment is captured as trivia with the line ending of the input: it must be
+        // written with the configured newline like the other lines. (Blank lines are not captured as trivia.)
+        var expected = string.Join(expectedNewLine,
+            "# Top comment",
+            "Name = \"app\" # Name comment",
+            "# Server comment",
+            "[Server] # Server trailing comment",
+            "Host = \"localhost\"",
+            "[[Products]]",
+            "Name = \"Hammer\"",
+            "");
+        Assert.That(toml, Is.EqualTo(expected));
+    }
 }
