@@ -226,6 +226,16 @@ public sealed record TomlSerializerOptions
     public bool BlankLineBeforeTableHeaders { get; init; }
 
     /// <summary>
+    /// Gets or sets how non-empty array values are emitted.
+    /// </summary>
+    /// <remarks>
+    /// With <see cref="TomlArrayLayout.Multiline"/>, each element of an array assigned to a key (including an inline
+    /// array of tables) is written on its own line, indented by <see cref="IndentSize"/> spaces when
+    /// <see cref="WriteIndented"/> is enabled, and followed by a comma. Nested arrays and arrays within inline tables stay inline.
+    /// </remarks>
+    public TomlArrayLayout ArrayLayout { get; init; } = TomlArrayLayout.Inline;
+
+    /// <summary>
     /// Gets or sets an optional metadata store used to capture or apply TOML trivia/comment metadata.
     /// </summary>
     public ITomlMetadataStore? MetadataStore { get; init; }
@@ -392,6 +402,22 @@ public enum TomlTableArrayStyle
     /// Emit arrays of tables as an inline array of inline tables (<c>a = [{...}, {...}]</c>).
     /// </summary>
     InlineArrayOfTables = 1,
+}
+
+/// <summary>
+/// Specifies how array values are emitted.
+/// </summary>
+public enum TomlArrayLayout
+{
+    /// <summary>
+    /// Emit arrays on a single line (<c>a = [1, 2, 3]</c>).
+    /// </summary>
+    Inline = 0,
+
+    /// <summary>
+    /// Emit each element of a non-empty array on its own line, followed by a comma.
+    /// </summary>
+    Multiline = 1,
 }
 
 /// <summary>

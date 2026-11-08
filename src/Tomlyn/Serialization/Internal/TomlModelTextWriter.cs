@@ -38,6 +38,7 @@ internal static class TomlModelTextWriter
         private readonly TomlSerializerOptions _options;
         private readonly int _effectiveMaxDepth;
         private readonly string _newLine;
+        private readonly string _arrayElementIndent;
         private bool _hasWrittenLine;
 
         public State(TextWriter writer, TomlSerializerOptions options)
@@ -46,6 +47,7 @@ internal static class TomlModelTextWriter
             _options = options;
             _effectiveMaxDepth = TomlDepthHelper.GetEffectiveMaxDepth(options.MaxDepth);
             _newLine = options.NewLine == TomlNewLineKind.CrLf ? "\r\n" : "\n";
+            _arrayElementIndent = options.WriteIndented ? new string(' ', options.IndentSize) : string.Empty;
         }
 
         public void WriteTableBody(TomlTable table, List<string> path, HeaderKind headerKind, TomlPropertiesMetadata? headerMetadata, int depth)
@@ -146,11 +148,23 @@ internal static class TomlModelTextWriter
                 displayKind = propertyMetadata.DisplayKind;
             }
 
-            WriteValue(value, displayKind, depth, propertyMetadata);
+            // Only the array value of a key is written across lines: nested arrays and arrays within
+            // inline tables stay inline, as TOML 1.0 inline tables must fit on a single line.
+            if (value is TomlArray array && UseMultilineArray(array.Count))
+            {
+                WriteMultilineArray(array, depth + 1);
+            }
+            else
+            {
+                WriteValue(value, displayKind, depth, propertyMetadata);
+            }
+
             WriteTrailingTrivia(table.PropertiesMetadata, key);
             WriteNewLine();
             WriteTrailingTriviaAfterEndOfLine(table.PropertiesMetadata, key);
         }
+
+        private bool UseMultilineArray(int count) => count > 0 && _options.ArrayLayout == TomlArrayLayout.Multiline;
 
         private static TomlPropertyMetadata? GetPropertyMetadata(TomlPropertiesMetadata? metadata, string key)
         {
@@ -222,18 +236,36 @@ internal static class TomlModelTextWriter
             WriteKey(key);
             _writer.Write(" = ");
 
-            _writer.Write("[");
-            for (var i = 0; i < tableArray.Count; i++)
+            if (UseMultilineArray(tableArray.Count))
             {
-                if (i > 0)
+                _writer.Write("[");
+                WriteNewLine();
+                for (var i = 0; i < tableArray.Count; i++)
                 {
-                    _writer.Write(", ");
+                    _writer.Write(_arrayElementIndent);
+                    WriteInlineTable(tableArray[i], depth + 2);
+                    _writer.Write(",");
+                    WriteNewLine();
                 }
 
-                WriteInlineTable(tableArray[i], depth + 2);
+                _writer.Write("]");
+            }
+            else
+            {
+                _writer.Write("[");
+                for (var i = 0; i < tableArray.Count; i++)
+                {
+                    if (i > 0)
+                    {
+                        _writer.Write(", ");
+                    }
+
+                    WriteInlineTable(tableArray[i], depth + 2);
+                }
+
+                _writer.Write("]");
             }
 
-            _writer.Write("]");
             WriteTrailingTrivia(metadata, key);
             WriteNewLine();
             WriteTrailingTriviaAfterEndOfLine(metadata, key);
@@ -578,21 +610,42 @@ internal static class TomlModelTextWriter
                     _writer.Write(", ");
                 }
 
-                var value = array[i]!;
-                if (value is TomlTable nestedTable)
-                {
-                    if (!IsInlineableTable(nestedTable, maxMemberCount: int.MaxValue, depth + 1))
-                    {
-                        throw new TomlException("Arrays cannot contain non-inline tables or table arrays.");
-                    }
-
-                    WriteInlineTable(nestedTable, depth + 1);
-                    continue;
-                }
-
-                WriteValue(value, TomlPropertyDisplayKind.Default, depth);
+                WriteArrayElement(array[i]!, depth);
             }
             _writer.Write("]");
+        }
+
+        private void WriteMultilineArray(TomlArray array, int depth)
+        {
+            ValidateDepth(depth);
+            _writer.Write("[");
+            WriteNewLine();
+            for (var i = 0; i < array.Count; i++)
+            {
+                _writer.Write(_arrayElementIndent);
+                WriteArrayElement(array[i]!, depth);
+                // A trailing comma keeps diffs to one line when an element is added or removed.
+                _writer.Write(",");
+                WriteNewLine();
+            }
+
+            _writer.Write("]");
+        }
+
+        private void WriteArrayElement(object value, int depth)
+        {
+            if (value is TomlTable nestedTable)
+            {
+                if (!IsInlineableTable(nestedTable, maxMemberCount: int.MaxValue, depth + 1))
+                {
+                    throw new TomlException("Arrays cannot contain non-inline tables or table arrays.");
+                }
+
+                WriteInlineTable(nestedTable, depth + 1);
+                return;
+            }
+
+            WriteValue(value, TomlPropertyDisplayKind.Default, depth);
         }
 
         private void ValidateDepth(int depth)

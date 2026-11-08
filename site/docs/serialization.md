@@ -109,7 +109,7 @@ var toml = TomlSerializer.Serialize(config, options);
 | [`PropertyNameCaseInsensitive`](xref:Tomlyn.TomlSerializerOptions.PropertyNameCaseInsensitive) | `bool` | `false` | Case-insensitive property matching when reading. |
 | [`MaxDepth`](xref:Tomlyn.TomlSerializerOptions.MaxDepth) | `int` | `0` (`64` effective) | Maximum nesting depth when reading or writing TOML containers. |
 | [`DefaultIgnoreCondition`](xref:Tomlyn.TomlSerializerOptions.DefaultIgnoreCondition) | [`TomlIgnoreCondition`](xref:Tomlyn.TomlIgnoreCondition) | `WhenWritingNull` | Skips null/default values when writing. |
-| [`WriteIndented`](xref:Tomlyn.TomlSerializerOptions.WriteIndented) | `bool` | `true` | Enables indentation for nested tables. |
+| [`WriteIndented`](xref:Tomlyn.TomlSerializerOptions.WriteIndented) | `bool` | `true` | Indents the elements of multi-line arrays (see `ArrayLayout`). |
 | [`IndentSize`](xref:Tomlyn.TomlSerializerOptions.IndentSize) | `int` | `2` | Spaces per indent level. |
 | [`NewLine`](xref:Tomlyn.TomlSerializerOptions.NewLine) | [`TomlNewLineKind`](xref:Tomlyn.TomlNewLineKind) | `Lf` | Line ending style (`Lf` or `CrLf`). |
 | [`MappingOrder`](xref:Tomlyn.TomlSerializerOptions.MappingOrder) | [`TomlMappingOrderPolicy`](xref:Tomlyn.TomlMappingOrderPolicy) | `Declaration` | Property ordering within tables. |
@@ -120,6 +120,7 @@ var toml = TomlSerializer.Serialize(config, options);
 | [`InlineTablePolicy`](xref:Tomlyn.TomlSerializerOptions.InlineTablePolicy) | [`TomlInlineTablePolicy`](xref:Tomlyn.TomlInlineTablePolicy) | `Never` | When to emit inline tables (`Never`, `WhenSmall`, `Always`). |
 | [`TableArrayStyle`](xref:Tomlyn.TomlSerializerOptions.TableArrayStyle) | [`TomlTableArrayStyle`](xref:Tomlyn.TomlTableArrayStyle) | `Headers` | Array-of-tables style (`Headers` = `[[a]]`, `InlineArrayOfTables` = `a = [{...}]`). |
 | [`BlankLineBeforeTableHeaders`](xref:Tomlyn.TomlSerializerOptions.BlankLineBeforeTableHeaders) | `bool` | `false` | Writes a blank line before each `[table]` / `[[array]]` header that follows other content. |
+| [`ArrayLayout`](xref:Tomlyn.TomlSerializerOptions.ArrayLayout) | [`TomlArrayLayout`](xref:Tomlyn.TomlArrayLayout) | `Inline` | Array layout (`Inline` = `a = [1, 2]`, `Multiline` = one element per line). |
 | [`StringStylePreferences`](xref:Tomlyn.TomlSerializerOptions.StringStylePreferences) | [`TomlStringStylePreferences`](xref:Tomlyn.TomlStringStylePreferences) | *(see below)* | Controls string emission style (basic, literal, multiline). |
 | [`PolymorphismOptions`](xref:Tomlyn.TomlSerializerOptions.PolymorphismOptions) | [`TomlPolymorphismOptions`](xref:Tomlyn.TomlPolymorphismOptions) | *(see below)* | Polymorphism discriminator settings. |
 | [`MetadataStore`](xref:Tomlyn.TomlSerializerOptions.MetadataStore) | [`ITomlMetadataStore?`](xref:Tomlyn.Serialization.ITomlMetadataStore) | `null` | Captures trivia (comments, source spans) during deserialization. |
@@ -261,6 +262,27 @@ level = "info"
 ```
 
 No blank line is written at the start of the document, and a blank line already captured with the comments of a header by a [`MetadataStore`](xref:Tomlyn.TomlSerializerOptions.MetadataStore) is not doubled.
+
+### Multi-line arrays
+
+[`ArrayLayout`](xref:Tomlyn.TomlSerializerOptions.ArrayLayout) controls how array values are written. With [`Multiline`](xref:Tomlyn.TomlArrayLayout.Multiline), each element goes on its own line with a trailing comma, which keeps diffs and merges to one line per element:
+
+```csharp
+var options = new TomlSerializerOptions { ArrayLayout = TomlArrayLayout.Multiline };
+```
+
+```toml
+Name = "Example"
+Items = [
+  "A",
+  "B",
+  "C",
+]
+```
+
+- Elements are indented by [`IndentSize`](xref:Tomlyn.TomlSerializerOptions.IndentSize) spaces, or not at all when [`WriteIndented`](xref:Tomlyn.TomlSerializerOptions.WriteIndented) is `false`.
+- Empty arrays stay `[]`.
+- It applies to the array value of a key, including an inline array of tables (`TableArrayStyle = InlineArrayOfTables`). Nested arrays and arrays within inline tables stay inline.
 
 ### Formatting attributes
 

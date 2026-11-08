@@ -64,6 +64,9 @@ public sealed class TomlSourceGenerationOptionsAttribute : TomlAttribute
     /// <summary>Gets or sets a value indicating whether a blank line is written before each table header that follows other content.</summary>
     public bool BlankLineBeforeTableHeaders { get; set; }
 
+    /// <summary>Gets or sets how non-empty array values are emitted.</summary>
+    public TomlArrayLayout ArrayLayout { get; set; }
+
     /// <summary>
     /// Gets or sets converter types to register on the generated context.
     /// </summary>

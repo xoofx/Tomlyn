@@ -203,6 +203,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         public int? InlineTablePolicy { get; set; }
         public int? TableArrayStyle { get; set; }
         public bool? BlankLineBeforeTableHeaders { get; set; }
+        public int? ArrayLayout { get; set; }
         public ImmutableArray<ITypeSymbol> ConverterTypes { get; set; } = ImmutableArray<ITypeSymbol>.Empty;
     }
 
@@ -587,6 +588,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         if (model.Options.BlankLineBeforeTableHeaders is not null)
         {
             builder.Append("        options = options with { BlankLineBeforeTableHeaders = ").Append(model.Options.BlankLineBeforeTableHeaders.Value ? "true" : "false").AppendLine(" };");
+        }
+
+        if (model.Options.ArrayLayout is not null && TryGetTomlArrayLayoutExpression(model.Options.ArrayLayout.Value, out var arrayLayoutExpression))
+        {
+            builder.Append("        options = options with { ArrayLayout = ").Append(arrayLayoutExpression).AppendLine(" };");
         }
 
         builder.AppendLine("        return options;");
@@ -5506,6 +5512,9 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                 case "BlankLineBeforeTableHeaders":
                     if (value.Value is bool blankLineBeforeTableHeaders) options.BlankLineBeforeTableHeaders = blankLineBeforeTableHeaders;
                     break;
+                case "ArrayLayout":
+                    if (value.Value is int arrayLayout) options.ArrayLayout = arrayLayout;
+                    break;
                 case "Converters":
                     if (value.Kind == TypedConstantKind.Array && !value.Values.IsDefault)
                     {
@@ -5595,6 +5604,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         ValidateEnumOption(context, model, "RootValueHandling", model.Options.RootValueHandling, TryGetTomlRootValueHandlingExpression, v => model.Options.RootValueHandling = v);
         ValidateEnumOption(context, model, "InlineTablePolicy", model.Options.InlineTablePolicy, TryGetTomlInlineTablePolicyExpression, v => model.Options.InlineTablePolicy = v);
         ValidateEnumOption(context, model, "TableArrayStyle", model.Options.TableArrayStyle, TryGetTomlTableArrayStyleExpression, v => model.Options.TableArrayStyle = v);
+        ValidateEnumOption(context, model, "ArrayLayout", model.Options.ArrayLayout, TryGetTomlArrayLayoutExpression, v => model.Options.ArrayLayout = v);
 
         if (model.Options.RootValueKeyName is not null && string.IsNullOrWhiteSpace(model.Options.RootValueKeyName))
         {
@@ -5808,6 +5818,18 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         {
             0 => "global::Tomlyn.TomlTableArrayStyle.Headers",
             1 => "global::Tomlyn.TomlTableArrayStyle.InlineArrayOfTables",
+            _ => null!,
+        };
+
+        return expression is not null;
+    }
+
+    private static bool TryGetTomlArrayLayoutExpression(int value, out string expression)
+    {
+        expression = value switch
+        {
+            0 => "global::Tomlyn.TomlArrayLayout.Inline",
+            1 => "global::Tomlyn.TomlArrayLayout.Multiline",
             _ => null!,
         };
 
