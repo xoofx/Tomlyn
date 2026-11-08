@@ -66,7 +66,9 @@ public class NewApiMetadataStoreRoundtripTests
             MetadataStore = store,
         };
 
-        var config = TomlSerializer.Deserialize<Config>(
+        // The comments keep the newlines of the input, whose raw string literal follows the line endings
+        // of this file (CRLF in a Windows checkout): normalize them so that the assertions hold on every platform.
+        var config = TomlSerializer.Deserialize<Config>(AssertHelper.NormalizeEndOfLine(
             """
             # Top comment
             Name = "app"
@@ -83,7 +85,7 @@ public class NewApiMetadataStoreRoundtripTests
             # Product name comment
             Name = "Hammer"
             Sku = 1
-            """,
+            """),
             options)!;
 
         var toml = TomlSerializer.Serialize(config, options);
@@ -105,7 +107,8 @@ public class NewApiMetadataStoreRoundtripTests
             MetadataStore = store,
         };
 
-        var config = TomlSerializer.Deserialize<Config>(
+        // Normalized for the same reason as in the test above.
+        var config = TomlSerializer.Deserialize<Config>(AssertHelper.NormalizeEndOfLine(
             """
             [Server] # Server trailing comment
             Host = "localhost"
@@ -116,7 +119,7 @@ public class NewApiMetadataStoreRoundtripTests
             # Second product comment
             [[Products]]
             Name = "Nail"
-            """,
+            """),
             options)!;
 
         var toml = TomlSerializer.Serialize(config, options);
