@@ -32,7 +32,7 @@ public class TomlFormatHelper
         switch (displayKind)
         {
             case TomlPropertyDisplayKind.StringMulti:
-                return $"\"\"\"{s.EscapeForToml(true)}\"\"\"";
+                return $"\"\"\"{GetMultilineLeadingNewLine(s)}{s.EscapeForToml(true)}\"\"\"";
             case TomlPropertyDisplayKind.StringLiteral:
                 if (IsSafeStringLiteral(s))
                 {
@@ -45,7 +45,7 @@ public class TomlFormatHelper
             case TomlPropertyDisplayKind.StringLiteralMulti:
                 if (IsSafeStringLiteralMulti(s))
                 {
-                    return $"'''{s}'''";
+                    return $"'''{GetMultilineLeadingNewLine(s)}{s}'''";
                 }
                 else
                 {
@@ -312,6 +312,13 @@ public class TomlFormatHelper
             }
         }
         return text + ".0";
+    }
+
+    private static string GetMultilineLeadingNewLine(string text)
+    {
+        // A newline immediately following the opening delimiter of a multi-line string is trimmed
+        // by TOML parsers, so an extra one is needed to preserve a leading newline in the value.
+        return text.Length > 0 && (text[0] == '\n' || (text[0] == '\r' && text.Length > 1 && text[1] == '\n')) ? "\n" : string.Empty;
     }
 
     private static bool IsSafeStringLiteral(string text)
