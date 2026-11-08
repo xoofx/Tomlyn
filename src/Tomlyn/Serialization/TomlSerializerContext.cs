@@ -564,4 +564,20 @@ public abstract partial class TomlSerializerContext : ITomlTypeInfoResolver
         ArgumentGuard.ThrowIfNull(context, nameof(context));
         return new TomlSourceGeneratedDictionaryTypeInfo<TDictionary, TValue>(context, options);
     }
+
+    /// <summary>
+    /// Creates metadata for a concrete mutable dictionary type with string keys (for example a type deriving from
+    /// <see cref="Dictionary{TKey, TValue}"/>) using source-generated resolution for nested values.
+    /// </summary>
+    /// <remarks>
+    /// Instances are created with the parameterless constructor of <typeparamref name="TDictionary"/>, so a comparer
+    /// configured by that constructor is preserved. This method avoids reflection-based metadata resolution,
+    /// making it compatible with trimming and NativeAOT.
+    /// </remarks>
+    protected static TomlTypeInfo<TDictionary> CreateSourceGeneratedMutableDictionaryTypeInfo<TDictionary, TValue>(TomlSerializerContext context, TomlSerializerOptions? options = null)
+        where TDictionary : IDictionary<string, TValue>, new()
+    {
+        ArgumentGuard.ThrowIfNull(context, nameof(context));
+        return new TomlSourceGeneratedDictionaryTypeInfo<TDictionary, TValue>(context, options, static () => new TDictionary());
+    }
 }

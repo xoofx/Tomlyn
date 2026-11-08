@@ -1217,12 +1217,24 @@ internal sealed class TomlImmutableHashSetTypeInfo<TElement> : TomlTypeInfo<Immu
 internal sealed class TomlDictionaryTypeInfo<TDictionary, TValue> : TomlTypeInfo<TDictionary>
     where TDictionary : IEnumerable<KeyValuePair<string, TValue>>
 {
+    private readonly Func<IDictionary<string, TValue>>? _createDictionary;
     private TomlTypeInfo? _valueTypeInfo;
     private TomlTypeInfo<TValue>? _typedValueTypeInfo;
 
     public TomlDictionaryTypeInfo(TomlSerializerOptions options)
+        : this(options, createDictionary: null)
+    {
+    }
+
+    /// <param name="options">The serializer options.</param>
+    /// <param name="createDictionary">
+    /// Creates the instance to populate when <typeparamref name="TDictionary"/> is a concrete dictionary type;
+    /// when null, a <see cref="Dictionary{TKey, TValue}"/> is created, which <typeparamref name="TDictionary"/> must accept.
+    /// </param>
+    public TomlDictionaryTypeInfo(TomlSerializerOptions options, Func<IDictionary<string, TValue>>? createDictionary)
         : base(options)
     {
+        _createDictionary = createDictionary;
     }
 
     public override bool WritesTable => true;
@@ -1261,7 +1273,8 @@ internal sealed class TomlDictionaryTypeInfo<TDictionary, TValue> : TomlTypeInfo
             throw reader.CreateException($"Expected {TomlTokenType.StartTable} token but was {reader.TokenType}.");
         }
 
-        var dict = new Dictionary<string, TValue>(StringComparer.Ordinal);
+        // A concrete dictionary type is created through its own constructor so that its comparer is preserved.
+        IDictionary<string, TValue> dict = _createDictionary?.Invoke() ?? new Dictionary<string, TValue>(StringComparer.Ordinal);
         reader.Read();
         while (reader.TokenType != TomlTokenType.EndTable)
         {

@@ -82,6 +82,16 @@ public sealed class TableArrayItem
     public string Name { get; set; } = string.Empty;
 }
 
+// Issue #139: a custom dictionary type deriving from Dictionary<string, T> with its own comparer.
+public sealed class CaseInsensitiveItemMap() : Dictionary<string, TableArrayItem>(System.StringComparer.OrdinalIgnoreCase);
+
+public sealed class CustomDictionaryHolder
+{
+    public CaseInsensitiveItemMap Items { get; set; } = new();
+
+    public SortedDictionary<string, long> Sorted { get; set; } = new();
+}
+
 [TomlSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [TomlSerializable(typeof(GeneratedCollectionHolder))]
 [TomlSerializable(typeof(ObservableCollectionHolder))]
@@ -91,6 +101,8 @@ public sealed class TableArrayItem
 [TomlSerializable(typeof(SingleOrArraySettableCollectionHolder))]
 [TomlSerializable(typeof(TableArrayCollectionHolder))]
 [TomlSerializable(typeof(TableArrayStyleOverrideHolder))]
+[TomlSerializable(typeof(CaseInsensitiveItemMap))]
+[TomlSerializable(typeof(CustomDictionaryHolder))]
 internal partial class TestTomlCollectionsContext : TomlSerializerContext
 {
 }
@@ -420,6 +432,81 @@ public class NewApiCollectionTests
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Global, Is.InstanceOf<ObservableCollection<string>>());
         Assert.That(result.Global, Is.EqualTo(new[] { "test" }));
+    }
+
+    [Test]
+    public void Reflection_CustomDictionaryRoot_Roundtrips()
+    {
+        var value = new CaseInsensitiveItemMap { ["first"] = new() { Name = "one" }, ["second"] = new() { Name = "two" } };
+
+        var toml = TomlSerializer.Serialize(value);
+        var roundtrip = TomlSerializer.Deserialize<CaseInsensitiveItemMap>(toml);
+
+        AssertCustomDictionaryRoundtrip(toml, roundtrip, "[first]", "Name");
+    }
+
+    [Test]
+    public void GeneratedContext_CustomDictionaryRoot_Roundtrips()
+    {
+        var context = TestTomlCollectionsContext.Default;
+        var value = new CaseInsensitiveItemMap { ["first"] = new() { Name = "one" }, ["second"] = new() { Name = "two" } };
+
+        var toml = TomlSerializer.Serialize(value, context.CaseInsensitiveItemMap);
+        var roundtrip = TomlSerializer.Deserialize(toml, context.CaseInsensitiveItemMap);
+
+        AssertCustomDictionaryRoundtrip(toml, roundtrip, "[first]", "name");
+    }
+
+    [Test]
+    public void Reflection_CustomDictionaryMembers_Roundtrip()
+    {
+        var value = new CustomDictionaryHolder
+        {
+            Items = new CaseInsensitiveItemMap { ["first"] = new() { Name = "one" } },
+            Sorted = new SortedDictionary<string, long> { ["b"] = 2, ["a"] = 1 },
+        };
+
+        var toml = TomlSerializer.Serialize(value);
+        var roundtrip = TomlSerializer.Deserialize<CustomDictionaryHolder>(toml);
+
+        AssertCustomDictionaryHolderRoundtrip(roundtrip);
+    }
+
+    [Test]
+    public void GeneratedContext_CustomDictionaryMembers_Roundtrip()
+    {
+        var context = TestTomlCollectionsContext.Default;
+        var value = new CustomDictionaryHolder
+        {
+            Items = new CaseInsensitiveItemMap { ["first"] = new() { Name = "one" } },
+            Sorted = new SortedDictionary<string, long> { ["b"] = 2, ["a"] = 1 },
+        };
+
+        var toml = TomlSerializer.Serialize(value, context.CustomDictionaryHolder);
+        var roundtrip = TomlSerializer.Deserialize(toml, context.CustomDictionaryHolder);
+
+        AssertCustomDictionaryHolderRoundtrip(roundtrip);
+    }
+
+    private static void AssertCustomDictionaryRoundtrip(string toml, CaseInsensitiveItemMap? roundtrip, string expectedHeader, string expectedNameKey)
+    {
+        Assert.That(toml, Does.Contain(expectedHeader));
+        Assert.That(toml, Does.Contain($"{expectedNameKey} = \"one\""));
+        Assert.That(toml, Does.Not.Contain("Comparer"));
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.Count, Is.EqualTo(2));
+        // The instance is created through the custom type constructor, so its comparer is preserved.
+        Assert.That(roundtrip["FIRST"].Name, Is.EqualTo("one"));
+        Assert.That(roundtrip["Second"].Name, Is.EqualTo("two"));
+    }
+
+    private static void AssertCustomDictionaryHolderRoundtrip(CustomDictionaryHolder? roundtrip)
+    {
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.Items, Is.InstanceOf<CaseInsensitiveItemMap>());
+        Assert.That(roundtrip.Items["FIRST"].Name, Is.EqualTo("one"));
+        Assert.That(roundtrip.Sorted, Is.InstanceOf<SortedDictionary<string, long>>());
+        Assert.That(roundtrip.Sorted, Is.EquivalentTo(new Dictionary<string, long> { ["a"] = 1, ["b"] = 2 }));
     }
 
     private static string CreateItemsToml(int itemCount)

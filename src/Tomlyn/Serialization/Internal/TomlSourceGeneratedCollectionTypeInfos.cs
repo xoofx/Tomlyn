@@ -594,13 +594,26 @@ internal sealed class TomlSourceGeneratedDictionaryTypeInfo<TDictionary, TValue>
     where TDictionary : IEnumerable<KeyValuePair<string, TValue>>
 {
     private readonly TomlSerializerContext _context;
+    private readonly Func<IDictionary<string, TValue>>? _createDictionary;
     private TomlTypeInfo? _valueTypeInfo;
     private TomlTypeInfo<TValue>? _typedValueTypeInfo;
 
     public TomlSourceGeneratedDictionaryTypeInfo(TomlSerializerContext context, TomlSerializerOptions? options = null)
+        : this(context, options, createDictionary: null)
+    {
+    }
+
+    /// <param name="context">The context used to resolve value metadata.</param>
+    /// <param name="options">The options, or null to use the options of the context.</param>
+    /// <param name="createDictionary">
+    /// Creates the instance to populate when <typeparamref name="TDictionary"/> is a concrete dictionary type;
+    /// when null, a <see cref="Dictionary{TKey, TValue}"/> is created, which <typeparamref name="TDictionary"/> must accept.
+    /// </param>
+    public TomlSourceGeneratedDictionaryTypeInfo(TomlSerializerContext context, TomlSerializerOptions? options, Func<IDictionary<string, TValue>>? createDictionary)
         : base(options ?? context.Options)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
+        _createDictionary = createDictionary;
     }
 
     public override bool WritesTable => true;
@@ -639,7 +652,8 @@ internal sealed class TomlSourceGeneratedDictionaryTypeInfo<TDictionary, TValue>
             throw reader.CreateException($"Expected {TomlTokenType.StartTable} token but was {reader.TokenType}.");
         }
 
-        var dict = new Dictionary<string, TValue>(StringComparer.Ordinal);
+        // A concrete dictionary type is created through its own constructor so that its comparer is preserved.
+        IDictionary<string, TValue> dict = _createDictionary?.Invoke() ?? new Dictionary<string, TValue>(StringComparer.Ordinal);
         reader.Read();
         while (reader.TokenType != TomlTokenType.EndTable)
         {

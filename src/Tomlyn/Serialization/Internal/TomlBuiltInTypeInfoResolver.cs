@@ -7,6 +7,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Tomlyn.Helpers;
 using Tomlyn.Model;
 using Tomlyn.Serialization.Converters;
@@ -174,6 +175,14 @@ internal static class TomlBuiltInTypeInfoResolver
             }
         }
 
+        if (TryGetCustomMutableDictionaryValueType(type, out var dictionaryValueType))
+        {
+            var factory = typeof(TomlBuiltInTypeInfoResolver)
+                .GetMethod(nameof(CreateMutableDictionaryTypeInfo), BindingFlags.NonPublic | BindingFlags.Static)!
+                .MakeGenericMethod(type, dictionaryValueType);
+            return (TomlTypeInfo?)factory.Invoke(null, [options]);
+        }
+
         if (TryGetMutableCollectionElementType(type, out var collectionElementType))
         {
             var typeInfoType = typeof(TomlMutableCollectionTypeInfo<,>).MakeGenericType(type, collectionElementType);
@@ -181,6 +190,59 @@ internal static class TomlBuiltInTypeInfoResolver
         }
 
         return null;
+    }
+
+    [RequiresUnreferencedCode(ReflectionBasedSerializationMessage)]
+    [RequiresDynamicCode(ReflectionBasedSerializationMessage)]
+    private static TomlTypeInfo CreateMutableDictionaryTypeInfo<TDictionary, TValue>(TomlSerializerOptions options)
+        where TDictionary : IDictionary<string, TValue>, new()
+        => new TomlDictionaryTypeInfo<TDictionary, TValue>(options, static () => new TDictionary());
+
+    /// <summary>
+    /// Matches a concrete dictionary type with string keys other than <see cref="Dictionary{TKey, TValue}"/>
+    /// (for example a class deriving from it, or <see cref="SortedDictionary{TKey, TValue}"/>).
+    /// </summary>
+    private static bool TryGetCustomMutableDictionaryValueType(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces | DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type,
+        [NotNullWhen(true)] out Type? valueType)
+    {
+        valueType = null;
+
+        if (type.IsInterface || type.IsAbstract || type.IsValueType || type.GetConstructor(Type.EmptyTypes) is null)
+        {
+            return false;
+        }
+
+        Type? matched = null;
+        foreach (var interfaceType in type.GetInterfaces())
+        {
+            if (!interfaceType.IsGenericType || interfaceType.GetGenericTypeDefinition() != typeof(IDictionary<,>))
+            {
+                continue;
+            }
+
+            // A type implementing several IDictionary<,> shapes is ambiguous: leave it to a converter.
+            if (matched is not null)
+            {
+                return false;
+            }
+
+            matched = interfaceType;
+        }
+
+        if (matched is null)
+        {
+            return false;
+        }
+
+        var args = matched.GetGenericArguments();
+        if (args[0] != typeof(string))
+        {
+            return false;
+        }
+
+        valueType = args[1];
+        return true;
     }
 
     private static bool TryGetMutableCollectionElementType(

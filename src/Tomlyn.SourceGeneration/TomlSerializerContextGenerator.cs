@@ -712,7 +712,9 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         }
         else if (TryGetDictionaryValueType(type, out var dictionaryValueType))
         {
-            builder.Append("        return CreateSourceGeneratedDictionaryTypeInfo<")
+            builder.Append(IsCustomMutableDictionaryType(type)
+                    ? "        return CreateSourceGeneratedMutableDictionaryTypeInfo<"
+                    : "        return CreateSourceGeneratedDictionaryTypeInfo<")
                 .Append(typeName)
                 .Append(", ")
                 .Append(dictionaryValueType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
@@ -4696,24 +4698,79 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         keyType = null!;
         valueType = null!;
 
-        if (type is not INamedTypeSymbol named || !named.IsGenericType)
+        if (type is not INamedTypeSymbol named)
         {
             return false;
         }
 
-        var constructedFrom = named.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        if (constructedFrom is not
-            "global::System.Collections.Generic.Dictionary<TKey, TValue>" and not
-            "global::System.Collections.Generic.IDictionary<TKey, TValue>" and not
-            "global::System.Collections.Generic.IReadOnlyDictionary<TKey, TValue>")
+        if (IsBuiltInDictionaryType(named))
+        {
+            keyType = named.TypeArguments[0];
+            valueType = named.TypeArguments[1];
+            return true;
+        }
+
+        return TryGetCustomMutableDictionaryKeyValueTypes(named, out keyType, out valueType);
+    }
+
+    private static bool IsBuiltInDictionaryType(INamedTypeSymbol type)
+    {
+        if (!type.IsGenericType)
         {
             return false;
         }
 
-        keyType = named.TypeArguments[0];
-        valueType = named.TypeArguments[1];
+        return type.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) is
+            "global::System.Collections.Generic.Dictionary<TKey, TValue>" or
+            "global::System.Collections.Generic.IDictionary<TKey, TValue>" or
+            "global::System.Collections.Generic.IReadOnlyDictionary<TKey, TValue>";
+    }
+
+    /// <summary>
+    /// Matches a concrete dictionary type other than <c>Dictionary&lt;TKey, TValue&gt;</c> (for example a class deriving from it,
+    /// or <c>SortedDictionary&lt;TKey, TValue&gt;</c>) that can be instantiated and populated through <c>IDictionary&lt;TKey, TValue&gt;</c>.
+    /// </summary>
+    private static bool TryGetCustomMutableDictionaryKeyValueTypes(INamedTypeSymbol type, out ITypeSymbol keyType, out ITypeSymbol valueType)
+    {
+        keyType = null!;
+        valueType = null!;
+
+        // Built-in types such as TomlTable implement IDictionary<string, object> but have their own converters.
+        if (type.TypeKind != TypeKind.Class || type.IsAbstract || IsBuiltInDictionaryType(type) || IsBuiltInType(type) || !HasPublicParameterlessConstructor(type))
+        {
+            return false;
+        }
+
+        INamedTypeSymbol? matched = null;
+        foreach (var interfaceType in type.AllInterfaces)
+        {
+            if (!interfaceType.IsGenericType ||
+                interfaceType.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) != "global::System.Collections.Generic.IDictionary<TKey, TValue>")
+            {
+                continue;
+            }
+
+            // A type implementing several IDictionary<,> shapes is ambiguous: leave it to a converter.
+            if (matched is not null)
+            {
+                return false;
+            }
+
+            matched = interfaceType;
+        }
+
+        if (matched is null)
+        {
+            return false;
+        }
+
+        keyType = matched.TypeArguments[0];
+        valueType = matched.TypeArguments[1];
         return true;
     }
+
+    private static bool IsCustomMutableDictionaryType(ITypeSymbol type)
+        => type is INamedTypeSymbol named && TryGetCustomMutableDictionaryKeyValueTypes(named, out _, out _);
 
     private static bool TryGetDictionaryValueType(ITypeSymbol type, out ITypeSymbol valueType)
     {

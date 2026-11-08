@@ -324,7 +324,14 @@ Tomlyn supports common .NET collection shapes:
 
 - **Arrays**: `T[]`, `IList<T>`, `List<T>`, `IReadOnlyList<T>`
 - **Sets**: `ISet<T>`, `HashSet<T>`, `SortedSet<T>`, `IReadOnlySet<T>`
-- **Dictionaries**: `IDictionary<string, T>`, `Dictionary<string, T>`, `IReadOnlyDictionary<string, T>`, `SortedDictionary<string, T>`
+- **Dictionaries**: `IDictionary<string, T>`, `Dictionary<string, T>`, `IReadOnlyDictionary<string, T>`, and any concrete class with a public parameterless constructor that implements `IDictionary<string, T>`, such as `SortedDictionary<string, T>` or a class deriving from `Dictionary<string, T>`. Such a type is created through its own constructor when deserializing, so a comparer it sets is preserved:
+
+  ```csharp
+  public sealed class Cache() : Dictionary<string, CacheEntry>(StringComparer.OrdinalIgnoreCase);
+
+  [TomlSerializable(typeof(Cache))]
+  internal partial class MyContext : TomlSerializerContext { }
+  ```
 - **Immutable collections**: `ImmutableArray<T>`, `ImmutableList<T>`, `ImmutableDictionary<string, T>`, etc.
 
 ### DOM types
