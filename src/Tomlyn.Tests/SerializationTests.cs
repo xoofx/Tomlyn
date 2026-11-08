@@ -63,6 +63,17 @@ public class SerializationTests
         Assert.That(result["property"], Is.EqualTo(value));
     }
 
+    [TestCase("\r\nstarts with a crlf")]
+    [TestCase("crlf\r\nin the middle")]
+    [TestCase("multiple\r\ncrlf\r\nlines\r\n")]
+    public void TestFormatHelperMultilineBasicStringWithCrLfRoundtrips(string value)
+    {
+        var toml = $"property = {TomlFormatHelper.ToString(value, TomlPropertyDisplayKind.StringMulti)}";
+        var result = TomlSerializer.Deserialize<TomlTable>(toml)!;
+
+        Assert.That(result["property"], Is.EqualTo(value));
+    }
+
     [Test]
     public void TestArrayWithPrimitives()
     {
