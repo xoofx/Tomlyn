@@ -202,6 +202,7 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         public string? RootValueKeyName { get; set; }
         public int? InlineTablePolicy { get; set; }
         public int? TableArrayStyle { get; set; }
+        public bool? BlankLineBeforeTableHeaders { get; set; }
         public ImmutableArray<ITypeSymbol> ConverterTypes { get; set; } = ImmutableArray<ITypeSymbol>.Empty;
     }
 
@@ -581,6 +582,11 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
         if (model.Options.TableArrayStyle is not null && TryGetTomlTableArrayStyleExpression(model.Options.TableArrayStyle.Value, out var tableArrayExpression))
         {
             builder.Append("        options = options with { TableArrayStyle = ").Append(tableArrayExpression).AppendLine(" };");
+        }
+
+        if (model.Options.BlankLineBeforeTableHeaders is not null)
+        {
+            builder.Append("        options = options with { BlankLineBeforeTableHeaders = ").Append(model.Options.BlankLineBeforeTableHeaders.Value ? "true" : "false").AppendLine(" };");
         }
 
         builder.AppendLine("        return options;");
@@ -5496,6 +5502,9 @@ public sealed class TomlSerializerContextGenerator : IIncrementalGenerator
                     break;
                 case "TableArrayStyle":
                     if (value.Value is int tableArrayStyle) options.TableArrayStyle = tableArrayStyle;
+                    break;
+                case "BlankLineBeforeTableHeaders":
+                    if (value.Value is bool blankLineBeforeTableHeaders) options.BlankLineBeforeTableHeaders = blankLineBeforeTableHeaders;
                     break;
                 case "Converters":
                     if (value.Kind == TypedConstantKind.Array && !value.Values.IsDefault)

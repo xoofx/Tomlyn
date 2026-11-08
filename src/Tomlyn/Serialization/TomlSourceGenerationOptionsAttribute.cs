@@ -61,6 +61,9 @@ public sealed class TomlSourceGenerationOptionsAttribute : TomlAttribute
     /// <summary>Gets or sets array-of-table emission style.</summary>
     public TomlTableArrayStyle TableArrayStyle { get; set; }
 
+    /// <summary>Gets or sets a value indicating whether a blank line is written before each table header that follows other content.</summary>
+    public bool BlankLineBeforeTableHeaders { get; set; }
+
     /// <summary>
     /// Gets or sets converter types to register on the generated context.
     /// </summary>

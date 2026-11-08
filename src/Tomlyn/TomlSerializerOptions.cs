@@ -217,6 +217,15 @@ public sealed record TomlSerializerOptions
     public TomlTableArrayStyle TableArrayStyle { get; init; } = TomlTableArrayStyle.Headers;
 
     /// <summary>
+    /// Gets or sets a value indicating whether a blank line is written before each table header
+    /// (<c>[table]</c> and <c>[[array-of-tables]]</c>) that follows other content.
+    /// </summary>
+    /// <remarks>
+    /// When disabled (the default), a blank line is only written between the elements of an array of tables.
+    /// </remarks>
+    public bool BlankLineBeforeTableHeaders { get; init; }
+
+    /// <summary>
     /// Gets or sets an optional metadata store used to capture or apply TOML trivia/comment metadata.
     /// </summary>
     public ITomlMetadataStore? MetadataStore { get; init; }

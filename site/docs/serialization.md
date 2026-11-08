@@ -119,6 +119,7 @@ var toml = TomlSerializer.Serialize(config, options);
 | [`RootValueKeyName`](xref:Tomlyn.TomlSerializerOptions.RootValueKeyName) | `string` | `"value"` | Key name used when `RootValueHandling` is `WrapInRootKey`. |
 | [`InlineTablePolicy`](xref:Tomlyn.TomlSerializerOptions.InlineTablePolicy) | [`TomlInlineTablePolicy`](xref:Tomlyn.TomlInlineTablePolicy) | `Never` | When to emit inline tables (`Never`, `WhenSmall`, `Always`). |
 | [`TableArrayStyle`](xref:Tomlyn.TomlSerializerOptions.TableArrayStyle) | [`TomlTableArrayStyle`](xref:Tomlyn.TomlTableArrayStyle) | `Headers` | Array-of-tables style (`Headers` = `[[a]]`, `InlineArrayOfTables` = `a = [{...}]`). |
+| [`BlankLineBeforeTableHeaders`](xref:Tomlyn.TomlSerializerOptions.BlankLineBeforeTableHeaders) | `bool` | `false` | Writes a blank line before each `[table]` / `[[array]]` header that follows other content. |
 | [`StringStylePreferences`](xref:Tomlyn.TomlSerializerOptions.StringStylePreferences) | [`TomlStringStylePreferences`](xref:Tomlyn.TomlStringStylePreferences) | *(see below)* | Controls string emission style (basic, literal, multiline). |
 | [`PolymorphismOptions`](xref:Tomlyn.TomlSerializerOptions.PolymorphismOptions) | [`TomlPolymorphismOptions`](xref:Tomlyn.TomlPolymorphismOptions) | *(see below)* | Polymorphism discriminator settings. |
 | [`MetadataStore`](xref:Tomlyn.TomlSerializerOptions.MetadataStore) | [`ITomlMetadataStore?`](xref:Tomlyn.Serialization.ITomlMetadataStore) | `null` | Captures trivia (comments, source spans) during deserialization. |
@@ -241,6 +242,25 @@ Empty object collections still write as ordinary empty arrays (`Package = []`), 
 | [`InlineArrayOfTables`](xref:Tomlyn.TomlTableArrayStyle.InlineArrayOfTables) | Emit inline arrays of inline tables (`Package = [{Name = "core"}]`) when the contents can be written inline. |
 
 [`InlineTablePolicy`](xref:Tomlyn.TomlSerializerOptions.InlineTablePolicy) similarly controls whether nested object values may be emitted as inline tables.
+
+By default, table headers directly follow the preceding values, and only the elements of an array of tables are separated by a blank line. Set [`BlankLineBeforeTableHeaders`](xref:Tomlyn.TomlSerializerOptions.BlankLineBeforeTableHeaders) to separate every table, which is easier to read in larger documents:
+
+```csharp
+var options = new TomlSerializerOptions { BlankLineBeforeTableHeaders = true };
+```
+
+```toml
+name = "foo"
+version = 1
+
+[database]
+host = "localhost"
+
+[logging]
+level = "info"
+```
+
+No blank line is written at the start of the document, and a blank line already captured with the comments of a header by a [`MetadataStore`](xref:Tomlyn.TomlSerializerOptions.MetadataStore) is not doubled.
 
 ### Formatting attributes
 

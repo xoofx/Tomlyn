@@ -8,6 +8,7 @@ using System.Globalization;
 using System.IO;
 using Tomlyn.Helpers;
 using Tomlyn.Model;
+using Tomlyn.Syntax;
 
 namespace Tomlyn.Serialization.Internal;
 
@@ -37,6 +38,7 @@ internal static class TomlModelTextWriter
         private readonly TomlSerializerOptions _options;
         private readonly int _effectiveMaxDepth;
         private readonly string _newLine;
+        private bool _hasWrittenLine;
 
         public State(TextWriter writer, TomlSerializerOptions options)
         {
@@ -119,7 +121,8 @@ internal static class TomlModelTextWriter
             ValidateDepth(depth);
             for (var index = 0; index < tableArray.Count; index++)
             {
-                if (index > 0)
+                // Elements are separated by a blank line; with BlankLineBeforeTableHeaders the header writes it.
+                if (index > 0 && !_options.BlankLineBeforeTableHeaders)
                 {
                     WriteNewLine();
                 }
@@ -239,6 +242,13 @@ internal static class TomlModelTextWriter
         private void WriteHeader(List<string> path, HeaderKind kind, TomlPropertiesMetadata? metadata)
         {
             var name = path[path.Count - 1];
+            if (_options.BlankLineBeforeTableHeaders && _hasWrittenLine && !LeadingTriviaStartsWithNewLine(metadata, name))
+            {
+                // Separate the header (and the comments above it) from the preceding content.
+                // Trivia captured from a parsed document may already carry a blank line: do not double it.
+                WriteNewLine();
+            }
+
             WriteLeadingTrivia(metadata, name);
 
             if (kind == HeaderKind.TableArrayElement)
@@ -867,6 +877,27 @@ internal static class TomlModelTextWriter
         private void WriteNewLine()
         {
             _writer.Write(_newLine);
+            _hasWrittenLine = true;
+        }
+
+        private static bool LeadingTriviaStartsWithNewLine(TomlPropertiesMetadata? metadata, string key)
+        {
+            if (metadata is null || !metadata.TryGetProperty(key, out var propertyMetadata) || propertyMetadata?.LeadingTrivia is null)
+            {
+                return false;
+            }
+
+            foreach (var trivia in propertyMetadata.LeadingTrivia)
+            {
+                if (trivia.Kind == TokenKind.Whitespaces)
+                {
+                    continue;
+                }
+
+                return trivia.Kind == TokenKind.NewLine;
+            }
+
+            return false;
         }
 
         private void WriteLeadingTrivia(TomlPropertiesMetadata? metadata, string key)
