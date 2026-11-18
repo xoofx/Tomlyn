@@ -602,20 +602,7 @@ internal sealed class TomlTimeSpanConverter : TomlConverter<TimeSpan>
         }
 
         var dt = new DateTime(1, 1, 1, value.Hours, value.Minutes, value.Seconds, DateTimeKind.Unspecified).AddTicks(value.Ticks % TimeSpan.TicksPerSecond);
-        var precision = 0;
-        var fractionTicks = value.Ticks % TimeSpan.TicksPerSecond;
-        if (fractionTicks != 0)
-        {
-            // Derive precision up to 7 digits from ticks (100ns).
-            var fractional = (int)(fractionTicks * 10_000_000 / TimeSpan.TicksPerSecond);
-            precision = 7;
-            while (precision > 0 && fractional % 10 == 0)
-            {
-                fractional /= 10;
-                precision--;
-            }
-        }
-
+        var precision = TomlDateTime.GetSecondPrecision(value.Ticks);
         var tomlTime = new TomlDateTime(new DateTimeOffset(DateTime.SpecifyKind(dt, DateTimeKind.Unspecified), TimeSpan.Zero), precision, TomlDateTimeKind.LocalTime);
         writer.WriteDateTimeValue(tomlTime);
     }
@@ -718,16 +705,17 @@ internal sealed class TomlDateTimeConverter : TomlConverter<DateTime>
     public override void Write(TomlWriter writer, DateTime value)
     {
         TomlDateTime toml;
+        var precision = TomlDateTime.GetSecondPrecision(value.Ticks);
         switch (value.Kind)
         {
             case DateTimeKind.Utc:
-                toml = new TomlDateTime(new DateTimeOffset(value, TimeSpan.Zero), 0, TomlDateTimeKind.OffsetDateTimeByZ);
+                toml = new TomlDateTime(new DateTimeOffset(value, TimeSpan.Zero), precision, TomlDateTimeKind.OffsetDateTimeByZ);
                 break;
             case DateTimeKind.Local:
-                toml = new TomlDateTime(new DateTimeOffset(value), 0, TomlDateTimeKind.OffsetDateTimeByNumber);
+                toml = new TomlDateTime(new DateTimeOffset(value), precision, TomlDateTimeKind.OffsetDateTimeByNumber);
                 break;
             default:
-                toml = new TomlDateTime(value);
+                toml = new TomlDateTime(value) { SecondPrecision = precision };
                 break;
         }
 
@@ -764,7 +752,7 @@ internal sealed class TomlDateTimeOffsetConverter : TomlConverter<DateTimeOffset
     public override void Write(TomlWriter writer, DateTimeOffset value)
     {
         var kind = value.Offset == TimeSpan.Zero ? TomlDateTimeKind.OffsetDateTimeByZ : TomlDateTimeKind.OffsetDateTimeByNumber;
-        writer.WriteDateTimeValue(new TomlDateTime(value, 0, kind));
+        writer.WriteDateTimeValue(new TomlDateTime(value, TomlDateTime.GetSecondPrecision(value.Ticks), kind));
     }
 }
 

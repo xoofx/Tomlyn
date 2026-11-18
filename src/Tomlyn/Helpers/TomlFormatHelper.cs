@@ -247,7 +247,7 @@ public class TomlFormatHelper
     /// <returns>The TOML string.</returns>
     public static string ToString(DateTime dateTime, TomlPropertyDisplayKind displayKind)
     {
-        return new TomlDateTime(dateTime, 0,
+        return new TomlDateTime(dateTime, TomlDateTime.GetSecondPrecision(dateTime.Ticks),
             GetDateTimeDisplayKind(displayKind == TomlPropertyDisplayKind.Default
                 ? TomlPropertyDisplayKind.LocalDateTime
                 : displayKind)).ToString();
@@ -261,7 +261,7 @@ public class TomlFormatHelper
     /// <returns>The TOML string.</returns>
     public static string ToString(DateTimeOffset dateTimeOffset, TomlPropertyDisplayKind displayKind)
     {
-        return new TomlDateTime(dateTimeOffset, 0,
+        return new TomlDateTime(dateTimeOffset, TomlDateTime.GetSecondPrecision(dateTimeOffset.Ticks),
             GetDateTimeDisplayKind(displayKind == TomlPropertyDisplayKind.Default
                 ? TomlPropertyDisplayKind.OffsetDateTimeByZ
                 : displayKind)).ToString();
@@ -290,7 +290,7 @@ public class TomlFormatHelper
     /// <returns>The TOML string.</returns>
     public static string ToString(TimeOnly timeOnly, TomlPropertyDisplayKind displayKind)
     {
-        return new TomlDateTime(DateOnly.MinValue.ToDateTime(timeOnly), 0,
+        return new TomlDateTime(DateOnly.MinValue.ToDateTime(timeOnly), TomlDateTime.GetSecondPrecision(timeOnly.Ticks),
             GetDateTimeDisplayKind(displayKind == TomlPropertyDisplayKind.Default
                 ? TomlPropertyDisplayKind.LocalTime
                 : displayKind)).ToString();

@@ -1,5 +1,6 @@
 using System;
 using NUnit.Framework;
+using Tomlyn.Model;
 using Tomlyn.Serialization;
 
 namespace Tomlyn.Tests;
@@ -128,6 +129,53 @@ public sealed class NewApiBuiltInConvertersTests
         Assert.That(ex, Is.Not.Null);
         Assert.That(ex!.Line, Is.EqualTo(1));
         Assert.That(ex.Column, Is.Not.Null.And.GreaterThan(0));
+    }
+
+    private sealed class DateTimeModel
+    {
+        public DateTime Value { get; set; }
+    }
+
+    [TestCase(DateTimeKind.Utc)]
+    [TestCase(DateTimeKind.Unspecified)]
+    public void DateTime_Roundtrip_KeepsFractionalSeconds(DateTimeKind kind)
+    {
+        var value = new DateTime(new DateTime(1979, 5, 27, 7, 32, 0).Ticks + 1_234_567, kind);
+        var model = new DateTimeModel { Value = value };
+        var toml = TomlSerializer.Serialize(model);
+        Assert.That(toml, Does.Contain("07:32:00.1234567"));
+
+        var roundtrip = TomlSerializer.Deserialize<DateTimeModel>(toml);
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.Value, Is.EqualTo(value));
+    }
+
+    [Test]
+    public void DateTimeOffset_Roundtrip_KeepsFractionalSeconds()
+    {
+        var value = new DateTimeOffset(1979, 5, 27, 7, 32, 0, 120, TimeSpan.FromHours(2));
+        var model = new DateTimeOffsetModel { Value = value };
+        var toml = TomlSerializer.Serialize(model);
+        Assert.That(toml, Does.Contain("07:32:00.12+02:00"));
+
+        var roundtrip = TomlSerializer.Deserialize<DateTimeOffsetModel>(toml);
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.Value, Is.EqualTo(value));
+        Assert.That(roundtrip.Value.Offset, Is.EqualTo(value.Offset));
+    }
+
+    [Test]
+    public void TomlTable_DateTimeValues_KeepFractionalSeconds()
+    {
+        var table = new TomlTable
+        {
+            ["local"] = new DateTime(1979, 5, 27, 7, 32, 0, 500),
+            ["offset"] = new DateTimeOffset(1979, 5, 27, 7, 32, 0, 5, TimeSpan.Zero),
+        };
+
+        var toml = TomlSerializer.Serialize(table);
+        Assert.That(toml, Does.Contain("local = 1979-05-27T07:32:00.5"));
+        Assert.That(toml, Does.Contain("offset = 1979-05-27T07:32:00.005Z"));
     }
 
 #if NET6_0_OR_GREATER
