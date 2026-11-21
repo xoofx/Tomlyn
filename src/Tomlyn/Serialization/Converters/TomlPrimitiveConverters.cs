@@ -1160,7 +1160,11 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
             var nameSpan = reader.CurrentSpan;
             var leadingTrivia = reader.CurrentLeadingTrivia;
             reader.Read();
-            if (propertiesMetadata is not null)
+            var isReopeningHeader = reader.CurrentSpan is null &&
+                                    (reader.TokenType is TomlTokenType.StartTable or TomlTokenType.StartArray) &&
+                                    table.TryGetValue(name, out var reopenedValue) &&
+                                    reopenedValue is TomlTable or TomlTableArray;
+            if (propertiesMetadata is not null && !isReopeningHeader)
             {
                 capturedAnyMetadata |= CapturePropertyMetadata(propertiesMetadata, name, nameSpan, leadingTrivia, reader.CurrentTrailingTrivia, GetDisplayKind(reader));
             }
@@ -1176,6 +1180,23 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
 
                 ReadTableInto(reader, existingTable);
                 continue;
+            }
+
+            if (reader.CurrentSpan is null &&
+                table.TryGetValue(name, out var existingArrayValue) &&
+                existingArrayValue is TomlTableArray { Count: > 0 } existingTableArray)
+            {
+                if (reader.TokenType == TomlTokenType.StartArray)
+                {
+                    ReadTableArrayInto(reader, existingTableArray);
+                    continue;
+                }
+
+                if (reader.TokenType == TomlTokenType.StartTable)
+                {
+                    ReadTableInto(reader, existingTableArray[existingTableArray.Count - 1]);
+                    continue;
+                }
             }
 
             table[name] = ReadValue(reader);
@@ -1285,17 +1306,7 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
         if (reader.TokenType == TomlTokenType.StartTable && reader.CurrentSpan is null)
         {
             var tableArray = new TomlTableArray();
-            while (reader.TokenType != TomlTokenType.EndArray)
-            {
-                if (reader.TokenType != TomlTokenType.StartTable)
-                {
-                    throw reader.CreateException($"Expected {TomlTokenType.StartTable} token but was {reader.TokenType}.");
-                }
-
-                tableArray.Add(ReadTable(reader));
-            }
-
-            reader.Read();
+            ReadTableArrayElements(reader, tableArray);
             return tableArray;
         }
 
@@ -1307,6 +1318,32 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
 
         reader.Read();
         return array;
+    }
+
+    private static void ReadTableArrayInto(TomlReader reader, TomlTableArray tableArray)
+    {
+        if (reader.TokenType != TomlTokenType.StartArray)
+        {
+            throw reader.CreateException($"Expected {TomlTokenType.StartArray} token but was {reader.TokenType}.");
+        }
+
+        reader.Read();
+        ReadTableArrayElements(reader, tableArray);
+    }
+
+    private static void ReadTableArrayElements(TomlReader reader, TomlTableArray tableArray)
+    {
+        while (reader.TokenType != TomlTokenType.EndArray)
+        {
+            if (reader.TokenType != TomlTokenType.StartTable)
+            {
+                throw reader.CreateException($"Expected {TomlTokenType.StartTable} token but was {reader.TokenType}.");
+            }
+
+            tableArray.Add(ReadTable(reader));
+        }
+
+        reader.Read();
     }
 
     internal static TomlArray ReadArray(TomlReader reader)

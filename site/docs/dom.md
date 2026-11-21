@@ -111,6 +111,8 @@ name = "beta"
 ip = "10.0.0.2"
 ```
 
+When deserializing into a [`TomlTable`](xref:Tomlyn.Model.TomlTable), every `[[servers]]` header appends an element to the same [`TomlTableArray`](xref:Tomlyn.Model.TomlTableArray) in the order encountered, even when other table headers appear between them. A later `[servers.sub]` header adds to the most recently defined element. Comments and other metadata for `servers` come from its first header.
+
 ## Inline tables
 
 Pass `true` to the [`TomlTable`](xref:Tomlyn.Model.TomlTable) constructor to emit an inline table:
