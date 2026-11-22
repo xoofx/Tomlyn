@@ -136,18 +136,34 @@ public sealed class NewApiBuiltInConvertersTests
         public DateTime Value { get; set; }
     }
 
-    [TestCase(DateTimeKind.Utc)]
-    [TestCase(DateTimeKind.Unspecified)]
-    public void DateTime_Roundtrip_KeepsFractionalSeconds(DateTimeKind kind)
+    [TestCase(DateTimeKind.Utc, "Value = 1979-05-27T07:32:00.1234567Z")]
+    [TestCase(DateTimeKind.Unspecified, "Value = 1979-05-27T07:32:00.1234567")]
+    public void DateTime_Roundtrip_KeepsFractionalSeconds(DateTimeKind kind, string expectedToml)
     {
         var value = new DateTime(new DateTime(1979, 5, 27, 7, 32, 0).Ticks + 1_234_567, kind);
         var model = new DateTimeModel { Value = value };
         var toml = TomlSerializer.Serialize(model);
-        Assert.That(toml, Does.Contain("07:32:00.1234567"));
+        Assert.That(toml.TrimEnd(), Is.EqualTo(expectedToml));
 
         var roundtrip = TomlSerializer.Deserialize<DateTimeModel>(toml);
         Assert.That(roundtrip, Is.Not.Null);
         Assert.That(roundtrip!.Value, Is.EqualTo(value));
+        Assert.That(roundtrip.Value.Kind, Is.EqualTo(kind));
+    }
+
+    [Test]
+    public void DateTime_Roundtrip_LocalKind_KeepsFractionalSecondsAndInstant()
+    {
+        var value = new DateTime(new DateTime(1979, 5, 27, 7, 32, 0).Ticks + 1_234_567, DateTimeKind.Local);
+        var model = new DateTimeModel { Value = value };
+        var toml = TomlSerializer.Serialize(model);
+        // A local DateTime is written with the numeric offset of the machine's time zone.
+        Assert.That(toml.TrimEnd(), Does.Match(@"^Value = 1979-05-27T07:32:00\.1234567[+-]\d\d:\d\d$"));
+
+        var roundtrip = TomlSerializer.Deserialize<DateTimeModel>(toml);
+        Assert.That(roundtrip, Is.Not.Null);
+        Assert.That(roundtrip!.Value.Kind, Is.EqualTo(DateTimeKind.Utc));
+        Assert.That(roundtrip.Value.Ticks, Is.EqualTo(value.ToUniversalTime().Ticks));
     }
 
     [Test]
@@ -205,6 +221,22 @@ public sealed class NewApiBuiltInConvertersTests
         var model = TomlSerializer.Deserialize<TimeOnlyModel>("Time = 07:32\n");
         Assert.That(model, Is.Not.Null);
         Assert.That(model!.Time, Is.EqualTo(new TimeOnly(7, 32, 0)));
+    }
+
+    [Test]
+    public void TomlTable_TimeOnlyValue_KeepsFractionalSeconds()
+    {
+        var table = new TomlTable
+        {
+            ["time"] = new TimeOnly(15, 32, 0, 120),
+        };
+
+        var toml = TomlSerializer.Serialize(table);
+        Assert.That(toml.TrimEnd(), Is.EqualTo("time = 15:32:00.12"));
+
+        var roundtrip = (TomlDateTime)TomlSerializer.Deserialize<TomlTable>(toml)!["time"];
+        Assert.That(roundtrip.Kind, Is.EqualTo(TomlDateTimeKind.LocalTime));
+        Assert.That(roundtrip.DateTime.TimeOfDay, Is.EqualTo(new TimeSpan(0, 15, 32, 0, 120)));
     }
 #endif
 }
