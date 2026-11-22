@@ -330,9 +330,116 @@ public class NewApiOutOfOrderSubtableTests
     }
 
     [Test]
-    public void TomlTable_RepeatedScalarKeyKeepsItsOwnLineFormat()
+    public void TomlTable_KeepsFirstHeaderCommentOfTableReopenedBySubtable()
     {
         var options = new TomlSerializerOptions { MetadataStore = new TomlMetadataStore() };
+        const string toml =
+            """
+            # Parent description
+            [a]
+            k = 1
+
+            [b]
+            m = 2
+
+            # Child description
+            [a.c]
+            z = 3
+            """;
+
+        var table = TomlSerializer.Deserialize<TomlTable>(toml, options)!;
+        var written = TomlSerializer.Serialize(table, options);
+
+        Assert.That(written, Does.Contain("# Parent description"));
+        Assert.That(written, Does.Contain("# Child description"));
+    }
+
+    [Test]
+    public void TomlTable_RecordsMetadataOfParentHeaderDefinedAfterAnotherTable()
+    {
+        var store = new TomlMetadataStore();
+        var options = new TomlSerializerOptions { MetadataStore = store };
+        const string toml =
+            """
+            [[a.items]]
+            id = 1
+
+            [other]
+
+            # Parent description
+            [a] # Parent note
+            tag = 'x'
+            """;
+
+        var table = TomlSerializer.Deserialize<TomlTable>(toml, options)!;
+        var written = TomlSerializer.Serialize(table, options);
+
+        Assert.That(store.TryGetProperties(table, out var properties), Is.True);
+        Assert.That(properties!.TryGetProperty("a", out var a), Is.True);
+        Assert.That(a!.Span.Start.Line, Is.EqualTo(6));
+        Assert.That(a.LeadingTrivia, Has.Some.Matches<TomlSyntaxTriviaMetadata>(trivia => trivia.Text == "# Parent description"));
+        Assert.That(a.TrailingTrivia, Has.Some.Matches<TomlSyntaxTriviaMetadata>(trivia => trivia.Text == "# Parent note"));
+        Assert.That(written, Does.Contain("# Parent description"));
+        Assert.That(written, Does.Contain("# Parent note"));
+    }
+
+    [Test]
+    public void TomlTable_AddsHeadersToLatestElementsOfNestedTableArrays()
+    {
+        const string toml =
+            """
+            [[x]]
+            id = 1
+
+            [[x.c]]
+            n = 1
+
+            [x.p]
+            q = 1
+
+            [[x.c]]
+            n = 2
+
+            [[x]]
+            id = 2
+
+            [[x.c]]
+            n = 3
+
+            [x.p]
+            q = 2
+
+            [[x.c]]
+            n = 4
+
+            [x.r]
+
+            [x.c.sub]
+            m = 5
+            """;
+
+        var table = TomlSerializer.Deserialize<TomlTable>(toml)!;
+
+        var x = (TomlTableArray)table["x"];
+        Assert.That(x, Has.Count.EqualTo(2));
+        Assert.That(GetN((TomlTableArray)x[0]["c"]), Is.EqualTo(new long[] { 1, 2 }));
+        Assert.That(((TomlTable)x[0]["p"])["q"], Is.EqualTo(1L));
+        var c = (TomlTableArray)x[1]["c"];
+        Assert.That(GetN(c), Is.EqualTo(new long[] { 3, 4 }));
+        Assert.That(((TomlTable)x[1]["p"])["q"], Is.EqualTo(2L));
+        Assert.That(c[0].ContainsKey("sub"), Is.False);
+        Assert.That(((TomlTable)c[1]["sub"])["m"], Is.EqualTo(5L));
+    }
+
+    [Test]
+    public void TomlTable_RepeatedScalarKeyKeepsItsOwnLineFormat()
+    {
+        // TOML forbids a repeated key: this checks the format recorded when duplicates are allowed to overwrite.
+        var options = new TomlSerializerOptions
+        {
+            MetadataStore = new TomlMetadataStore(),
+            DuplicateKeyHandling = TomlDuplicateKeyHandling.LastWins,
+        };
         const string toml =
             """
             a = 0x10

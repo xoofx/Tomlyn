@@ -1160,11 +1160,7 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
             var nameSpan = reader.CurrentSpan;
             var leadingTrivia = reader.CurrentLeadingTrivia;
             reader.Read();
-            var isReopeningHeader = reader.CurrentSpan is null &&
-                                    (reader.TokenType is TomlTokenType.StartTable or TomlTokenType.StartArray) &&
-                                    table.TryGetValue(name, out var reopenedValue) &&
-                                    reopenedValue is TomlTable or TomlTableArray;
-            if (propertiesMetadata is not null && !isReopeningHeader)
+            if (propertiesMetadata is not null && !KeepsFirstHeaderMetadata(reader, table, name, leadingTrivia))
             {
                 capturedAnyMetadata |= CapturePropertyMetadata(propertiesMetadata, name, nameSpan, leadingTrivia, reader.CurrentTrailingTrivia, GetDisplayKind(reader));
             }
@@ -1207,6 +1203,29 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
         {
             store!.SetProperties(table, propertiesMetadata);
         }
+    }
+
+    /// <summary>
+    /// Gets whether the header being read reopens a table or an array of tables that keeps the metadata of an earlier header,
+    /// so that a later `[[name]]` or `[name.sub]` header does not replace the comments of the first one.
+    /// </summary>
+    private static bool KeepsFirstHeaderMetadata(TomlReader reader, TomlTable table, string name, TomlSyntaxTriviaMetadata[]? leadingTrivia)
+    {
+        if (reader.CurrentSpan is not null ||
+            reader.TokenType is not (TomlTokenType.StartTable or TomlTokenType.StartArray) ||
+            !table.TryGetValue(name, out var existingValue))
+        {
+            return false;
+        }
+
+        return existingValue switch
+        {
+            TomlTableArray => true,
+            // The parser gives the trivia of a header to its last key, so trivia here comes from the `[name]` header itself:
+            // a table first created implicitly (by `[name.sub]` or `[[name.items]]`) records the comments of its own header.
+            TomlTable => leadingTrivia is not { Length: > 0 } && reader.CurrentTrailingTrivia is not { Length: > 0 },
+            _ => false,
+        };
     }
 
     private static bool CapturePropertyMetadata(
