@@ -111,6 +111,8 @@ name = "beta"
 ip = "10.0.0.2"
 ```
 
+When deserializing into a [`TomlTable`](xref:Tomlyn.Model.TomlTable), every `[[servers]]` header appends an element to the same [`TomlTableArray`](xref:Tomlyn.Model.TomlTableArray) in the order encountered, even when other table headers appear between them. A later `[servers.sub]` header adds to the most recently defined element.
+
 ## Inline tables
 
 Pass `true` to the [`TomlTable`](xref:Tomlyn.Model.TomlTable) constructor to emit an inline table:
@@ -221,7 +223,7 @@ Each [`TomlPropertyMetadata`](xref:Tomlyn.Model.TomlPropertyMetadata) contains:
 | `Span` | [`TomlSourceSpan`](xref:Tomlyn.Text.TomlSourceSpan) | Source location of the key-value pair. |
 | `DisplayKind` | [`TomlPropertyDisplayKind`](xref:Tomlyn.Model.TomlPropertyDisplayKind) | How the value appeared in the original source. |
 
-When the same options serialize the object again, this trivia is written back: comments and blank lines are kept, and every line ends with the configured [`NewLine`](xref:Tomlyn.TomlSerializerOptions.NewLine). Blank lines inside a multi-line array, and before the header of a subsequent `[[array]]` element (elements are always separated by one blank line), are not kept.
+When the same options serialize the object again, this trivia is written back: comments and blank lines are kept, and every line ends with the configured [`NewLine`](xref:Tomlyn.TomlSerializerOptions.NewLine). Blank lines inside a multi-line array, and before the header of a subsequent `[[array]]` element (elements are always separated by one blank line), are not kept. Neither are the comments of an `[[array]]` header that returns to the array after a header outside of it, such as a `[[file]]` after a `[[dir]]`: its element is written with the earlier elements of the array, under the comments of the first `[[array]]` header.
 
 > [!NOTE]
 > For full-fidelity syntax round-trip (preserving every character), prefer [`SyntaxParser`](xref:Tomlyn.Parsing.SyntaxParser) - see [Low-level APIs](low-level.md).

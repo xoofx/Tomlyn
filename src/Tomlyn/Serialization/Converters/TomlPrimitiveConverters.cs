@@ -1150,7 +1150,7 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
             reader.Read();
             if (propertiesMetadata is not null)
             {
-                capturedAnyMetadata |= CapturePropertyMetadata(propertiesMetadata, name, nameSpan, leadingTrivia, reader.CurrentTrailingTrivia, GetDisplayKind(reader));
+                capturedAnyMetadata |= CaptureEntryMetadata(reader, table, propertiesMetadata, name, nameSpan, leadingTrivia);
             }
 
             if (reader.TokenType == TomlTokenType.StartTable &&
@@ -1166,6 +1166,23 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
                 continue;
             }
 
+            if (reader.CurrentSpan is null &&
+                table.TryGetValue(name, out var existingArrayValue) &&
+                existingArrayValue is TomlTableArray { Count: > 0 } existingTableArray)
+            {
+                if (reader.TokenType == TomlTokenType.StartArray)
+                {
+                    ReadTableArrayInto(reader, existingTableArray);
+                    continue;
+                }
+
+                if (reader.TokenType == TomlTokenType.StartTable)
+                {
+                    ReadTableInto(reader, existingTableArray[existingTableArray.Count - 1]);
+                    continue;
+                }
+            }
+
             table[name] = ReadValue(reader);
         }
 
@@ -1175,6 +1192,50 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
             store!.SetProperties(table, propertiesMetadata);
         }
     }
+
+    /// <summary>
+    /// Records the metadata of the property that the current key/value or header names.
+    /// A header that reopens an array of tables keeps the metadata of the first `[[name]]` header. A header without trivia
+    /// that reopens a table, such as a later `[name.sub]`, keeps the comments recorded before, and records its span as any
+    /// header naming the table does.
+    /// </summary>
+    private static bool CaptureEntryMetadata(
+        TomlReader reader,
+        TomlTable table,
+        TomlPropertiesMetadata propertiesMetadata,
+        string name,
+        TomlSourceSpan? nameSpan,
+        TomlSyntaxTriviaMetadata[]? leadingTrivia)
+    {
+        var trailingTrivia = reader.CurrentTrailingTrivia;
+        if (reader.CurrentSpan is null &&
+            reader.TokenType is (TomlTokenType.StartTable or TomlTokenType.StartArray) &&
+            table.TryGetValue(name, out var existingValue) &&
+            propertiesMetadata.TryGetProperty(name, out var existingMetadata))
+        {
+            switch (existingValue)
+            {
+                case TomlTableArray:
+                    return false;
+                // The parser gives the trivia of a header to its last key, so a reopening header without trivia is either a
+                // `[name.sub]` or a `[name]` without comments: neither replaces the comments of an earlier `[name]`.
+                case TomlTable when leadingTrivia is not { Length: > 0 } && trailingTrivia is not { Length: > 0 }:
+                    if (nameSpan is { } span)
+                    {
+                        existingMetadata.Span = ToSourceSpan(span);
+                    }
+
+                    return true;
+            }
+        }
+
+        return CapturePropertyMetadata(propertiesMetadata, name, nameSpan, leadingTrivia, trailingTrivia, GetDisplayKind(reader));
+    }
+
+    private static SourceSpan ToSourceSpan(TomlSourceSpan span) => new(
+        span.SourceName,
+        new TextPosition(span.Start.Offset, span.Start.Line, span.Start.Column),
+        new TextPosition(span.End.Offset, span.End.Line, span.End.Column));
 
     private static bool CapturePropertyMetadata(
         TomlPropertiesMetadata propertiesMetadata,
@@ -1198,10 +1259,7 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
 
         if (span is { } locatedSpan)
         {
-            propertyMetadata.Span = new SourceSpan(
-                locatedSpan.SourceName,
-                new TextPosition(locatedSpan.Start.Offset, locatedSpan.Start.Line, locatedSpan.Start.Column),
-                new TextPosition(locatedSpan.End.Offset, locatedSpan.End.Line, locatedSpan.End.Column));
+            propertyMetadata.Span = ToSourceSpan(locatedSpan);
         }
 
         if (hasLeading)
@@ -1273,17 +1331,7 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
         if (reader.TokenType == TomlTokenType.StartTable && reader.CurrentSpan is null)
         {
             var tableArray = new TomlTableArray();
-            while (reader.TokenType != TomlTokenType.EndArray)
-            {
-                if (reader.TokenType != TomlTokenType.StartTable)
-                {
-                    throw reader.CreateException($"Expected {TomlTokenType.StartTable} token but was {reader.TokenType}.");
-                }
-
-                tableArray.Add(ReadTable(reader));
-            }
-
-            reader.Read();
+            ReadTableArrayElements(reader, tableArray);
             return tableArray;
         }
 
@@ -1295,6 +1343,32 @@ internal sealed class TomlUntypedObjectConverter : TomlConverter
 
         reader.Read();
         return array;
+    }
+
+    private static void ReadTableArrayInto(TomlReader reader, TomlTableArray tableArray)
+    {
+        if (reader.TokenType != TomlTokenType.StartArray)
+        {
+            throw reader.CreateException($"Expected {TomlTokenType.StartArray} token but was {reader.TokenType}.");
+        }
+
+        reader.Read();
+        ReadTableArrayElements(reader, tableArray);
+    }
+
+    private static void ReadTableArrayElements(TomlReader reader, TomlTableArray tableArray)
+    {
+        while (reader.TokenType != TomlTokenType.EndArray)
+        {
+            if (reader.TokenType != TomlTokenType.StartTable)
+            {
+                throw reader.CreateException($"Expected {TomlTokenType.StartTable} token but was {reader.TokenType}.");
+            }
+
+            tableArray.Add(ReadTable(reader));
+        }
+
+        reader.Read();
     }
 
     internal static TomlArray ReadArray(TomlReader reader)

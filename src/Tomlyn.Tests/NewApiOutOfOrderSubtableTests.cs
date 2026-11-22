@@ -172,6 +172,312 @@ public class NewApiOutOfOrderSubtableTests
         AssertNestedTableArrayResult(result);
     }
 
+    private const string ReopenedTableArrayToml =
+        """
+        [[file]]
+        n = 1
+
+        [[dir]]
+        n = 2
+
+        [[file]]
+        n = 3
+        """;
+
+    [Test]
+    public void TomlTable_KeepsTableArrayElementsReopenedAfterAnotherTable()
+    {
+        var table = TomlSerializer.Deserialize<TomlTable>(ReopenedTableArrayToml)!;
+
+        Assert.That(GetN((TomlTableArray)table["file"]), Is.EqualTo(new long[] { 1, 3 }));
+        Assert.That(GetN((TomlTableArray)table["dir"]), Is.EqualTo(new long[] { 2 }));
+    }
+
+    [Test]
+    public void TomlTable_KeepsDottedTableArrayElementsReopenedAfterSiblingTable()
+    {
+        const string toml =
+            """
+            [[a.file]]
+            n = 1
+
+            [a.other]
+            n = 2
+
+            [[a.file]]
+            n = 3
+            """;
+
+        var table = TomlSerializer.Deserialize<TomlTable>(toml)!;
+
+        var a = (TomlTable)table["a"];
+        Assert.That(GetN((TomlTableArray)a["file"]), Is.EqualTo(new long[] { 1, 3 }));
+        Assert.That(((TomlTable)a["other"])["n"], Is.EqualTo(2L));
+    }
+
+    [Test]
+    public void TomlTable_KeepsNestedTableArrayElementsReopenedAfterSiblingSubtable()
+    {
+        const string toml =
+            """
+            [[x]]
+
+            [[x.c]]
+            n = 1
+
+            [x.p]
+            n = 2
+
+            [[x.c]]
+            n = 3
+            """;
+
+        var table = TomlSerializer.Deserialize<TomlTable>(toml)!;
+
+        var x = (TomlTableArray)table["x"];
+        Assert.That(x, Has.Count.EqualTo(1));
+        Assert.That(GetN((TomlTableArray)x[0]["c"]), Is.EqualTo(new long[] { 1, 3 }));
+    }
+
+    [Test]
+    public void TomlTable_KeepsAdjacentTableArrayElements()
+    {
+        const string toml =
+            """
+            [[file]]
+            n = 1
+
+            [[file]]
+            n = 2
+            """;
+
+        var table = TomlSerializer.Deserialize<TomlTable>(toml)!;
+
+        Assert.That(GetN((TomlTableArray)table["file"]), Is.EqualTo(new long[] { 1, 2 }));
+    }
+
+    [Test]
+    public void TomlTable_KeepsTableArrayElementsSeparatedBySubtableOfCurrentElement()
+    {
+        const string toml =
+            """
+            [[file]]
+            n = 1
+
+            [file.meta]
+            m = 1
+
+            [[file]]
+            n = 2
+            """;
+
+        var table = TomlSerializer.Deserialize<TomlTable>(toml)!;
+
+        var file = (TomlTableArray)table["file"];
+        Assert.That(GetN(file), Is.EqualTo(new long[] { 1, 2 }));
+        Assert.That(((TomlTable)file[0]["meta"])["m"], Is.EqualTo(1L));
+        Assert.That(file[1].ContainsKey("meta"), Is.False);
+    }
+
+    [Test]
+    public void TomlTable_AddsSubtableToLastElementOfArrayReopenedByStandardHeader()
+    {
+        const string toml =
+            """
+            [[x]]
+            n = 1
+
+            [[x]]
+            n = 2
+
+            [y]
+
+            [x.sub]
+            m = 3
+            """;
+
+        var table = TomlSerializer.Deserialize<TomlTable>(toml)!;
+
+        var x = (TomlTableArray)table["x"];
+        Assert.That(GetN(x), Is.EqualTo(new long[] { 1, 2 }));
+        Assert.That(x[0].ContainsKey("sub"), Is.False);
+        Assert.That(((TomlTable)x[1]["sub"])["m"], Is.EqualTo(3L));
+    }
+
+    [Test]
+    public void TomlTable_KeepsFirstHeaderCommentOfReopenedTableArray()
+    {
+        var options = new TomlSerializerOptions { MetadataStore = new TomlMetadataStore() };
+        const string toml =
+            """
+            # First files
+            [[file]]
+            n = 1
+
+            [[dir]]
+            n = 2
+
+            # More files
+            [[file]]
+            n = 3
+            """;
+
+        var table = TomlSerializer.Deserialize<TomlTable>(toml, options)!;
+        var written = TomlSerializer.Serialize(table, options);
+
+        Assert.That(written, Does.Contain("# First files"));
+        Assert.That(written, Does.Not.Contain("# More files"));
+    }
+
+    [Test]
+    public void TomlTable_KeepsFirstHeaderCommentOfTableReopenedBySubtable()
+    {
+        var options = new TomlSerializerOptions { MetadataStore = new TomlMetadataStore() };
+        const string toml =
+            """
+            # Parent description
+            [a]
+            k = 1
+
+            [b]
+            m = 2
+
+            # Child description
+            [a.c]
+            z = 3
+            """;
+
+        var table = TomlSerializer.Deserialize<TomlTable>(toml, options)!;
+        var written = TomlSerializer.Serialize(table, options);
+
+        Assert.That(written, Does.Contain("# Parent description"));
+        Assert.That(written, Does.Contain("# Child description"));
+    }
+
+    [Test]
+    public void TomlTable_RecordsMetadataOfParentHeaderDefinedAfterAnotherTable()
+    {
+        var store = new TomlMetadataStore();
+        var options = new TomlSerializerOptions { MetadataStore = store };
+        const string toml =
+            """
+            [[a.items]]
+            id = 1
+
+            [other]
+
+            # Parent description
+            [a] # Parent note
+            tag = 'x'
+            """;
+
+        var table = TomlSerializer.Deserialize<TomlTable>(toml, options)!;
+        var written = TomlSerializer.Serialize(table, options);
+
+        Assert.That(store.TryGetProperties(table, out var properties), Is.True);
+        Assert.That(properties!.TryGetProperty("a", out var a), Is.True);
+        Assert.That(a!.Span.Start.Line, Is.EqualTo(6));
+        Assert.That(a.LeadingTrivia, Has.Some.Matches<TomlSyntaxTriviaMetadata>(trivia => trivia.Text == "# Parent description"));
+        Assert.That(a.TrailingTrivia, Has.Some.Matches<TomlSyntaxTriviaMetadata>(trivia => trivia.Text == "# Parent note"));
+        Assert.That(written, Does.Contain("# Parent description"));
+        Assert.That(written, Does.Contain("# Parent note"));
+    }
+
+    [TestCase("[[a.items]]")]
+    [TestCase("[a.items]")]
+    public void TomlTable_RecordsSpanOfParentHeaderWithoutCommentsDefinedAfterAnotherTable(string childHeader)
+    {
+        var store = new TomlMetadataStore();
+        var options = new TomlSerializerOptions { MetadataStore = store };
+        var toml = $"{childHeader}\nid = 1\n[other]\n[a]\ntag = 'x'\n";
+
+        var table = TomlSerializer.Deserialize<TomlTable>(toml, options)!;
+
+        Assert.That(store.TryGetProperties(table, out var properties), Is.True);
+        Assert.That(properties!.TryGetProperty("a", out var a), Is.True);
+        Assert.That(a!.Span.Start.Line, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void TomlTable_AddsHeadersToLatestElementsOfNestedTableArrays()
+    {
+        const string toml =
+            """
+            [[x]]
+            id = 1
+
+            [[x.c]]
+            n = 1
+
+            [x.p]
+            q = 1
+
+            [[x.c]]
+            n = 2
+
+            [[x]]
+            id = 2
+
+            [[x.c]]
+            n = 3
+
+            [x.p]
+            q = 2
+
+            [[x.c]]
+            n = 4
+
+            [x.r]
+
+            [x.c.sub]
+            m = 5
+            """;
+
+        var table = TomlSerializer.Deserialize<TomlTable>(toml)!;
+
+        var x = (TomlTableArray)table["x"];
+        Assert.That(x, Has.Count.EqualTo(2));
+        Assert.That(GetN((TomlTableArray)x[0]["c"]), Is.EqualTo(new long[] { 1, 2 }));
+        Assert.That(((TomlTable)x[0]["p"])["q"], Is.EqualTo(1L));
+        var c = (TomlTableArray)x[1]["c"];
+        Assert.That(GetN(c), Is.EqualTo(new long[] { 3, 4 }));
+        Assert.That(((TomlTable)x[1]["p"])["q"], Is.EqualTo(2L));
+        Assert.That(c[0].ContainsKey("sub"), Is.False);
+        Assert.That(((TomlTable)c[1]["sub"])["m"], Is.EqualTo(5L));
+    }
+
+    [Test]
+    public void TomlTable_RepeatedScalarKeyKeepsItsOwnLineFormat()
+    {
+        // TOML forbids a repeated key: this checks the format recorded when duplicates are allowed to overwrite.
+        var options = new TomlSerializerOptions
+        {
+            MetadataStore = new TomlMetadataStore(),
+            DuplicateKeyHandling = TomlDuplicateKeyHandling.LastWins,
+        };
+        const string toml =
+            """
+            a = 0x10
+            a = 'lit'
+            """;
+
+        var table = TomlSerializer.Deserialize<TomlTable>(toml, options)!;
+        var written = TomlSerializer.Serialize(table, options);
+
+        Assert.That(written, Does.Contain("a = 'lit'"));
+    }
+
+    private static List<long> GetN(TomlTableArray tableArray)
+    {
+        var values = new List<long>();
+        foreach (var element in tableArray)
+        {
+            values.Add((long)element["n"]);
+        }
+
+        return values;
+    }
+
     private static void AssertNestedTableArrayResult(NestedTableArrayRoot? result)
     {
         Assert.That(result, Is.Not.Null);
