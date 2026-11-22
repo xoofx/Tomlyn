@@ -383,6 +383,21 @@ public class NewApiOutOfOrderSubtableTests
         Assert.That(written, Does.Contain("# Parent note"));
     }
 
+    [TestCase("[[a.items]]")]
+    [TestCase("[a.items]")]
+    public void TomlTable_RecordsSpanOfParentHeaderWithoutCommentsDefinedAfterAnotherTable(string childHeader)
+    {
+        var store = new TomlMetadataStore();
+        var options = new TomlSerializerOptions { MetadataStore = store };
+        var toml = $"{childHeader}\nid = 1\n[other]\n[a]\ntag = 'x'\n";
+
+        var table = TomlSerializer.Deserialize<TomlTable>(toml, options)!;
+
+        Assert.That(store.TryGetProperties(table, out var properties), Is.True);
+        Assert.That(properties!.TryGetProperty("a", out var a), Is.True);
+        Assert.That(a!.Span.Start.Line, Is.EqualTo(3));
+    }
+
     [Test]
     public void TomlTable_AddsHeadersToLatestElementsOfNestedTableArrays()
     {
