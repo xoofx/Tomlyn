@@ -212,6 +212,28 @@ public record struct TomlDateTime(DateTimeOffset DateTime, int SecondPrecision, 
     }
 
     /// <summary>
+    /// Gets the number of fractional second digits (0 to 7) needed to write the sub-second part of a tick count without loss.
+    /// </summary>
+    internal static int GetSecondPrecision(long ticks)
+    {
+        // A tick is 100ns, so the sub-second ticks are exactly the 7 fractional digits; trailing zeros are dropped.
+        var fraction = ticks % TimeSpan.TicksPerSecond;
+        if (fraction == 0)
+        {
+            return 0;
+        }
+
+        var precision = 7;
+        while (fraction % 10 == 0)
+        {
+            fraction /= 10;
+            precision--;
+        }
+
+        return precision;
+    }
+
+    /// <summary>
     /// Converts a datetime to TomlDateTime.
     /// </summary>
     public static implicit operator TomlDateTime(DateTime dateTime)
