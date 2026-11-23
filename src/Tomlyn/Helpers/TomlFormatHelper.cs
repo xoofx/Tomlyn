@@ -62,8 +62,16 @@ public class TomlFormatHelper
     /// <param name="i32">The integer value.</param>
     /// <param name="displayKind">The display kind.</param>
     /// <returns>The TOML string.</returns>
+    /// <remarks>Negative values are always written as decimal integers.</remarks>
     public static string ToString(int i32, TomlPropertyDisplayKind displayKind)
     {
+        // TOML only allows non-negative hexadecimal, octal and binary integers, so a negative value
+        // written in one of these forms would not read back as the same number.
+        if (i32 < 0)
+        {
+            return i32.ToString(CultureInfo.InvariantCulture);
+        }
+
         return displayKind switch
         {
             TomlPropertyDisplayKind.IntegerHexadecimal => $"0x{i32:x8}",
@@ -79,8 +87,16 @@ public class TomlFormatHelper
     /// <param name="i64">The integer value.</param>
     /// <param name="displayKind">The display kind.</param>
     /// <returns>The TOML string.</returns>
+    /// <remarks>Negative values are always written as decimal integers.</remarks>
     public static string ToString(long i64, TomlPropertyDisplayKind displayKind)
     {
+        // TOML only allows non-negative hexadecimal, octal and binary integers, so a negative value
+        // written in one of these forms would not read back as the same number.
+        if (i64 < 0)
+        {
+            return i64.ToString(CultureInfo.InvariantCulture);
+        }
+
         return displayKind switch
         {
             TomlPropertyDisplayKind.IntegerHexadecimal => $"0x{i64:x16}",
@@ -124,8 +140,16 @@ public class TomlFormatHelper
     /// <param name="i8">The integer value.</param>
     /// <param name="displayKind">The display kind.</param>
     /// <returns>The TOML string.</returns>
+    /// <remarks>Negative values are always written as decimal integers.</remarks>
     public static string ToString(sbyte i8, TomlPropertyDisplayKind displayKind)
     {
+        // TOML only allows non-negative hexadecimal, octal and binary integers, so a negative value
+        // written in one of these forms would not read back as the same number.
+        if (i8 < 0)
+        {
+            return i8.ToString(CultureInfo.InvariantCulture);
+        }
+
         return displayKind switch
         {
             TomlPropertyDisplayKind.IntegerHexadecimal => $"0x{i8:x2}",
@@ -157,8 +181,16 @@ public class TomlFormatHelper
     /// <param name="i16">The integer value.</param>
     /// <param name="displayKind">The display kind.</param>
     /// <returns>The TOML string.</returns>
+    /// <remarks>Negative values are always written as decimal integers.</remarks>
     public static string ToString(short i16, TomlPropertyDisplayKind displayKind)
     {
+        // TOML only allows non-negative hexadecimal, octal and binary integers, so a negative value
+        // written in one of these forms would not read back as the same number.
+        if (i16 < 0)
+        {
+            return i16.ToString(CultureInfo.InvariantCulture);
+        }
+
         return displayKind switch
         {
             TomlPropertyDisplayKind.IntegerHexadecimal => $"0x{i16:x4}",

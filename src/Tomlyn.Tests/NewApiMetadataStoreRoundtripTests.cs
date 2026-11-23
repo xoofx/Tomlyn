@@ -57,6 +57,28 @@ public class NewApiMetadataStoreRoundtripTests
         Assert.That(toml, Does.Contain("Value = 0x"));
     }
 
+    [TestCase("0x2A")]
+    [TestCase("0o52")]
+    [TestCase("0b101010")]
+    public void MetadataStore_NegativeValueInNonDecimalInteger_IsWrittenAsDecimal(string literal)
+    {
+        var options = new TomlSerializerOptions { MetadataStore = new TomlMetadataStore() };
+
+        var table = TomlSerializer.Deserialize<Tomlyn.Model.TomlTable>($"a = {literal}\n", options)!;
+        table["a"] = -42L;
+        var tableToml = TomlSerializer.Serialize(table, options);
+
+        Assert.That(tableToml, Is.EqualTo("a = -42\n"));
+        Assert.That(TomlSerializer.Deserialize<Tomlyn.Model.TomlTable>(tableToml)!["a"], Is.EqualTo(-42L));
+
+        var sample = TomlSerializer.Deserialize<Sample>($"Value = {literal}\n", options)!;
+        sample.Value = int.MinValue;
+        var sampleToml = TomlSerializer.Serialize(sample, options);
+
+        Assert.That(sampleToml, Is.EqualTo("Value = -2147483648\n"));
+        Assert.That(TomlSerializer.Deserialize<Sample>(sampleToml)!.Value, Is.EqualTo(int.MinValue));
+    }
+
     [Test]
     public void MetadataStore_DeserializeThenSerialize_PreservesTableAndTableArrayComments()
     {
